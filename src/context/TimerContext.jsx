@@ -209,24 +209,53 @@ export function TimerProvider({ children }) {
     return newItems.length;
   }, [roleRules]);
 
+  // Helper function to format "passed red" comment
+  const formatPassedRedComment = useCallback((elapsedSeconds, redThreshold) => {
+    if (elapsedSeconds <= redThreshold) {
+      return '';
+    }
+    
+    const overTime = elapsedSeconds - redThreshold;
+    const minutes = Math.floor(overTime / 60);
+    const seconds = Math.floor(overTime % 60);
+    
+    if (minutes > 0) {
+      if (seconds > 0) {
+        return `Passed red by ${minutes} minute${minutes > 1 ? 's' : ''} ${seconds} second${seconds > 1 ? 's' : ''}`;
+      } else {
+        return `Passed red by ${minutes} minute${minutes > 1 ? 's' : ''}`;
+      }
+    } else {
+      return `Passed red by ${seconds} second${seconds > 1 ? 's' : ''}`;
+    }
+  }, []);
+
   // Report management
   const addReport = useCallback((entry) => {
     const reportEntry = {
       name: entry.name,
       role: entry.role,
       duration: formatTime(entry.duration),
-      color: entry.color
+      color: entry.color,
+      comments: entry.comments || ''
     };
     setReports(prev => [...prev, reportEntry]);
   }, []);
 
   const finishCurrentSpeech = useCallback(() => {
     if (currentSpeaker && elapsedTime > 0) {
+      // Calculate comment if speaker passed red
+      let comment = '';
+      if (currentSpeaker.rules && elapsedTime > currentSpeaker.rules.red) {
+        comment = formatPassedRedComment(elapsedTime, currentSpeaker.rules.red);
+      }
+
       addReport({
         name: currentSpeaker.name,
         role: currentSpeaker.role,
         duration: elapsedTime,
-        color: currentStatus
+        color: currentStatus,
+        comments: comment
       });
 
       // Mark as completed in agenda if it exists
@@ -238,7 +267,7 @@ export function TimerProvider({ children }) {
       resetTimer();
       setActiveSpeakerId(null);
     }
-  }, [currentSpeaker, elapsedTime, currentStatus, activeSpeakerId, addReport, markCompleted, resetTimer]);
+  }, [currentSpeaker, elapsedTime, currentStatus, activeSpeakerId, addReport, markCompleted, resetTimer, formatPassedRedComment]);
 
   // Role rules management
   const updateRoleRules = useCallback((role, rules) => {
