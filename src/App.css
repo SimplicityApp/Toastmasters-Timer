@@ -1,0 +1,9 @@
+/* App-specific styles */
+.app-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  /* Optimized for Zoom sidebar (~320px width) */
+  min-width: 280px;
+  max-width: 400px;
+}

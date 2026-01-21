@@ -1,0 +1,9 @@
+# Place your virtual background images here:
+# - green.png (recommended: 1920x1080 PNG)
+# - yellow.png (recommended: 1920x1080 PNG)
+# - red.png (recommended: 1920x1080 PNG)
+#
+# These images will be served at:
+# https://your-app.vercel.app/backgrounds/green.png
+# https://your-app.vercel.app/backgrounds/yellow.png
+# https://your-app.vercel.app/backgrounds/red.png
