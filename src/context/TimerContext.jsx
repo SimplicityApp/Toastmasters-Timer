@@ -110,6 +110,10 @@ export function TimerProvider({ children }) {
       return;
     }
     setIsRunning(true);
+    // Apply initial overlay when timer starts (status will be 'white' initially)
+    const initialStatus = calculateStatus(0, currentSpeaker.rules);
+    applyOverlay(getBackgroundUrl(initialStatus));
+    previousStatusRef.current = initialStatus;
   }, [currentSpeaker]);
 
   const stopTimer = useCallback(() => {

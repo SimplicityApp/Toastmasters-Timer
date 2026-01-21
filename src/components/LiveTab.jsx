@@ -84,31 +84,27 @@ export default function LiveTab() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle overlay removal/application based on isHidden state
+  // Handle overlay removal based on isHidden state
+  // TimerContext handles applying overlays, we only need to remove them when isHidden is false
   useEffect(() => {
     if (!isHidden) {
       // Remove filter to show face (override any overlays from TimerContext)
       removeVideoFilter();
     } else {
-      // Reapply current overlay based on status when toggling back to hidden
-      // TimerContext will handle status changes, but we need to apply initial state
+      // When toggling back to hidden, reapply current overlay
+      // TimerContext will handle future status changes
       if (currentStatus) {
         applyOverlay(getBackgroundUrl(currentStatus));
-      } else {
-        applyOverlay(getBackgroundUrl('white'));
       }
     }
-  }, [isHidden, currentStatus]); // Reapply when isHidden or status changes
+  }, [isHidden]); // Only depend on isHidden, not currentStatus
 
-  // Watch for status changes and immediately remove filter if not hidden
+  // Watch for status changes and remove filter if not hidden
   // This ensures TimerContext overlays are immediately removed when isHidden is false
   useEffect(() => {
-    if (!isHidden && currentStatus) {
-      // Small delay to ensure TimerContext overlay is applied first, then remove it
-      const timeoutId = setTimeout(() => {
-        removeVideoFilter();
-      }, 100);
-      return () => clearTimeout(timeoutId);
+    if (!isHidden) {
+      // Remove filter whenever status changes if we're in reveal mode
+      removeVideoFilter();
     }
   }, [currentStatus, isHidden]);
 

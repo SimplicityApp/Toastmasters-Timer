@@ -125,7 +125,8 @@ export async function initializeZoomSdk() {
       popoutSize: { width: 400, height: 600 },
       capabilities: [
         'shareApp',
-        'virtualBackground'
+        'virtualBackground',
+        'videoFilter' // Add video filter capability if available
       ],
       version: '1.0.0'
     });
@@ -178,27 +179,48 @@ export async function applyOverlay(imageUrl) {
     await initializeZoomSdk();
   }
 
+  if (!imageUrl) {
+    console.warn('No image URL provided for overlay');
+    return;
+  }
+
   try {
-    if (sdkAvailable && zoomSdk && typeof zoomSdk.setVideoFilter === 'function') {
-      console.log(`Zoom SDK: Attempting to apply video filter overlay`);
-      console.log(`File URL: ${imageUrl}`);
-      
-      const result = await zoomSdk.setVideoFilter({ fileUrl: imageUrl });
-      console.log(`Zoom SDK: Successfully applied video filter overlay`, result);
-      
-      // Verify the filter was set (some SDKs return a status)
-      if (result && result.status) {
-        console.log(`Filter set status: ${result.status}`);
+    if (sdkAvailable && zoomSdk) {
+      // Try setVideoFilter first (newer API)
+      if (typeof zoomSdk.setVideoFilter === 'function') {
+        console.log(`Zoom SDK: Attempting to apply video filter overlay`);
+        console.log(`File URL: ${imageUrl}`);
+        
+        const result = await zoomSdk.setVideoFilter({ fileUrl: imageUrl });
+        console.log(`Zoom SDK: Successfully applied video filter overlay`, result);
+        
+        // Verify the filter was set (some SDKs return a status)
+        if (result && result.status) {
+          console.log(`Filter set status: ${result.status}`);
+        }
+        return;
       }
+      // Fallback to setVirtualBackground if setVideoFilter is not available
+      else if (typeof zoomSdk.setVirtualBackground === 'function') {
+        console.log(`Zoom SDK: setVideoFilter not available, using setVirtualBackground as fallback`);
+        console.log(`File URL: ${imageUrl}`);
+        
+        const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
+        console.log(`Zoom SDK: Successfully applied virtual background`, result);
+        return;
+      }
+    }
+    
+    // SDK not available or function not found
+    console.warn(`[MOCK] Zoom SDK: Would apply video filter overlay (${imageUrl})`);
+    if (!sdkAvailable) {
+      console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+    }
+    if (!zoomSdk) {
+      console.warn(`[MOCK] zoomSdk object is not available`);
     } else {
-      // SDK not available
-      console.warn(`[MOCK] Zoom SDK: Would apply video filter overlay (${imageUrl})`);
-      if (!sdkAvailable) {
-        console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
-      }
-      if (!zoomSdk || typeof zoomSdk.setVideoFilter !== 'function') {
-        console.warn(`[MOCK] setVideoFilter function is not available on zoomSdk object`);
-      }
+      console.warn(`[MOCK] setVideoFilter and setVirtualBackground functions are not available on zoomSdk object`);
+      console.warn(`[MOCK] Available methods:`, Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function'));
     }
   } catch (error) {
     console.error('Failed to apply video filter overlay:', error);
