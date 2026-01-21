@@ -87,7 +87,7 @@ function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }
   );
 }
 
-export default function AgendaTab() {
+export default function AgendaTab({ onSwitchToLive }) {
   const {
     agenda,
     activeSpeakerId,
@@ -227,6 +227,13 @@ export default function AgendaTab() {
     setCustomRules(prev => ({ ...prev, [field]: numValue }));
   };
 
+  const handleSpeakerClick = (item) => {
+    loadSpeakerFromAgenda(item.id);
+    if (onSwitchToLive) {
+      onSwitchToLive();
+    }
+  };
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex gap-2">
@@ -275,7 +282,7 @@ export default function AgendaTab() {
                   isCompleted={item.completed}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
-                  onClick={() => loadSpeakerFromAgenda(item.id)}
+                  onClick={() => handleSpeakerClick(item)}
                 />
               ))}
             </div>

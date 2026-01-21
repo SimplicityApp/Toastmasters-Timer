@@ -16,7 +16,7 @@ function App() {
         
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'live' && <LiveTab />}
-          {activeTab === 'agenda' && <AgendaTab />}
+          {activeTab === 'agenda' && <AgendaTab onSwitchToLive={() => setActiveTab('live')} />}
           {activeTab === 'report' && <ReportTab />}
         </div>
       </div>

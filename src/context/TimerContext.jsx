@@ -180,10 +180,15 @@ export function TimerProvider({ children }) {
   const loadSpeakerFromAgenda = useCallback((id) => {
     const speaker = agenda.find(item => item.id === id);
     if (speaker) {
-      setCurrentSpeakerAction({
+      const speakerData = {
         name: speaker.name,
         role: speaker.role
-      });
+      };
+      // Include rules if they exist (for Custom role or any customized rules)
+      if (speaker.rules) {
+        speakerData.rules = speaker.rules;
+      }
+      setCurrentSpeakerAction(speakerData);
       setActiveSpeakerId(id);
     }
   }, [agenda, setCurrentSpeakerAction]);
