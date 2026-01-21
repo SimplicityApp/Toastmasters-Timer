@@ -1,18 +1,21 @@
 import zoomSdk from '@zoom/appssdk';
 
+// Production base URL for background images
+const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
+
 // Get the base URL for static assets (works in both dev and production)
 function getBackgroundUrl(color) {
-  // In browser, use the current origin
+  // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/backgrounds/${color}.png`;
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/backgrounds/${color}.png`;
   }
-  // Fallback (shouldn't happen in normal usage)
-  return `/backgrounds/${color}.png`;
+  // Fallback to production URL if window is not available
+  return `${PRODUCTION_BASE_URL}/backgrounds/${color}.png`;
 }
 
 // Virtual background image URLs getter
-// Images should be placed in public/backgrounds/ folder
-// They will be served at: https://your-app.vercel.app/backgrounds/{color}.png
+// Images are hosted at: https://www.timer.simple-tech.app/backgrounds/{color}.png
 function getBackgroundUrls() {
   return {
     green: getBackgroundUrl('green'),
