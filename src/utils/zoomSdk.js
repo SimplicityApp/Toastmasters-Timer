@@ -29,6 +29,9 @@ function getBackgroundUrls() {
 let sdkInitialized = false;
 let sdkAvailable = false;
 
+// Track last error for debugging
+let lastError = null;
+
 /**
  * Set virtual background using Zoom SDK
  * @param {'white' | 'green' | 'yellow' | 'red'} color - Background color to set
@@ -160,12 +163,23 @@ export function isSdkAvailable() {
  * Get SDK status for debugging
  */
 export function getSdkStatus() {
-  return {
+  const status = {
     initialized: sdkInitialized,
     available: sdkAvailable,
     sdkExists: typeof zoomSdk !== 'undefined',
-    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function'
+    hasSetVideoFilter: zoomSdk && typeof zoomSdk.setVideoFilter === 'function',
+    hasRemoveVideoFilter: zoomSdk && typeof zoomSdk.removeVideoFilter === 'function',
+    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
+    hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
+    hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
   };
+  
+  // Get available methods for debugging
+  if (zoomSdk && typeof zoomSdk === 'object') {
+    status.availableMethods = Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function');
+  }
+  
+  return status;
 }
 
 /**
@@ -194,6 +208,9 @@ export async function applyOverlay(imageUrl) {
         const result = await zoomSdk.setVideoFilter({ fileUrl: imageUrl });
         console.log(`Zoom SDK: Successfully applied video filter overlay`, result);
         
+        // Clear error on success
+        lastError = null;
+        
         // Verify the filter was set (some SDKs return a status)
         if (result && result.status) {
           console.log(`Filter set status: ${result.status}`);
@@ -207,6 +224,9 @@ export async function applyOverlay(imageUrl) {
         
         const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
         console.log(`Zoom SDK: Successfully applied virtual background`, result);
+        
+        // Clear error on success
+        lastError = null;
         return;
       }
     }
@@ -231,14 +251,25 @@ export async function applyOverlay(imageUrl) {
       stack: error.stack
     });
     
+    // Store error for debug panel
+    let errorMessage = `Failed to apply overlay: ${error.message || error.name || 'Unknown error'}`;
+    if (error.code) {
+      errorMessage += ` (Code: ${error.code})`;
+    }
+    
     // Provide helpful error message
     if (error.message && error.message.includes('permission')) {
-      console.error('⚠️ Permission error: Make sure video filters are enabled in your Zoom settings');
+      errorMessage = 'Permission error: Make sure video filters are enabled in your Zoom settings';
+      console.error('⚠️ ' + errorMessage);
     } else if (error.message && error.message.includes('video')) {
-      console.error('⚠️ Video error: Make sure your video is turned on in the Zoom meeting');
+      errorMessage = 'Video error: Make sure your video is turned on in the Zoom meeting';
+      console.error('⚠️ ' + errorMessage);
     } else if (error.code) {
-      console.error(`⚠️ Error code: ${error.code}. Check Zoom SDK documentation for this error code.`);
+      errorMessage = `Error code: ${error.code}. Check Zoom SDK documentation for this error code.`;
+      console.error(`⚠️ ${errorMessage}`);
     }
+    
+    lastError = errorMessage;
     
     // Don't throw - allow app to continue functioning
   }

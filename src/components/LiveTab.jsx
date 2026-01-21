@@ -5,7 +5,8 @@ import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
 import { ROLE_OPTIONS } from '../constants/timingRules';
-import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl, getSdkStatus } from '../utils/zoomSdk';
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function LiveTab() {
   const {
@@ -34,6 +35,25 @@ export default function LiveTab() {
   const [isHidden, setIsHidden] = useState(true);
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
+  
+  // Debug panel feature flag - can be disabled via environment variable for production
+  // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
+  const DEBUG_PANEL_ENABLED = import.meta.env.VITE_ENABLE_DEBUG_PANEL !== 'false';
+  
+  // Debug panel state - collapsed by default, remember user preference in localStorage
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
+    const saved = localStorage.getItem('debugPanelExpanded');
+    return saved ? saved === 'true' : false; // Default to collapsed
+  });
+  const [sdkStatus, setSdkStatus] = useState(null);
+  const [lastError, setLastError] = useState(null);
+  
+  // Save expanded state to localStorage
+  const toggleDebugPanel = () => {
+    const newState = !debugPanelExpanded;
+    setDebugPanelExpanded(newState);
+    localStorage.setItem('debugPanelExpanded', String(newState));
+  };
 
   // Update local state when currentSpeaker changes (but preserve custom rules if Custom role)
   useEffect(() => {
@@ -59,6 +79,42 @@ export default function LiveTab() {
     }
   }, [selectedRole]);
 
+  // Check SDK status on mount and periodically
+  useEffect(() => {
+    const updateSdkStatus = () => {
+      try {
+        const status = getSdkStatus();
+        setSdkStatus(status);
+        
+        // Set error if SDK is not available or key functions are missing
+        if (status.lastError) {
+          setLastError(status.lastError);
+        } else if (!status.initialized) {
+          setLastError('Zoom SDK not initialized');
+        } else if (!status.available) {
+          setLastError('Zoom SDK not available - Make sure you are running inside Zoom client');
+        } else if (!status.hasSetVideoFilter && !status.hasSetVirtualBackground) {
+          setLastError('setVideoFilter and setVirtualBackground are not available. Available methods: ' + (status.availableMethods?.join(', ') || 'none'));
+        } else if (!status.hasSetVideoFilter) {
+          setLastError('setVideoFilter is not a function. Using setVirtualBackground as fallback.');
+        } else {
+          setLastError(null);
+        }
+      } catch (error) {
+        console.error('Failed to get SDK status:', error);
+        setLastError('Failed to get SDK status: ' + error.message);
+      }
+    };
+
+    // Check immediately
+    updateSdkStatus();
+
+    // Update periodically every 2 seconds
+    const interval = setInterval(updateSdkStatus, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Check video state on mount and periodically
   useEffect(() => {
     const checkVideoState = async () => {
@@ -71,6 +127,7 @@ export default function LiveTab() {
         }
       } catch (error) {
         console.error('Failed to check video state:', error);
+        setLastError('Failed to check video state: ' + error.message);
         // Don't update state on error - keep current state
       }
     };
@@ -218,7 +275,7 @@ export default function LiveTab() {
       {/* "Reveal Face" toggle button in top right */}
       <button
         onClick={handleToggleRevealFace}
-        className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+        className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors z-10"
         title={isHidden ? 'Reveal Face' : 'Hide Face'}
       >
         {isHidden ? (
@@ -227,6 +284,89 @@ export default function LiveTab() {
           <Eye className="h-5 w-5 text-gray-700" />
         )}
       </button>
+
+      {/* Debug Panel - Only show if enabled via feature flag */}
+      {DEBUG_PANEL_ENABLED && (
+        <div className="bg-gray-50 border border-gray-300 rounded-lg overflow-hidden">
+          <button
+            onClick={toggleDebugPanel}
+            className="w-full flex items-center justify-between p-3 bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className={`h-4 w-4 ${lastError ? 'text-red-500' : 'text-green-500'}`} />
+              <span className="text-sm font-semibold text-gray-700">Debug Panel</span>
+              {lastError && (
+                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Error</span>
+              )}
+            </div>
+            {debugPanelExpanded ? (
+              <ChevronUp className="h-4 w-4 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-600" />
+            )}
+          </button>
+          
+          {debugPanelExpanded && (
+          <div className="p-3 space-y-2 text-xs">
+            {lastError && (
+              <div className="bg-red-50 border border-red-200 rounded p-2">
+                <div className="font-semibold text-red-800 mb-1">Error:</div>
+                <div className="text-red-700">{lastError}</div>
+              </div>
+            )}
+            
+            {sdkStatus && (
+              <div className="space-y-1">
+                <div className="font-semibold text-gray-700 mb-2">SDK Status:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className={`px-2 py-1 rounded ${sdkStatus.initialized ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    Initialized: {sdkStatus.initialized ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    Available: {sdkStatus.available ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.sdkExists ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    SDK Exists: {sdkStatus.sdkExists ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    setVideoFilter: {sdkStatus.hasSetVideoFilter ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasRemoveVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    removeVideoFilter: {sdkStatus.hasRemoveVideoFilter ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    setVirtualBackground: {sdkStatus.hasSetVirtualBackground ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasGetUserContext ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    getUserContext: {sdkStatus.hasGetUserContext ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoState ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    setVideoState: {sdkStatus.hasSetVideoState ? 'Yes' : 'No'}
+                  </div>
+                </div>
+                
+                {sdkStatus.availableMethods && sdkStatus.availableMethods.length > 0 && (
+                  <div className="mt-2">
+                    <div className="font-semibold text-gray-700 mb-1">Available Methods:</div>
+                    <div className="text-gray-600 font-mono text-xs bg-gray-100 p-2 rounded max-h-32 overflow-y-auto">
+                      {sdkStatus.availableMethods.join(', ')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="pt-2 border-t border-gray-200">
+              <div className="text-gray-600">
+                <div>Video State: {videoState === null ? 'Unknown' : videoState ? 'ON' : 'OFF'}</div>
+                <div>Current Status: {currentStatus || 'None'}</div>
+                <div>Is Hidden: {isHidden ? 'Yes' : 'No'}</div>
+              </div>
+            </div>
+          </div>
+          )}
+        </div>
+      )}
 
       <SpeakerInput
         value={speakerName}
