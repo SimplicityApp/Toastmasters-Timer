@@ -236,7 +236,6 @@ export function TimerProvider({ children }) {
 
       // Reset timer
       resetTimer();
-      setCurrentSpeaker(null); // This is the state setter, which is correct
       setActiveSpeakerId(null);
     }
   }, [currentSpeaker, elapsedTime, currentStatus, activeSpeakerId, addReport, markCompleted, resetTimer]);
