@@ -4,7 +4,7 @@ import zoomSdk from '@zoom/appssdk';
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
 // Get the base URL for static assets (works in both dev and production)
-function getBackgroundUrl(color) {
+export function getBackgroundUrl(color) {
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
     const baseUrl = window.location.origin;
@@ -165,6 +165,161 @@ export function getSdkStatus() {
     sdkExists: typeof zoomSdk !== 'undefined',
     hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function'
   };
+}
+
+/**
+ * Apply video filter overlay using Zoom SDK
+ * @param {string} imageUrl - URL of the image to use as overlay
+ */
+export async function applyOverlay(imageUrl) {
+  // Ensure SDK is initialized before attempting to set filter
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.setVideoFilter === 'function') {
+      console.log(`Zoom SDK: Attempting to apply video filter overlay`);
+      console.log(`File URL: ${imageUrl}`);
+      
+      const result = await zoomSdk.setVideoFilter({ fileUrl: imageUrl });
+      console.log(`Zoom SDK: Successfully applied video filter overlay`, result);
+      
+      // Verify the filter was set (some SDKs return a status)
+      if (result && result.status) {
+        console.log(`Filter set status: ${result.status}`);
+      }
+    } else {
+      // SDK not available
+      console.warn(`[MOCK] Zoom SDK: Would apply video filter overlay (${imageUrl})`);
+      if (!sdkAvailable) {
+        console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+      }
+      if (!zoomSdk || typeof zoomSdk.setVideoFilter !== 'function') {
+        console.warn(`[MOCK] setVideoFilter function is not available on zoomSdk object`);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to apply video filter overlay:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack
+    });
+    
+    // Provide helpful error message
+    if (error.message && error.message.includes('permission')) {
+      console.error('⚠️ Permission error: Make sure video filters are enabled in your Zoom settings');
+    } else if (error.message && error.message.includes('video')) {
+      console.error('⚠️ Video error: Make sure your video is turned on in the Zoom meeting');
+    } else if (error.code) {
+      console.error(`⚠️ Error code: ${error.code}. Check Zoom SDK documentation for this error code.`);
+    }
+    
+    // Don't throw - allow app to continue functioning
+  }
+}
+
+/**
+ * Remove video filter overlay
+ */
+export async function removeVideoFilter() {
+  // Ensure SDK is initialized
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk) {
+      // Try removeVideoFilter first, fallback to setVideoFilter with null
+      if (typeof zoomSdk.removeVideoFilter === 'function') {
+        console.log('Zoom SDK: Attempting to remove video filter');
+        await zoomSdk.removeVideoFilter();
+        console.log('Zoom SDK: Successfully removed video filter');
+      } else if (typeof zoomSdk.setVideoFilter === 'function') {
+        console.log('Zoom SDK: Attempting to remove video filter via setVideoFilter(null)');
+        await zoomSdk.setVideoFilter({ fileUrl: null });
+        console.log('Zoom SDK: Successfully removed video filter');
+      } else {
+        console.warn('[MOCK] Zoom SDK: Would remove video filter');
+      }
+    } else {
+      console.warn('[MOCK] Zoom SDK: Would remove video filter (SDK not available)');
+    }
+  } catch (error) {
+    console.error('Failed to remove video filter:', error);
+    // Don't throw - allow app to continue functioning
+  }
+}
+
+/**
+ * Get current video state (on/off)
+ * @returns {Promise<boolean>} True if video is on, false if off
+ */
+export async function getVideoState() {
+  try {
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.getUserContext === 'function') {
+      const context = await zoomSdk.getUserContext();
+      const videoState = context?.videoState ?? false;
+      console.log('Zoom SDK: Video state:', videoState);
+      return videoState;
+    } else {
+      console.warn('[MOCK] Zoom SDK: Would get video state (SDK not available)');
+      // Return true in mock mode to allow development
+      return true;
+    }
+  } catch (error) {
+    console.error('Failed to get video state:', error);
+    // Return false on error to be safe
+    return false;
+  }
+}
+
+/**
+ * Set video state (turn video on/off)
+ * @param {boolean} enabled - True to turn video on, false to turn off
+ */
+export async function setVideoState(enabled) {
+  // Ensure SDK is initialized
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.setVideoState === 'function') {
+      console.log(`Zoom SDK: Attempting to set video state to ${enabled ? 'ON' : 'OFF'}`);
+      const result = await zoomSdk.setVideoState(enabled);
+      console.log(`Zoom SDK: Successfully set video state to ${enabled ? 'ON' : 'OFF'}`, result);
+      return result;
+    } else {
+      console.warn(`[MOCK] Zoom SDK: Would set video state to ${enabled ? 'ON' : 'OFF'} (SDK not available)`);
+      if (!sdkAvailable) {
+        console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+      }
+      if (!zoomSdk || typeof zoomSdk.setVideoState !== 'function') {
+        console.warn(`[MOCK] setVideoState function is not available on zoomSdk object`);
+      }
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to set video state:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
+    
+    // Provide helpful error message
+    if (error.message && error.message.includes('permission')) {
+      console.error('⚠️ Permission error: Video state control may require user permission');
+    }
+    
+    throw error; // Re-throw so caller can handle it
+  }
 }
 
 /**

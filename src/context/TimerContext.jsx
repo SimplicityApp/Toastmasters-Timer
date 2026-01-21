@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { DEFAULT_ROLE_RULES, detectRoleFromText } from '../constants/timingRules';
 import { calculateStatus, formatTime } from '../utils/timerLogic';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules } from '../utils/storage';
-import { setVirtualBackground } from '../utils/zoomSdk';
+import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
 
 const TimerContext = createContext(null);
 
@@ -78,9 +78,9 @@ export function TimerProvider({ children }) {
             const newStatus = calculateStatus(newTime, currentSpeaker.rules);
             setCurrentStatus(newStatus);
 
-            // Trigger Zoom background change when status changes
+            // Trigger Zoom overlay change when status changes
             if (newStatus !== previousStatusRef.current) {
-              setVirtualBackground(newStatus);
+              applyOverlay(getBackgroundUrl(newStatus));
               previousStatusRef.current = newStatus;
             }
           }
@@ -121,7 +121,7 @@ export function TimerProvider({ children }) {
     setElapsedTime(0);
     setCurrentStatus('white');
     previousStatusRef.current = 'white';
-    setVirtualBackground('white');
+    applyOverlay(getBackgroundUrl('white'));
   }, []);
 
   // Speaker management

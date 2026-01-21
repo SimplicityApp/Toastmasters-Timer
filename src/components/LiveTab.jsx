@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useTimer } from '../context/TimerContext';
-import { Play, Square, RotateCcw } from 'lucide-react';
+import { Play, Square, RotateCcw, Eye, EyeOff, Video } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
 import { ROLE_OPTIONS } from '../constants/timingRules';
+import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl } from '../utils/zoomSdk';
 
 export default function LiveTab() {
   const {
@@ -28,6 +29,11 @@ export default function LiveTab() {
     red: 420, // 7 minutes in seconds
   });
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
+  
+  // State for "Reveal Face" toggle and video control
+  const [isHidden, setIsHidden] = useState(true);
+  const [videoState, setVideoStateLocal] = useState(true);
+  const [isEnablingVideo, setIsEnablingVideo] = useState(false);
 
   // Update local state when currentSpeaker changes (but preserve custom rules if Custom role)
   useEffect(() => {
@@ -52,6 +58,56 @@ export default function LiveTab() {
       setCustomRules(roleRules['Custom']);
     }
   }, [selectedRole]);
+
+  // Check video state on mount and periodically
+  useEffect(() => {
+    const checkVideoState = async () => {
+      try {
+        const isVideoOn = await getVideoState();
+        setVideoStateLocal(isVideoOn);
+      } catch (error) {
+        console.error('Failed to check video state:', error);
+        // Default to false on error to be safe
+        setVideoStateLocal(false);
+      }
+    };
+
+    // Check immediately
+    checkVideoState();
+
+    // Check periodically every 2-3 seconds
+    const interval = setInterval(checkVideoState, 2500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle overlay removal/application based on isHidden state
+  useEffect(() => {
+    if (!isHidden) {
+      // Remove filter to show face (override any overlays from TimerContext)
+      removeVideoFilter();
+    } else {
+      // Reapply current overlay based on status when toggling back to hidden
+      // TimerContext will handle status changes, but we need to apply initial state
+      if (currentStatus) {
+        applyOverlay(getBackgroundUrl(currentStatus));
+      } else {
+        applyOverlay(getBackgroundUrl('white'));
+      }
+    }
+  }, [isHidden, currentStatus]); // Reapply when isHidden or status changes
+
+  // Watch for status changes and immediately remove filter if not hidden
+  // This ensures TimerContext overlays are immediately removed when isHidden is false
+  useEffect(() => {
+    if (!isHidden && currentStatus) {
+      // Small delay to ensure TimerContext overlay is applied first, then remove it
+      const timeoutId = setTimeout(() => {
+        removeVideoFilter();
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentStatus, isHidden]);
 
   const handleSpeakerChange = (name) => {
     setSpeakerName(name || '');
@@ -134,8 +190,45 @@ export default function LiveTab() {
     setSelectedRole('Standard Speech');
   };
 
+  const handleToggleRevealFace = () => {
+    setIsHidden(!isHidden);
+  };
+
+  const handleTurnVideoOn = async () => {
+    setIsEnablingVideo(true);
+    try {
+      await setVideoState(true);
+      // Wait a moment for the state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // Re-check video state
+      const isVideoOn = await getVideoState();
+      setVideoStateLocal(isVideoOn);
+      if (!isVideoOn) {
+        alert('Failed to turn video on. Please turn on video manually in Zoom.');
+      }
+    } catch (error) {
+      console.error('Failed to turn video on:', error);
+      alert('Failed to turn video on. Please turn on video manually in Zoom.');
+    } finally {
+      setIsEnablingVideo(false);
+    }
+  };
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4 relative">
+      {/* "Reveal Face" toggle button in top right */}
+      <button
+        onClick={handleToggleRevealFace}
+        className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+        title={isHidden ? 'Reveal Face' : 'Hide Face'}
+      >
+        {isHidden ? (
+          <EyeOff className="h-5 w-5 text-gray-700" />
+        ) : (
+          <Eye className="h-5 w-5 text-gray-700" />
+        )}
+      </button>
+
       <SpeakerInput
         value={speakerName}
         onChange={handleSpeakerChange}
@@ -222,7 +315,12 @@ export default function LiveTab() {
           {!isRunning ? (
             <button
               onClick={handleStart}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              disabled={!videoState}
+              className={`flex-1 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                videoState
+                  ? 'bg-green-500 hover:bg-green-600 text-white'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
               <Play className="h-5 w-5" />
               START
@@ -237,6 +335,34 @@ export default function LiveTab() {
             </button>
           )}
         </div>
+
+        {/* Video state warning and button */}
+        {!videoState && (
+          <div className="space-y-2">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                Turn on video to enable Timer Card
+              </p>
+            </div>
+            <button
+              onClick={handleTurnVideoOn}
+              disabled={isEnablingVideo}
+              className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              {isEnablingVideo ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Turning Video On...</span>
+                </>
+              ) : (
+                <>
+                  <Video className="h-4 w-4" />
+                  <span>Turn Video On</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button
