@@ -21,7 +21,7 @@ function getBackgroundUrls() {
     green: getBackgroundUrl('green'),
     yellow: getBackgroundUrl('yellow'),
     red: getBackgroundUrl('red'),
-    white: null, // No background change for white
+    white: getBackgroundUrl('white'),
   };
 }
 
