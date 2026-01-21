@@ -32,7 +32,7 @@ export default function LiveTab() {
   
   // State for "Reveal Face" toggle and video control
   const [isHidden, setIsHidden] = useState(true);
-  const [videoState, setVideoStateLocal] = useState(true);
+  const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
 
   // Update local state when currentSpeaker changes (but preserve custom rules if Custom role)
@@ -63,12 +63,15 @@ export default function LiveTab() {
   useEffect(() => {
     const checkVideoState = async () => {
       try {
-        const isVideoOn = await getVideoState();
-        setVideoStateLocal(isVideoOn);
+        const videoStateResult = await getVideoState();
+        // Only update if we got a definitive answer (true or false)
+        // null means we can't determine, so don't update the state
+        if (videoStateResult !== null) {
+          setVideoStateLocal(videoStateResult);
+        }
       } catch (error) {
         console.error('Failed to check video state:', error);
-        // Default to false on error to be safe
-        setVideoStateLocal(false);
+        // Don't update state on error - keep current state
       }
     };
 
@@ -315,11 +318,11 @@ export default function LiveTab() {
           {!isRunning ? (
             <button
               onClick={handleStart}
-              disabled={!videoState}
+              disabled={videoState === false}
               className={`flex-1 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                videoState
-                  ? 'bg-green-500 hover:bg-green-600 text-white'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                videoState === false
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
               }`}
             >
               <Play className="h-5 w-5" />
@@ -337,7 +340,7 @@ export default function LiveTab() {
         </div>
 
         {/* Video state warning and button */}
-        {!videoState && (
+        {videoState === false && (
           <div className="space-y-2">
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
               <p className="text-sm text-yellow-800">

@@ -257,24 +257,40 @@ export async function removeVideoFilter() {
 
 /**
  * Get current video state (on/off)
- * @returns {Promise<boolean>} True if video is on, false if off
+ * @returns {Promise<boolean | null>} True if video is on, false if off, null if unable to determine
  */
 export async function getVideoState() {
+  // Ensure SDK is initialized first
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
   try {
     if (sdkAvailable && zoomSdk && typeof zoomSdk.getUserContext === 'function') {
       const context = await zoomSdk.getUserContext();
-      const videoState = context?.videoState ?? false;
-      console.log('Zoom SDK: Video state:', videoState);
-      return videoState;
+      const videoState = context?.videoState;
+      
+      // Only return false if explicitly false, otherwise return null if undefined
+      if (videoState === false) {
+        console.log('Zoom SDK: Video state: OFF');
+        return false;
+      } else if (videoState === true) {
+        console.log('Zoom SDK: Video state: ON');
+        return true;
+      } else {
+        console.warn('Zoom SDK: Video state is undefined, cannot determine');
+        return null; // Return null if we can't determine
+      }
     } else {
       console.warn('[MOCK] Zoom SDK: Would get video state (SDK not available)');
-      // Return true in mock mode to allow development
-      return true;
+      // Return null in mock mode to indicate we can't determine (don't show warning)
+      return null;
     }
   } catch (error) {
     console.error('Failed to get video state:', error);
-    // Return false on error to be safe
-    return false;
+    // Return null on error to indicate we can't determine (don't show warning)
+    return null;
   }
 }
 
