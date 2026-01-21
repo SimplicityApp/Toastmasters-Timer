@@ -36,6 +36,15 @@ let sdkAvailable = false;
 export async function setVirtualBackground(color) {
   // Skip if white (no background change)
   if (color === 'white') {
+    // Try to clear virtual background when going back to white
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.setVirtualBackground === 'function') {
+      try {
+        await zoomSdk.setVirtualBackground({ fileUrl: null });
+        console.log('Zoom SDK: Cleared virtual background');
+      } catch (error) {
+        console.warn('Failed to clear virtual background:', error.message);
+      }
+    }
     return;
   }
 
@@ -46,17 +55,53 @@ export async function setVirtualBackground(color) {
     return;
   }
 
+  // Ensure SDK is initialized before attempting to set background
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
   try {
-    if (sdkAvailable) {
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.setVirtualBackground === 'function') {
       // Real Zoom SDK integration
-      await zoomSdk.setVirtualBackground({ fileUrl });
-      console.log(`Zoom SDK: Set virtual background to ${color}`);
+      console.log(`Zoom SDK: Attempting to set virtual background to ${color}`);
+      console.log(`File URL: ${fileUrl}`);
+      
+      const result = await zoomSdk.setVirtualBackground({ fileUrl });
+      console.log(`Zoom SDK: Successfully set virtual background to ${color}`, result);
+      
+      // Verify the background was set (some SDKs return a status)
+      if (result && result.status) {
+        console.log(`Background set status: ${result.status}`);
+      }
     } else {
-      // Mock implementation for local development
-      console.log(`[MOCK] Zoom SDK: Would set virtual background to ${color} (${fileUrl})`);
+      // SDK not available
+      console.warn(`[MOCK] Zoom SDK: Would set virtual background to ${color} (${fileUrl})`);
+      if (!sdkAvailable) {
+        console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+      }
+      if (!zoomSdk || typeof zoomSdk.setVirtualBackground !== 'function') {
+        console.warn(`[MOCK] setVirtualBackground function is not available on zoomSdk object`);
+      }
     }
   } catch (error) {
     console.error('Failed to set virtual background:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack
+    });
+    
+    // Provide helpful error message
+    if (error.message && error.message.includes('permission')) {
+      console.error('⚠️ Permission error: Make sure virtual backgrounds are enabled in your Zoom settings');
+    } else if (error.message && error.message.includes('video')) {
+      console.error('⚠️ Video error: Make sure your video is turned on in the Zoom meeting');
+    } else if (error.code) {
+      console.error(`⚠️ Error code: ${error.code}. Check Zoom SDK documentation for this error code.`);
+    }
+    
     // Don't throw - allow app to continue functioning
   }
 }
@@ -66,6 +111,7 @@ export async function setVirtualBackground(color) {
  */
 export async function initializeZoomSdk() {
   if (sdkInitialized) {
+    console.log(`Zoom SDK already initialized. Available: ${sdkAvailable}`);
     return sdkAvailable;
   }
 
@@ -74,7 +120,8 @@ export async function initializeZoomSdk() {
   try {
     // Check if we're in a Zoom environment
     // The SDK will be available when running in Zoom client
-    await zoomSdk.config({
+    console.log('Initializing Zoom SDK...');
+    const configResult = await zoomSdk.config({
       popoutSize: { width: 400, height: 600 },
       capabilities: [
         'shareApp',
@@ -84,15 +131,40 @@ export async function initializeZoomSdk() {
     });
 
     sdkAvailable = true;
-    console.log('Zoom SDK initialized successfully');
+    console.log('Zoom SDK initialized successfully', configResult);
+    console.log('Virtual background capability is available');
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
     sdkAvailable = false;
-    console.log('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)');
-    console.log('SDK initialization error (expected in local dev):', error.message);
+    console.warn('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)');
+    console.warn('SDK initialization error:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
+    console.warn('Note: Virtual backgrounds will only work when running inside Zoom client');
     return false;
   }
+}
+
+/**
+ * Check if SDK is available (for debugging)
+ */
+export function isSdkAvailable() {
+  return sdkAvailable;
+}
+
+/**
+ * Get SDK status for debugging
+ */
+export function getSdkStatus() {
+  return {
+    initialized: sdkInitialized,
+    available: sdkAvailable,
+    sdkExists: typeof zoomSdk !== 'undefined',
+    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function'
+  };
 }
 
 /**
