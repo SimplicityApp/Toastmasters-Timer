@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ROLE_OPTIONS } from '../constants/timingRules';
+import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
 
 function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }) {
   const {
@@ -105,6 +105,11 @@ export default function AgendaTab() {
   const [editItem, setEditItem] = useState(null);
   const [newSpeakerName, setNewSpeakerName] = useState('');
   const [newSpeakerRole, setNewSpeakerRole] = useState('Standard Speech');
+  const [customRules, setCustomRules] = useState({
+    green: 300,
+    yellow: 360,
+    red: 420,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -135,12 +140,18 @@ export default function AgendaTab() {
 
   const handleAdd = () => {
     if (newSpeakerName.trim()) {
-      addToAgenda({
+      const speakerData = {
         name: newSpeakerName.trim(),
         role: newSpeakerRole,
-      });
+      };
+      // If Custom role, include custom rules
+      if (newSpeakerRole === 'Custom') {
+        speakerData.rules = customRules;
+      }
+      addToAgenda(speakerData);
       setNewSpeakerName('');
       setNewSpeakerRole('Standard Speech');
+      setCustomRules({ green: 300, yellow: 360, red: 420 });
       setShowAddModal(false);
     }
   };
@@ -149,6 +160,12 @@ export default function AgendaTab() {
     setEditItem(item);
     setNewSpeakerName(item.name);
     setNewSpeakerRole(item.role);
+    // If item has custom rules, load them
+    if (item.role === 'Custom' && item.rules) {
+      setCustomRules(item.rules);
+    } else {
+      setCustomRules({ green: 300, yellow: 360, red: 420 });
+    }
     setShowAddModal(true);
   };
 
@@ -156,13 +173,19 @@ export default function AgendaTab() {
     if (editItem && newSpeakerName.trim()) {
       // Remove old item and add updated one
       removeFromAgenda(editItem.id);
-      addToAgenda({
+      const speakerData = {
         name: newSpeakerName.trim(),
         role: newSpeakerRole,
-      });
+      };
+      // If Custom role, include custom rules
+      if (newSpeakerRole === 'Custom') {
+        speakerData.rules = customRules;
+      }
+      addToAgenda(speakerData);
       setEditItem(null);
       setNewSpeakerName('');
       setNewSpeakerRole('Standard Speech');
+      setCustomRules({ green: 300, yellow: 360, red: 420 });
       setShowAddModal(false);
     }
   };
@@ -171,6 +194,37 @@ export default function AgendaTab() {
     if (window.confirm('Are you sure you want to remove this speaker from the agenda?')) {
       removeFromAgenda(id);
     }
+  };
+
+  // Helper to format seconds as MM:SS for display
+  const formatTimeForInput = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
+  // Helper to format seconds as readable time
+  const formatTimeReadable = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) {
+      return `${secs} second${secs !== 1 ? 's' : ''}`;
+    }
+    if (secs === 0) {
+      return `${mins} minute${mins !== 1 ? 's' : ''}`;
+    }
+    return `${mins} min ${secs} sec`;
+  };
+
+  // Get explanation text for each role
+  const getRoleExplanation = (role) => {
+    const rules = roleRules[role] || DEFAULT_ROLE_RULES[role] || DEFAULT_ROLE_RULES['Standard Speech'];
+    return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
+  };
+
+  const handleCustomRuleChange = (field, value) => {
+    const numValue = parseInt(value) || 0;
+    setCustomRules(prev => ({ ...prev, [field]: numValue }));
   };
 
   return (
@@ -188,6 +242,7 @@ export default function AgendaTab() {
             setEditItem(null);
             setNewSpeakerName('');
             setNewSpeakerRole('Standard Speech');
+            setCustomRules({ green: 300, yellow: 360, red: 420 });
             setShowAddModal(true);
           }}
           className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
@@ -288,6 +343,7 @@ export default function AgendaTab() {
                   setEditItem(null);
                   setNewSpeakerName('');
                   setNewSpeakerRole('Standard Speech');
+                  setCustomRules({ green: 300, yellow: 360, red: 420 });
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -322,7 +378,77 @@ export default function AgendaTab() {
                     </option>
                   ))}
                 </select>
+                {newSpeakerRole !== 'Custom' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Timing rules: {getRoleExplanation(newSpeakerRole)}
+                  </p>
+                )}
               </div>
+              {newSpeakerRole === 'Custom' && (
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Custom Timing Rules</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Green (seconds)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={customRules.green}
+                        onChange={(e) => handleCustomRuleChange('green', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="300"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatTimeForInput(customRules.green)}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Yellow (seconds)
+                      </label>
+                      <input
+                        type="number"
+                        min={customRules.green + 1}
+                        value={customRules.yellow}
+                        onChange={(e) => handleCustomRuleChange('yellow', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="360"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatTimeForInput(customRules.yellow)}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Red (seconds)
+                      </label>
+                      <input
+                        type="number"
+                        min={customRules.yellow + 1}
+                        value={customRules.red}
+                        onChange={(e) => handleCustomRuleChange('red', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder="420"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatTimeForInput(customRules.red)}
+                      </div>
+                    </div>
+                  </div>
+                  {customRules.yellow <= customRules.green && (
+                    <div className="text-xs text-red-600 mt-2">
+                      Yellow must be greater than Green
+                    </div>
+                  )}
+                  {customRules.red <= customRules.yellow && (
+                    <div className="text-xs text-red-600 mt-2">
+                      Red must be greater than Yellow
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-6">
               <button
@@ -337,6 +463,7 @@ export default function AgendaTab() {
                   setEditItem(null);
                   setNewSpeakerName('');
                   setNewSpeakerRole('Standard Speech');
+                  setCustomRules({ green: 300, yellow: 360, red: 420 });
                 }}
                 className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
               >

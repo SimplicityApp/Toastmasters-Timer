@@ -147,7 +147,8 @@ export function TimerProvider({ children }) {
   // Agenda management
   const addToAgenda = useCallback((speaker) => {
     const id = Date.now().toString();
-    const rules = roleRules[speaker.role] || DEFAULT_ROLE_RULES['Standard Speech'];
+    // Use custom rules if provided (for Custom role), otherwise use roleRules
+    const rules = speaker.rules || roleRules[speaker.role] || DEFAULT_ROLE_RULES['Standard Speech'];
     const newItem = {
       id,
       name: speaker.name,
