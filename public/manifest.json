@@ -5,7 +5,7 @@
   "app_type": "zoomapps",
   "app_location": {
     "type": "sidebar",
-    "url": "https://your-deployed-app-url.com"
+    "url": "https://www.timer.simple-tech.app"
   },
   "capabilities": {
     "virtualBackground": {
@@ -13,11 +13,11 @@
     }
   },
   "developer": {
-    "name": "Your Name",
-    "email": "your-email@example.com"
+    "name": "Shuhao Zhang",
+    "email": "shuhao.qgg.zhang@gmail.com"
   },
   "description": "Automates the Timer role in Toastmasters meetings by controlling virtual backgrounds and tracking speech times.",
-  "homepage_url": "https://your-deployed-app-url.com",
-  "privacy_policy_url": "https://your-deployed-app-url.com/privacy",
-  "support_url": "https://your-deployed-app-url.com/support"
+  "homepage_url": "https://www.timer.simple-tech.app",
+  "privacy_policy_url": "https://www.timer.simple-tech.app/privacy",
+  "support_url": "https://www.timer.simple-tech.app/support"
 }
