@@ -51,7 +51,6 @@ export default function LiveTab() {
   const [sdkStatus, setSdkStatus] = useState(null);
   const [lastError, setLastError] = useState(null);
   const [debugLogs, setDebugLogs] = useState([]);
-  const logsEndRef = useRef(null);
   const initializedRef = useRef(false);
   
   // Save expanded state to localStorage
@@ -72,12 +71,6 @@ export default function LiveTab() {
     });
   };
   
-  // Auto-scroll to bottom when new logs are added
-  useEffect(() => {
-    if (logsEndRef.current && debugPanelExpanded) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [debugLogs, debugPanelExpanded]);
 
   // Initialize currentSpeaker on mount if it's null
   useEffect(() => {
@@ -559,7 +552,6 @@ export default function LiveTab() {
                           <span>{log.message}</span>
                         </div>
                       ))}
-                      <div ref={logsEndRef} />
                     </>
                   )}
                 </div>
