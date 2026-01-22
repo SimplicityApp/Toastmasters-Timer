@@ -453,18 +453,9 @@ export async function getVideoState() {
     if (sdkAvailable && zoomSdk && typeof zoomSdk.getVideoState === 'function') {
       const result = await zoomSdk.getVideoState();
       
-      // Handle different possible return formats:
-      // 1. Direct boolean: true/false
-      // 2. Object with 'on' property: { on: true/false }
-      // 3. Object with 'videoState' property: { videoState: true/false }
-      let videoState;
-      if (typeof result === 'boolean') {
-        videoState = result;
-      } else if (result && typeof result === 'object') {
-        videoState = result.on !== undefined ? result.on : result.videoState;
-      } else {
-        videoState = undefined;
-      }
+      // According to Zoom SDK: GetVideoStateResponse = { video: boolean }
+      // video: false means off, true means on
+      const videoState = result?.video;
       
       // Only return false if explicitly false, otherwise return null if undefined
       if (videoState === false) {
@@ -476,8 +467,8 @@ export async function getVideoState() {
         log('Zoom SDK: Video state: ON', 'info');
         return true;
       } else {
-        console.warn('Zoom SDK: Video state is undefined, cannot determine');
-        log('Zoom SDK: Video state is undefined, cannot determine', 'warn');
+        console.warn('Zoom SDK: Video state is undefined, cannot determine. Result:', result);
+        log(`Zoom SDK: Video state is undefined, cannot determine. Result: ${JSON.stringify(result)}`, 'warn');
         return null; // Return null if we can't determine
       }
     } else {
@@ -507,17 +498,23 @@ export async function setVideoState(enabled) {
 
   try {
     if (sdkAvailable && zoomSdk && typeof zoomSdk.setVideoState === 'function') {
+      // According to Zoom SDK: SetVideoStateOptions = { video: boolean }
       console.log(`Zoom SDK: Attempting to set video state to ${enabled ? 'ON' : 'OFF'}`);
-      const result = await zoomSdk.setVideoState(enabled);
+      log(`Zoom SDK: Attempting to set video state to ${enabled ? 'ON' : 'OFF'}`, 'info');
+      const result = await zoomSdk.setVideoState({ video: enabled });
       console.log(`Zoom SDK: Successfully set video state to ${enabled ? 'ON' : 'OFF'}`, result);
+      log(`Zoom SDK: Successfully set video state to ${enabled ? 'ON' : 'OFF'}`, 'info');
       return result;
     } else {
       console.warn(`[MOCK] Zoom SDK: Would set video state to ${enabled ? 'ON' : 'OFF'} (SDK not available)`);
+      log(`[MOCK] Zoom SDK: Would set video state to ${enabled ? 'ON' : 'OFF'} (SDK not available)`, 'warn');
       if (!sdkAvailable) {
         console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+        log(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`, 'warn');
       }
       if (!zoomSdk || typeof zoomSdk.setVideoState !== 'function') {
         console.warn(`[MOCK] setVideoState function is not available on zoomSdk object`);
+        log(`[MOCK] setVideoState function is not available on zoomSdk object`, 'warn');
       }
       return null;
     }
