@@ -105,6 +105,21 @@ npm i -g vercel
 vercel
 ```
 
+### Production Configuration
+
+To disable the debug panel in production, set the environment variable:
+
+```bash
+VITE_ENABLE_DEBUG_PANEL=false
+```
+
+Or add it to your `.env` file:
+```
+VITE_ENABLE_DEBUG_PANEL=false
+```
+
+The debug panel is enabled by default for development and can be toggled by users. In production, you can completely hide it by setting the environment variable to `false`.
+
 ## Project Structure
 
 ```

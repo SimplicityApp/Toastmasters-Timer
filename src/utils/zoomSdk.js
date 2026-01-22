@@ -4,7 +4,7 @@ import zoomSdk from '@zoom/appssdk';
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
 // Get the base URL for static assets (works in both dev and production)
-function getBackgroundUrl(color) {
+export function getBackgroundUrl(color) {
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
     const baseUrl = window.location.origin;
@@ -21,13 +21,44 @@ function getBackgroundUrls() {
     green: getBackgroundUrl('green'),
     yellow: getBackgroundUrl('yellow'),
     red: getBackgroundUrl('red'),
-    white: null, // No background change for white
+    white: getBackgroundUrl('white'),
   };
 }
 
 // Track SDK initialization state
 let sdkInitialized = false;
 let sdkAvailable = false;
+
+// Track last error for debugging
+let lastError = null;
+
+// Log callback function - will be set by LiveTab component
+let logCallback = null;
+
+/**
+ * Set log callback for debug panel
+ * @param {Function} callback - Function to call with log messages
+ */
+export function setLogCallback(callback) {
+  logCallback = callback;
+}
+
+/**
+ * Internal logging function
+ */
+function log(message, type = 'info') {
+  if (logCallback) {
+    logCallback(message, type);
+  }
+  // Also log to console
+  if (type === 'error') {
+    console.error(message);
+  } else if (type === 'warn') {
+    console.warn(message);
+  } else {
+    console.log(message);
+  }
+}
 
 /**
  * Set virtual background using Zoom SDK
@@ -120,30 +151,27 @@ export async function initializeZoomSdk() {
   try {
     // Check if we're in a Zoom environment
     // The SDK will be available when running in Zoom client
-    console.log('Initializing Zoom SDK...');
+    log('Initializing Zoom SDK...', 'info');
     const configResult = await zoomSdk.config({
       popoutSize: { width: 400, height: 600 },
       capabilities: [
         'shareApp',
-        'virtualBackground'
+        'virtualBackground',
+        'videoFilter' // Add video filter capability if available
       ],
       version: '1.0.0'
     });
 
     sdkAvailable = true;
-    console.log('Zoom SDK initialized successfully', configResult);
-    console.log('Virtual background capability is available');
+    log(`Zoom SDK initialized successfully. Config: ${JSON.stringify(configResult)}`, 'info');
+    log('Virtual background capability is available', 'info');
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
     sdkAvailable = false;
-    console.warn('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)');
-    console.warn('SDK initialization error:', {
-      message: error.message,
-      code: error.code,
-      name: error.name
-    });
-    console.warn('Note: Virtual backgrounds will only work when running inside Zoom client');
+    log('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)', 'warn');
+    log(`SDK initialization error: ${error.message || error.name} (Code: ${error.code || 'N/A'})`, 'warn');
+    log('Note: Virtual backgrounds will only work when running inside Zoom client', 'warn');
     return false;
   }
 }
@@ -159,12 +187,337 @@ export function isSdkAvailable() {
  * Get SDK status for debugging
  */
 export function getSdkStatus() {
-  return {
+  const status = {
     initialized: sdkInitialized,
     available: sdkAvailable,
     sdkExists: typeof zoomSdk !== 'undefined',
-    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function'
+    hasSetVideoFilter: zoomSdk && typeof zoomSdk.setVideoFilter === 'function',
+    hasRemoveVideoFilter: zoomSdk && typeof zoomSdk.removeVideoFilter === 'function',
+    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
+    hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
+    hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
   };
+  
+  // Get available methods for debugging
+  if (zoomSdk && typeof zoomSdk === 'object') {
+    status.availableMethods = Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function');
+  }
+  
+  return status;
+}
+
+/**
+ * Load image from URL and convert to ImageData
+ * @param {string} imageUrl - URL of the image
+ * @returns {Promise<ImageData>} ImageData object
+ */
+async function loadImageAsImageData(imageUrl) {
+  log(`Loading image: ${imageUrl}`, 'info');
+  
+  // Use fetch first (more reliable, especially for CORS)
+  try {
+    log(`Fetching image via fetch API...`, 'info');
+    const response = await fetch(imageUrl, {
+      mode: 'cors',
+      credentials: 'omit'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    log(`Fetched blob: ${blob.size} bytes, type: ${blob.type}`, 'info');
+    
+    // Create object URL from blob
+    const objectUrl = URL.createObjectURL(blob);
+    
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+      }, 10000);
+      
+      img.onload = () => {
+        clearTimeout(timeout);
+        try {
+          // Create a canvas to convert image to ImageData
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(objectUrl);
+          log(`Loaded image via fetch: ${img.width}x${img.height}, ImageData size: ${imageData.data.length} bytes`, 'info');
+          resolve(imageData);
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          log(`Error converting image to ImageData: ${error.message}`, 'error');
+          reject(error);
+        }
+      };
+      
+      img.onerror = (event) => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(objectUrl);
+        const errorMsg = `Image load failed: ${event.message || event.type || 'Unknown error'}`;
+        log(`Image onerror event: ${errorMsg}`, 'error');
+        log(`Image naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`, 'error');
+        log(`Image complete: ${img.complete}`, 'error');
+        reject(new Error(`Failed to load image from ${imageUrl}: ${errorMsg}`));
+      };
+      
+      img.src = objectUrl;
+    });
+  } catch (fetchError) {
+    log(`Fetch failed, trying direct Image() load: ${fetchError.message}`, 'warn');
+    
+    // Fallback to direct Image() load
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      const timeout = setTimeout(() => {
+        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+      }, 10000);
+      
+      img.onload = () => {
+        clearTimeout(timeout);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          log(`Loaded image via direct Image(): ${img.width}x${img.height}`, 'info');
+          resolve(imageData);
+        } catch (error) {
+          log(`Error converting image to ImageData: ${error.message}`, 'error');
+          reject(error);
+        }
+      };
+      
+      img.onerror = (event) => {
+        clearTimeout(timeout);
+        const errorMsg = event.message || event.type || 'Unknown error';
+        log(`Direct Image() load also failed: ${errorMsg}`, 'error');
+        reject(new Error(`Failed to load image from ${imageUrl} (both fetch and Image() failed): ${errorMsg}`));
+      };
+      
+      img.src = imageUrl;
+    });
+  }
+}
+
+/**
+ * Apply video filter overlay using Zoom SDK
+ * @param {string} imageUrl - URL of the image to use as overlay
+ */
+export async function applyOverlay(imageUrl) {
+  // Ensure SDK is initialized before attempting to set filter
+  if (!sdkInitialized) {
+    log('SDK not initialized yet, initializing now...', 'warn');
+    await initializeZoomSdk();
+  }
+
+  if (!imageUrl) {
+    log('No image URL provided for overlay', 'warn');
+    return;
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk) {
+      // Try setVideoFilter first (newer API)
+      if (typeof zoomSdk.setVideoFilter === 'function') {
+        log(`Loading image for video filter: ${imageUrl}`, 'info');
+        
+        // Load image and convert to ImageData
+        const imageData = await loadImageAsImageData(imageUrl);
+        
+        log(`Applying video filter overlay with ImageData (${imageData.width}x${imageData.height})`, 'info');
+        
+        // setVideoFilter expects { imageData: ImageData } not { fileUrl: string }
+        const result = await zoomSdk.setVideoFilter({ imageData });
+        log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
+        
+        // Clear error on success
+        lastError = null;
+        
+        // Verify the filter was set (some SDKs return a status)
+        if (result && result.status) {
+          log(`Filter set status: ${result.status}`, 'info');
+        }
+        return;
+      }
+      // Fallback to setVirtualBackground if setVideoFilter is not available
+      else if (typeof zoomSdk.setVirtualBackground === 'function') {
+        log(`setVideoFilter not available, using setVirtualBackground as fallback: ${imageUrl}`, 'warn');
+        
+        const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
+        log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
+        
+        // Clear error on success
+        lastError = null;
+        return;
+      }
+    }
+    
+    // SDK not available or function not found
+    log(`[MOCK] Would apply video filter overlay (${imageUrl})`, 'warn');
+    if (!sdkAvailable) {
+      log(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`, 'warn');
+    }
+    if (!zoomSdk) {
+      log(`[MOCK] zoomSdk object is not available`, 'warn');
+    } else {
+      const availableMethods = Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function');
+      log(`[MOCK] setVideoFilter and setVirtualBackground functions are not available. Available methods: ${availableMethods.join(', ')}`, 'warn');
+    }
+  } catch (error) {
+    log(`Failed to apply video filter overlay: ${error.message || error.name}`, 'error');
+    log(`Error details: ${JSON.stringify({ message: error.message, code: error.code, name: error.name })}`, 'error');
+    
+    // Store error for debug panel
+    let errorMessage = `Failed to apply overlay: ${error.message || error.name || 'Unknown error'}`;
+    if (error.code) {
+      errorMessage += ` (Code: ${error.code})`;
+    }
+    
+    // Provide helpful error message
+    if (error.message && error.message.includes('permission')) {
+      errorMessage = 'Permission error: Make sure video filters are enabled in your Zoom settings';
+      log('⚠️ ' + errorMessage, 'error');
+    } else if (error.message && error.message.includes('video')) {
+      errorMessage = 'Video error: Make sure your video is turned on in the Zoom meeting';
+      log('⚠️ ' + errorMessage, 'error');
+    } else if (error.code) {
+      errorMessage = `Error code: ${error.code}. Check Zoom SDK documentation for this error code.`;
+      log(`⚠️ ${errorMessage}`, 'error');
+    }
+    
+    lastError = errorMessage;
+    
+    // Don't throw - allow app to continue functioning
+  }
+}
+
+/**
+ * Remove video filter overlay
+ */
+export async function removeVideoFilter() {
+  // Ensure SDK is initialized
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk) {
+      // Try removeVideoFilter first, fallback to setVideoFilter with null
+      if (typeof zoomSdk.removeVideoFilter === 'function') {
+        log('Attempting to remove video filter', 'info');
+        await zoomSdk.removeVideoFilter();
+        log('Successfully removed video filter', 'info');
+      } else if (typeof zoomSdk.setVideoFilter === 'function') {
+        log('Attempting to remove video filter via setVideoFilter(null)', 'info');
+        await zoomSdk.setVideoFilter({ fileUrl: null });
+        log('Successfully removed video filter', 'info');
+      } else {
+        log('[MOCK] Would remove video filter', 'warn');
+      }
+    } else {
+      log('[MOCK] Would remove video filter (SDK not available)', 'warn');
+    }
+  } catch (error) {
+    console.error('Failed to remove video filter:', error);
+    // Don't throw - allow app to continue functioning
+  }
+}
+
+/**
+ * Get current video state (on/off)
+ * @returns {Promise<boolean | null>} True if video is on, false if off, null if unable to determine
+ */
+export async function getVideoState() {
+  // Ensure SDK is initialized first
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.getUserContext === 'function') {
+      const context = await zoomSdk.getUserContext();
+      const videoState = context?.videoState;
+      
+      // Only return false if explicitly false, otherwise return null if undefined
+      if (videoState === false) {
+        console.log('Zoom SDK: Video state: OFF');
+        return false;
+      } else if (videoState === true) {
+        console.log('Zoom SDK: Video state: ON');
+        return true;
+      } else {
+        console.warn('Zoom SDK: Video state is undefined, cannot determine');
+        return null; // Return null if we can't determine
+      }
+    } else {
+      console.warn('[MOCK] Zoom SDK: Would get video state (SDK not available)');
+      // Return null in mock mode to indicate we can't determine (don't show warning)
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to get video state:', error);
+    // Return null on error to indicate we can't determine (don't show warning)
+    return null;
+  }
+}
+
+/**
+ * Set video state (turn video on/off)
+ * @param {boolean} enabled - True to turn video on, false to turn off
+ */
+export async function setVideoState(enabled) {
+  // Ensure SDK is initialized
+  if (!sdkInitialized) {
+    console.warn('SDK not initialized yet, initializing now...');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.setVideoState === 'function') {
+      console.log(`Zoom SDK: Attempting to set video state to ${enabled ? 'ON' : 'OFF'}`);
+      const result = await zoomSdk.setVideoState(enabled);
+      console.log(`Zoom SDK: Successfully set video state to ${enabled ? 'ON' : 'OFF'}`, result);
+      return result;
+    } else {
+      console.warn(`[MOCK] Zoom SDK: Would set video state to ${enabled ? 'ON' : 'OFF'} (SDK not available)`);
+      if (!sdkAvailable) {
+        console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+      }
+      if (!zoomSdk || typeof zoomSdk.setVideoState !== 'function') {
+        console.warn(`[MOCK] setVideoState function is not available on zoomSdk object`);
+      }
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to set video state:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
+    
+    // Provide helpful error message
+    if (error.message && error.message.includes('permission')) {
+      console.error('⚠️ Permission error: Video state control may require user permission');
+    }
+    
+    throw error; // Re-throw so caller can handle it
+  }
 }
 
 /**
