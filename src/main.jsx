@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { initializeZoomSdk, preloadBackgroundImages } from './utils/zoomSdk'
+import { initPostHog } from './utils/posthog'
+import posthog from 'posthog-js'
+import { PostHogProvider } from '@posthog/react'
 
 // Initialize Zoom SDK before rendering the app
 async function initApp() {
@@ -20,10 +23,19 @@ async function initApp() {
     console.warn('Failed to pre-load background images:', error);
   }
 
-  // Render app regardless of SDK initialization status
+  // Initialize PostHog (gracefully handles failures)
+  try {
+    initPostHog();
+  } catch (error) {
+    console.warn('Failed to initialize PostHog:', error);
+  }
+
+  // Render app regardless of initialization status
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <App />
+      <PostHogProvider client={posthog}>
+        <App />
+      </PostHogProvider>
     </React.StrictMode>,
   )
 }

@@ -5,6 +5,7 @@ import NavTabs from './components/NavTabs';
 import LiveTab from './components/LiveTab';
 import AgendaTab from './components/AgendaTab';
 import ReportTab from './components/ReportTab';
+import Footer from './components/Footer';
 import './App.css';
 
 function App() {
@@ -21,6 +22,8 @@ function App() {
             {activeTab === 'agenda' && <AgendaTab onSwitchToLive={() => setActiveTab('live')} />}
             {activeTab === 'report' && <ReportTab />}
           </div>
+          
+          <Footer />
         </div>
       </TimerProvider>
     </ToastProvider>

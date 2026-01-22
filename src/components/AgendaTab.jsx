@@ -3,6 +3,7 @@ import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Plus, Upload, X, Edit2, Trash2, GripVertical, Check } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import { trackEvent } from '../utils/posthog';
 import {
   DndContext,
   closestCenter,
@@ -142,6 +143,14 @@ export default function AgendaTab({ onSwitchToLive }) {
       const newIndex = agenda.findIndex((item) => item.id === over.id);
       const newOrder = arrayMove(agenda, oldIndex, newIndex);
       reorderAgenda(newOrder);
+      
+      // Track agenda reordered
+      const movedItem = agenda[oldIndex];
+      trackEvent('agenda_reordered', {
+        speaker_name: movedItem?.name || 'Unnamed',
+        old_index: oldIndex,
+        new_index: newIndex
+      });
     }
   };
 
@@ -270,6 +279,11 @@ export default function AgendaTab({ onSwitchToLive }) {
 
   const handleSpeakerClick = (item) => {
     loadSpeakerFromAgenda(item.id);
+    // Track speaker loaded from agenda
+    trackEvent('speaker_loaded_from_agenda', {
+      speaker_name: item.name || 'Unnamed',
+      role: item.role
+    });
     if (onSwitchToLive) {
       onSwitchToLive();
     }

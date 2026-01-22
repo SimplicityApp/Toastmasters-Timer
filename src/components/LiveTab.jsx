@@ -8,6 +8,7 @@ import EditRulesModal from './EditRulesModal';
 import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
 import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl, getSdkStatus, setLogCallback } from '../utils/zoomSdk';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { trackEvent } from '../utils/posthog';
 
 export default function LiveTab() {
   const {
@@ -240,6 +241,7 @@ export default function LiveTab() {
   };
 
   const handleRoleChange = (role) => {
+    const previousRole = selectedRole;
     setSelectedRole(role);
     // Always update current speaker, even if name is empty
     const rules = role === 'Custom' ? customRules : undefined;
@@ -248,6 +250,14 @@ export default function LiveTab() {
       role,
       ...(rules && { rules }),
     });
+    // Track role change
+    if (previousRole !== role) {
+      trackEvent('speaker_role_changed', {
+        previous_role: previousRole,
+        new_role: role,
+        speaker_name: speakerName || 'Unnamed'
+      });
+    }
   };
 
   const handleCustomRuleChange = (field, value) => {
@@ -320,21 +330,50 @@ export default function LiveTab() {
     // So we call startTimer, and if currentSpeaker still doesn't have rules, 
     // the initialization useEffect should have set it up by now
     startTimer();
+    
+    // Track timer started event
+    trackEvent('timer_started', {
+      speaker_name: speakerName || 'Unnamed',
+      role: selectedRole,
+      timing_rules: {
+        green: rules.green,
+        yellow: rules.yellow,
+        red: rules.red
+      }
+    });
   };
 
   const handleContinue = () => {
     // Continue is the same as start - it resumes the timer
     startTimer();
+    // Track timer continued (resumed)
+    trackEvent('timer_continued', {
+      elapsed_time: elapsedTime
+    });
   };
 
   const handleStop = () => {
     stopTimer();
+    // Track timer stopped
+    trackEvent('timer_stopped', {
+      elapsed_time: elapsedTime,
+      final_status: currentStatus,
+      speaker_name: currentSpeaker?.name || 'Unnamed',
+      role: currentSpeaker?.role || 'Unknown'
+    });
   };
 
   const handleReset = () => {
+    const previousElapsedTime = elapsedTime;
+    const previousStatus = currentStatus;
     resetTimer();
     setSpeakerName('');
     setSelectedRole('Standard Speech');
+    // Track timer reset
+    trackEvent('timer_reset', {
+      previous_elapsed_time: previousElapsedTime,
+      previous_status: previousStatus
+    });
   };
 
   const handleFinish = () => {
@@ -344,7 +383,13 @@ export default function LiveTab() {
   };
 
   const handleToggleRevealFace = () => {
-    setIsHidden(!isHidden);
+    const newIsHidden = !isHidden;
+    setIsHidden(newIsHidden);
+    // Track background toggle
+    trackEvent('background_toggled', {
+      status: newIsHidden ? 'hidden' : 'revealed',
+      current_timer_status: currentStatus
+    });
   };
 
   const handleTurnVideoOn = async () => {

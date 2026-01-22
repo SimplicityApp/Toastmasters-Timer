@@ -4,6 +4,7 @@ import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
 import ConfirmModal from './ConfirmModal';
+import { trackEvent } from '../utils/posthog';
 
 // Helper to format seconds as MM:SS for display
 const formatTimeForInput = (seconds) => {
@@ -46,9 +47,33 @@ export default function EditRulesModal({ isOpen, onClose }) {
       }
     }
 
-    // Save all rules
+    // Track which rules were changed
+    const changedRoles = [];
     Object.keys(editedRules).forEach(role => {
-      updateRoleRules(role, editedRules[role]);
+      const oldRules = roleRules[role];
+      const newRules = editedRules[role];
+      if (oldRules && (
+        oldRules.green !== newRules.green ||
+        oldRules.yellow !== newRules.yellow ||
+        oldRules.red !== newRules.red
+      )) {
+        changedRoles.push(role);
+        updateRoleRules(role, newRules);
+        // Track each role's rules edit
+        trackEvent('rules_edited', {
+          role: role,
+          new_rules: {
+            green: newRules.green,
+            yellow: newRules.yellow,
+            red: newRules.red
+          },
+          previous_rules: oldRules ? {
+            green: oldRules.green,
+            yellow: oldRules.yellow,
+            red: oldRules.red
+          } : null
+        });
+      }
     });
 
     onClose();

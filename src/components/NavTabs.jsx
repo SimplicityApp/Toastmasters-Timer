@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { trackEvent } from '../utils/posthog';
 
 export default function NavTabs({ activeTab, onTabChange }) {
   const tabs = [
@@ -7,13 +8,22 @@ export default function NavTabs({ activeTab, onTabChange }) {
     { id: 'report', label: 'REPORT' },
   ];
 
+  const handleTabChange = (tabId) => {
+    // Track tab navigation
+    trackEvent('tab_viewed', {
+      tab_name: tabId,
+      previous_tab: activeTab
+    });
+    onTabChange(tabId);
+  };
+
   return (
     <div className="w-full border-b border-gray-200">
       <nav className="flex" aria-label="Tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => onTabChange(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className={`
               flex-1 px-4 py-3 text-sm font-medium text-center
               transition-colors duration-150

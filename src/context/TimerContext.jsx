@@ -5,6 +5,7 @@ import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRo
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '../utils/easySpeakParser';
 import { useToast } from './ToastContext';
+import { trackEvent } from '../utils/posthog';
 
 const TimerContext = createContext(null);
 
@@ -165,25 +166,47 @@ export function TimerProvider({ children }) {
       completed: false
     };
     setAgenda(prev => [...prev, newItem]);
+    
+    // Track speaker added to agenda
+    trackEvent('speaker_added', {
+      speaker_name: speaker.name || 'Unnamed',
+      role: speaker.role
+    });
+    
     return id;
   }, [roleRules]);
 
   const removeFromAgenda = useCallback((id) => {
+    const itemToRemove = agenda.find(item => item.id === id);
     setAgenda(prev => prev.filter(item => item.id !== id));
     if (activeSpeakerId === id) {
       setActiveSpeakerId(null);
     }
-  }, [activeSpeakerId]);
+    
+    // Track speaker removed from agenda
+    if (itemToRemove) {
+      trackEvent('speaker_removed', {
+        speaker_name: itemToRemove.name || 'Unnamed',
+        role: itemToRemove.role
+      });
+    }
+  }, [activeSpeakerId, agenda]);
 
   const reorderAgenda = useCallback((newOrder) => {
     setAgenda(newOrder);
   }, []);
 
   const clearAllAgenda = useCallback(() => {
+    const agendaCount = agenda.length;
     setAgenda([]);
     setActiveSpeakerId(null);
     clearAgenda();
-  }, []);
+    
+    // Track agenda cleared
+    trackEvent('agenda_cleared', {
+      items_count: agendaCount
+    });
+  }, [agenda]);
 
   const markCompleted = useCallback((id) => {
     setAgenda(prev => prev.map(item => 
@@ -226,6 +249,13 @@ export function TimerProvider({ children }) {
     });
 
     setAgenda(prev => [...prev, ...newItems]);
+    
+    // Track bulk import
+    trackEvent('agenda_imported', {
+      import_type: 'bulk',
+      items_count: newItems.length
+    });
+    
     return newItems.length;
   }, [roleRules]);
 
@@ -247,6 +277,13 @@ export function TimerProvider({ children }) {
     });
 
     setAgenda(prev => [...prev, ...newItems]);
+    
+    // Track EasySpeak import
+    trackEvent('agenda_imported', {
+      import_type: 'easyspeak',
+      items_count: newItems.length
+    });
+    
     return newItems.length;
   }, [roleRules]);
 
@@ -327,6 +364,16 @@ export function TimerProvider({ children }) {
         duration: elapsedTime,
         color: currentStatus,
         comments: comment
+      });
+
+      // Track speech finished
+      trackEvent('speech_finished', {
+        speaker_name: currentSpeaker.name || 'Unnamed',
+        role: currentSpeaker.role,
+        duration: elapsedTime,
+        final_status: currentStatus,
+        passed_red: elapsedTime > (currentSpeaker.rules?.red || 0),
+        finished_before_green: elapsedTime < (currentSpeaker.rules?.green || 0)
       });
 
       // Mark as completed in agenda if it exists
