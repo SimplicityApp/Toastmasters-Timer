@@ -5,13 +5,16 @@ const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
 // Get the base URL for static assets (works in both dev and production)
 export function getBackgroundUrl(color) {
+  // Map 'white' status to 'grey' image file
+  const imageFile = color === 'white' ? 'grey' : color;
+  
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
     const baseUrl = window.location.origin;
-    return `${baseUrl}/backgrounds/${color}.png`;
+    return `${baseUrl}/backgrounds/${imageFile}.png`;
   }
   // Fallback to production URL if window is not available
-  return `${PRODUCTION_BASE_URL}/backgrounds/${color}.png`;
+  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}.png`;
 }
 
 // Virtual background image URLs getter
@@ -21,7 +24,7 @@ function getBackgroundUrls() {
     green: getBackgroundUrl('green'),
     yellow: getBackgroundUrl('yellow'),
     red: getBackgroundUrl('red'),
-    white: getBackgroundUrl('white'),
+    white: getBackgroundUrl('grey'), // Use grey.png for white status
   };
 }
 
@@ -291,16 +294,17 @@ async function loadImageAsImageData(imageUrl) {
  * This should be called when the app initializes
  */
 export async function preloadBackgroundImages() {
+  // Map status colors to actual image files (white status uses grey.png)
   const colors = ['white', 'green', 'yellow', 'red'];
   log('Pre-loading background images...', 'info');
   
   const loadPromises = colors.map(async (color) => {
-    const url = getBackgroundUrl(color);
+    const url = getBackgroundUrl(color); // getBackgroundUrl maps white -> grey automatically
     try {
       await loadImageAsImageData(url);
-      log(`Pre-loaded ${color}.png`, 'info');
+      log(`Pre-loaded ${color} status`, 'info');
     } catch (error) {
-      log(`Failed to pre-load ${color}.png: ${error.message}`, 'warn');
+      log(`Failed to pre-load ${color} status: ${error.message}`, 'warn');
     }
   });
   
