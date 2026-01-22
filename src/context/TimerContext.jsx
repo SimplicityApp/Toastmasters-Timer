@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { DEFAULT_ROLE_RULES, detectRoleFromText } from '../constants/timingRules';
 import { calculateStatus, formatTime } from '../utils/timerLogic';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules } from '../utils/storage';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, clearAgenda, clearReports } from '../utils/storage';
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
+import { parseEasySpeakText } from '../utils/easySpeakParser';
 
 const TimerContext = createContext(null);
 
@@ -175,6 +176,12 @@ export function TimerProvider({ children }) {
     setAgenda(newOrder);
   }, []);
 
+  const clearAllAgenda = useCallback(() => {
+    setAgenda([]);
+    setActiveSpeakerId(null);
+    clearAgenda();
+  }, []);
+
   const markCompleted = useCallback((id) => {
     setAgenda(prev => prev.map(item => 
       item.id === id ? { ...item, completed: true } : item
@@ -197,7 +204,7 @@ export function TimerProvider({ children }) {
     }
   }, [agenda, setCurrentSpeakerAction]);
 
-  // Bulk import
+  // Simple format bulk import
   const importBulkSpeakers = useCallback((text) => {
     const lines = text.split('\n').filter(line => line.trim());
     const newItems = lines.map((line, index) => {
@@ -209,6 +216,26 @@ export function TimerProvider({ children }) {
       return {
         id: `${Date.now()}-${index}`,
         name,
+        role,
+        rules,
+        completed: false
+      };
+    });
+
+    setAgenda(prev => [...prev, ...newItems]);
+    return newItems.length;
+  }, [roleRules]);
+
+  // EasySpeak format bulk import
+  const importEasySpeakSpeakers = useCallback((text) => {
+    const parsedItems = parseEasySpeakText(text);
+    const newItems = parsedItems.map((item, index) => {
+      const role = item.role;
+      const rules = roleRules[role] || DEFAULT_ROLE_RULES['Standard Speech'];
+      
+      return {
+        id: `${Date.now()}-${index}`,
+        name: item.name,
         role,
         rules,
         completed: false
@@ -240,6 +267,27 @@ export function TimerProvider({ children }) {
     }
   }, []);
 
+  // Helper function to format "finished before green" comment
+  const formatBeforeGreenComment = useCallback((elapsedSeconds, greenThreshold) => {
+    if (elapsedSeconds >= greenThreshold) {
+      return '';
+    }
+    
+    const underTime = greenThreshold - elapsedSeconds;
+    const minutes = Math.floor(underTime / 60);
+    const seconds = Math.floor(underTime % 60);
+    
+    if (minutes > 0) {
+      if (seconds > 0) {
+        return `Finished ${minutes} minute${minutes > 1 ? 's' : ''} ${seconds} second${seconds > 1 ? 's' : ''} before green`;
+      } else {
+        return `Finished ${minutes} minute${minutes > 1 ? 's' : ''} before green`;
+      }
+    } else {
+      return `Finished ${seconds} second${seconds > 1 ? 's' : ''} before green`;
+    }
+  }, []);
+
   // Report management
   const addReport = useCallback((entry) => {
     const reportEntry = {
@@ -252,12 +300,21 @@ export function TimerProvider({ children }) {
     setReports(prev => [...prev, reportEntry]);
   }, []);
 
+  const clearAllReports = useCallback(() => {
+    setReports([]);
+    clearReports();
+  }, []);
+
   const finishCurrentSpeech = useCallback(() => {
     if (currentSpeaker && elapsedTime > 0) {
-      // Calculate comment if speaker passed red
+      // Calculate comment if speaker passed red or finished before green
       let comment = '';
-      if (currentSpeaker.rules && elapsedTime > currentSpeaker.rules.red) {
-        comment = formatPassedRedComment(elapsedTime, currentSpeaker.rules.red);
+      if (currentSpeaker.rules) {
+        if (elapsedTime > currentSpeaker.rules.red) {
+          comment = formatPassedRedComment(elapsedTime, currentSpeaker.rules.red);
+        } else if (elapsedTime < currentSpeaker.rules.green) {
+          comment = formatBeforeGreenComment(elapsedTime, currentSpeaker.rules.green);
+        }
       }
 
       addReport({
@@ -277,7 +334,7 @@ export function TimerProvider({ children }) {
       resetTimer();
       setActiveSpeakerId(null);
     }
-  }, [currentSpeaker, elapsedTime, currentStatus, activeSpeakerId, addReport, markCompleted, resetTimer, formatPassedRedComment]);
+  }, [currentSpeaker, elapsedTime, currentStatus, activeSpeakerId, addReport, markCompleted, resetTimer, formatPassedRedComment, formatBeforeGreenComment]);
 
   // Role rules management
   const updateRoleRules = useCallback((role, rules) => {
@@ -320,10 +377,13 @@ export function TimerProvider({ children }) {
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
+    importEasySpeakSpeakers,
+    clearAllAgenda,
     
     // Report actions
     addReport,
     finishCurrentSpeech,
+    clearAllReports,
     
     // Role rules actions
     updateRoleRules,

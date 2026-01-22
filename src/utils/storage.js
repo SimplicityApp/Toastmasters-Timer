@@ -31,6 +31,17 @@ export function loadAgenda() {
 }
 
 /**
+ * Clear agenda from localStorage
+ */
+export function clearAgenda() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.AGENDA);
+  } catch (error) {
+    console.error('Failed to clear agenda:', error);
+  }
+}
+
+/**
  * Save reports to localStorage
  * @param {Array} reports - Reports array
  */
@@ -53,6 +64,17 @@ export function loadReports() {
   } catch (error) {
     console.error('Failed to load reports:', error);
     return [];
+  }
+}
+
+/**
+ * Clear reports from localStorage
+ */
+export function clearReports() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.REPORTS);
+  } catch (error) {
+    console.error('Failed to clear reports:', error);
   }
 }
 
