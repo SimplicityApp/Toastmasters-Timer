@@ -35,6 +35,9 @@ let lastError = null;
 // Log callback function - will be set by LiveTab component
 let logCallback = null;
 
+// Cache for pre-loaded ImageData objects
+const imageDataCache = new Map();
+
 /**
  * Set log callback for debug panel
  * @param {Function} callback - Function to call with log messages
@@ -207,109 +210,102 @@ export function getSdkStatus() {
 }
 
 /**
- * Load image from URL and convert to ImageData
+ * Load image from URL and convert to ImageData (using direct Image() load, works better in Zoom client)
  * @param {string} imageUrl - URL of the image
  * @returns {Promise<ImageData>} ImageData object
  */
 async function loadImageAsImageData(imageUrl) {
+  // Check cache first
+  if (imageDataCache.has(imageUrl)) {
+    log(`Using cached ImageData for: ${imageUrl}`, 'info');
+    return imageDataCache.get(imageUrl);
+  }
+  
   log(`Loading image: ${imageUrl}`, 'info');
   
-  // Use fetch first (more reliable, especially for CORS)
-  try {
-    log(`Fetching image via fetch API...`, 'info');
-    const response = await fetch(imageUrl, {
-      mode: 'cors',
-      credentials: 'omit'
-    });
+  // In Zoom client, direct Image() load works better than fetch
+  // Use direct Image() load (similar to how UI images work)
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    let resolved = false;
     
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+      }
+    }, 10000);
+    
+    img.onload = () => {
+      if (resolved) return;
+      clearTimeout(timeout);
+      
+      // Verify image actually loaded
+      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+        resolved = true;
+        reject(new Error(`Image loaded but has invalid dimensions: ${img.naturalWidth}x${img.naturalHeight}`));
+        return;
+      }
+      
+      try {
+        // Create a canvas to convert image to ImageData
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Cache the ImageData for future use
+        imageDataCache.set(imageUrl, imageData);
+        
+        log(`Loaded image: ${img.naturalWidth}x${img.naturalHeight}, ImageData size: ${imageData.data.length} bytes (cached)`, 'info');
+        resolved = true;
+        resolve(imageData);
+      } catch (error) {
+        log(`Error converting image to ImageData: ${error.message}`, 'error');
+        resolved = true;
+        reject(error);
+      }
+    };
+    
+    img.onerror = (event) => {
+      if (resolved) return;
+      clearTimeout(timeout);
+      const errorMsg = `Image load failed: ${event.message || event.type || 'Unknown error'}`;
+      log(`Image onerror event: ${errorMsg}`, 'error');
+      log(`Image naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`, 'error');
+      log(`Image complete: ${img.complete}, width: ${img.width}, height: ${img.height}`, 'error');
+      resolved = true;
+      reject(new Error(`Failed to load image from ${imageUrl}: ${errorMsg}`));
+    };
+    
+    // Set src to load image (works like UI images in Zoom client)
+    img.src = imageUrl;
+  });
+}
+
+/**
+ * Pre-load all background images and cache them as ImageData
+ * This should be called when the app initializes
+ */
+export async function preloadBackgroundImages() {
+  const colors = ['white', 'green', 'yellow', 'red'];
+  log('Pre-loading background images...', 'info');
+  
+  const loadPromises = colors.map(async (color) => {
+    const url = getBackgroundUrl(color);
+    try {
+      await loadImageAsImageData(url);
+      log(`Pre-loaded ${color}.png`, 'info');
+    } catch (error) {
+      log(`Failed to pre-load ${color}.png: ${error.message}`, 'warn');
     }
-    
-    const blob = await response.blob();
-    log(`Fetched blob: ${blob.size} bytes, type: ${blob.type}`, 'info');
-    
-    // Create object URL from blob
-    const objectUrl = URL.createObjectURL(blob);
-    
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const timeout = setTimeout(() => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
-      }, 10000);
-      
-      img.onload = () => {
-        clearTimeout(timeout);
-        try {
-          // Create a canvas to convert image to ImageData
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          URL.revokeObjectURL(objectUrl);
-          log(`Loaded image via fetch: ${img.width}x${img.height}, ImageData size: ${imageData.data.length} bytes`, 'info');
-          resolve(imageData);
-        } catch (error) {
-          URL.revokeObjectURL(objectUrl);
-          log(`Error converting image to ImageData: ${error.message}`, 'error');
-          reject(error);
-        }
-      };
-      
-      img.onerror = (event) => {
-        clearTimeout(timeout);
-        URL.revokeObjectURL(objectUrl);
-        const errorMsg = `Image load failed: ${event.message || event.type || 'Unknown error'}`;
-        log(`Image onerror event: ${errorMsg}`, 'error');
-        log(`Image naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`, 'error');
-        log(`Image complete: ${img.complete}`, 'error');
-        reject(new Error(`Failed to load image from ${imageUrl}: ${errorMsg}`));
-      };
-      
-      img.src = objectUrl;
-    });
-  } catch (fetchError) {
-    log(`Fetch failed, trying direct Image() load: ${fetchError.message}`, 'warn');
-    
-    // Fallback to direct Image() load
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      const timeout = setTimeout(() => {
-        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
-      }, 10000);
-      
-      img.onload = () => {
-        clearTimeout(timeout);
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          log(`Loaded image via direct Image(): ${img.width}x${img.height}`, 'info');
-          resolve(imageData);
-        } catch (error) {
-          log(`Error converting image to ImageData: ${error.message}`, 'error');
-          reject(error);
-        }
-      };
-      
-      img.onerror = (event) => {
-        clearTimeout(timeout);
-        const errorMsg = event.message || event.type || 'Unknown error';
-        log(`Direct Image() load also failed: ${errorMsg}`, 'error');
-        reject(new Error(`Failed to load image from ${imageUrl} (both fetch and Image() failed): ${errorMsg}`));
-      };
-      
-      img.src = imageUrl;
-    });
-  }
+  });
+  
+  await Promise.allSettled(loadPromises);
+  log(`Pre-loading complete. Cached ${imageDataCache.size} images.`, 'info');
 }
 
 /**
