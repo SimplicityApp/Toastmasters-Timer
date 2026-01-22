@@ -207,18 +207,52 @@ export function getSdkStatus() {
 }
 
 /**
+ * Load image from URL and convert to ImageData
+ * @param {string} imageUrl - URL of the image
+ * @returns {Promise<ImageData>} ImageData object
+ */
+async function loadImageAsImageData(imageUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // Allow CORS
+    
+    img.onload = () => {
+      try {
+        // Create a canvas to convert image to ImageData
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        log(`Loaded image: ${img.width}x${img.height}, size: ${imageData.data.length} bytes`, 'info');
+        resolve(imageData);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    img.onerror = (error) => {
+      reject(new Error(`Failed to load image from ${imageUrl}: ${error.message || 'Unknown error'}`));
+    };
+    
+    img.src = imageUrl;
+  });
+}
+
+/**
  * Apply video filter overlay using Zoom SDK
  * @param {string} imageUrl - URL of the image to use as overlay
  */
 export async function applyOverlay(imageUrl) {
   // Ensure SDK is initialized before attempting to set filter
   if (!sdkInitialized) {
-    console.warn('SDK not initialized yet, initializing now...');
+    log('SDK not initialized yet, initializing now...', 'warn');
     await initializeZoomSdk();
   }
 
   if (!imageUrl) {
-    console.warn('No image URL provided for overlay');
+    log('No image URL provided for overlay', 'warn');
     return;
   }
 
@@ -226,9 +260,15 @@ export async function applyOverlay(imageUrl) {
     if (sdkAvailable && zoomSdk) {
       // Try setVideoFilter first (newer API)
       if (typeof zoomSdk.setVideoFilter === 'function') {
-        log(`Attempting to apply video filter overlay: ${imageUrl}`, 'info');
+        log(`Loading image for video filter: ${imageUrl}`, 'info');
         
-        const result = await zoomSdk.setVideoFilter({ fileUrl: imageUrl });
+        // Load image and convert to ImageData
+        const imageData = await loadImageAsImageData(imageUrl);
+        
+        log(`Applying video filter overlay with ImageData (${imageData.width}x${imageData.height})`, 'info');
+        
+        // setVideoFilter expects { imageData: ImageData } not { fileUrl: string }
+        const result = await zoomSdk.setVideoFilter({ imageData });
         log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
         
         // Clear error on success
