@@ -4,6 +4,7 @@ import { calculateStatus, formatTime } from '../utils/timerLogic';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, clearAgenda, clearReports } from '../utils/storage';
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '../utils/easySpeakParser';
+import { useToast } from './ToastContext';
 
 const TimerContext = createContext(null);
 
@@ -16,6 +17,8 @@ export function useTimer() {
 }
 
 export function TimerProvider({ children }) {
+  const { showToast } = useToast();
+  
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -107,7 +110,7 @@ export function TimerProvider({ children }) {
   const startTimer = useCallback(() => {
     // Speaker name is optional, but we need rules to run the timer
     if (!currentSpeaker || !currentSpeaker.rules) {
-      alert('Please set timing rules first');
+      showToast('Please set timing rules first', 'warning');
       return;
     }
     setIsRunning(true);
@@ -115,7 +118,7 @@ export function TimerProvider({ children }) {
     const initialStatus = calculateStatus(0, currentSpeaker.rules);
     applyOverlay(getBackgroundUrl(initialStatus));
     previousStatusRef.current = initialStatus;
-  }, [currentSpeaker]);
+  }, [currentSpeaker, showToast]);
 
   const stopTimer = useCallback(() => {
     setIsRunning(false);

@@ -1,6 +1,8 @@
 import { useTimer } from '../context/TimerContext';
-import { Copy, Check, Trash2 } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { Copy, Check, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import ConfirmModal from './ConfirmModal';
 
 function ColorDot({ color }) {
   const colorClasses = {
@@ -17,11 +19,15 @@ function ColorDot({ color }) {
 
 export default function ReportTab() {
   const { reports, clearAllReports } = useTimer();
+  const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showClipboardFallback, setShowClipboardFallback] = useState(false);
+  const [clipboardText, setClipboardText] = useState('');
 
   const copyToClipboard = async () => {
     if (reports.length === 0) {
-      alert('No reports to copy');
+      showToast('No reports to copy', 'warning');
       return;
     }
 
@@ -33,12 +39,22 @@ export default function ReportTab() {
     const text = header + rows;
 
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // Check if clipboard API is available
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        showToast('Copied to clipboard', 'success');
+      } else {
+        // Fallback: show modal with text
+        setClipboardText(text);
+        setShowClipboardFallback(true);
+      }
     } catch (error) {
       console.error('Failed to copy:', error);
-      alert('Failed to copy to clipboard');
+      // Fallback: show modal with text
+      setClipboardText(text);
+      setShowClipboardFallback(true);
     }
   };
 
@@ -46,9 +62,12 @@ export default function ReportTab() {
     if (reports.length === 0) {
       return;
     }
-    if (window.confirm('Are you sure you want to clear all reports? This action cannot be undone.')) {
-      clearAllReports();
-    }
+    setShowClearConfirm(true);
+  };
+
+  const handleConfirmClear = () => {
+    clearAllReports();
+    setShowClearConfirm(false);
   };
 
   return (
@@ -135,6 +154,60 @@ export default function ReportTab() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Clear Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        title="Clear All Reports"
+        message="Are you sure you want to clear all reports? This action cannot be undone."
+        confirmText="Clear All"
+        cancelText="Cancel"
+        onConfirm={handleConfirmClear}
+        onCancel={() => setShowClearConfirm(false)}
+      />
+
+      {/* Clipboard Fallback Modal */}
+      {showClipboardFallback && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Copy Report Data</h3>
+              <button
+                onClick={() => {
+                  setShowClipboardFallback(false);
+                  setClipboardText('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              Clipboard access is not available. Please manually copy the text below:
+            </p>
+            
+            <textarea
+              value={clipboardText}
+              readOnly
+              className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              onClick={(e) => e.target.select()}
+            />
+            
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowClipboardFallback(false);
+                  setClipboardText('');
+                }}
+                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

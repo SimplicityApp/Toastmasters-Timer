@@ -78,3 +78,41 @@ body {
   border-top-color: transparent;
   border-bottom-color: rgba(0, 0, 0, 0.9);
 }
+
+/* Tooltip appears to the right */
+[data-tooltip-direction="right"]:hover::before {
+  bottom: auto;
+  top: 50%;
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
+  /* Apply same viewport constraints */
+  max-width: min(250px, calc(100vw - 20px));
+  min-width: 120px;
+}
+
+[data-tooltip-direction="right"]:hover::after {
+  bottom: auto;
+  top: 50%;
+  left: calc(100% + 2px);
+  transform: translateY(-50%);
+  border-top-color: transparent;
+  border-left-color: rgba(0, 0, 0, 0.9);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* Toast animations */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}

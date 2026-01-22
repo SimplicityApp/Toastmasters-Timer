@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useTimer } from '../context/TimerContext';
+import { useToast } from '../context/ToastContext';
 import { Plus, Upload, X, Edit2, Trash2, GripVertical, Check } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 import {
   DndContext,
   closestCenter,
@@ -100,6 +102,7 @@ export default function AgendaTab({ onSwitchToLive }) {
     clearAllAgenda,
     roleRules,
   } = useTimer();
+  const { showToast } = useToast();
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -114,6 +117,9 @@ export default function AgendaTab({ onSwitchToLive }) {
     yellow: 360,
     red: 420,
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteItemId, setDeleteItemId] = useState(null);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -136,7 +142,7 @@ export default function AgendaTab({ onSwitchToLive }) {
   const handleSimpleImport = () => {
     if (importText.trim()) {
       const count = importBulkSpeakers(importText);
-      alert(`Imported ${count} speaker(s)`);
+      showToast(`Imported ${count} speaker(s)`, 'success');
       setImportText('');
       setShowImportModal(false);
     }
@@ -145,7 +151,7 @@ export default function AgendaTab({ onSwitchToLive }) {
   const handleEasySpeakImport = () => {
     if (easySpeakText.trim()) {
       const count = importEasySpeakSpeakers(easySpeakText);
-      alert(`Imported ${count} speaker(s)`);
+      showToast(`Imported ${count} speaker(s)`, 'success');
       setEasySpeakText('');
       setShowImportModal(false);
     }
@@ -204,15 +210,25 @@ export default function AgendaTab({ onSwitchToLive }) {
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to remove this speaker from the agenda?')) {
-      removeFromAgenda(id);
+    setDeleteItemId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteItemId) {
+      removeFromAgenda(deleteItemId);
     }
+    setShowDeleteConfirm(false);
+    setDeleteItemId(null);
   };
 
   const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to clear all agendas? This action cannot be undone.')) {
-      clearAllAgenda();
-    }
+    setShowClearAllConfirm(true);
+  };
+
+  const handleConfirmClearAll = () => {
+    clearAllAgenda();
+    setShowClearAllConfirm(false);
   };
 
   // Helper to format seconds as MM:SS for display
@@ -594,6 +610,31 @@ export default function AgendaTab({ onSwitchToLive }) {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Remove Speaker"
+        message="Are you sure you want to remove this speaker from the agenda?"
+        confirmText="Remove"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setDeleteItemId(null);
+        }}
+      />
+
+      {/* Clear All Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showClearAllConfirm}
+        title="Clear All Agendas"
+        message="Are you sure you want to clear all agendas? This action cannot be undone."
+        confirmText="Clear All"
+        cancelText="Cancel"
+        onConfirm={handleConfirmClearAll}
+        onCancel={() => setShowClearAllConfirm(false)}
+      />
     </div>
   );
 }

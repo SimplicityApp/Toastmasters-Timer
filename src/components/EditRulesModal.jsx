@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
+import { useToast } from '../context/ToastContext';
 import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
+import ConfirmModal from './ConfirmModal';
 
 // Helper to format seconds as MM:SS for display
 const formatTimeForInput = (seconds) => {
@@ -12,7 +14,9 @@ const formatTimeForInput = (seconds) => {
 
 export default function EditRulesModal({ isOpen, onClose }) {
   const { roleRules, updateRoleRules } = useTimer();
+  const { showToast } = useToast();
   const [editedRules, setEditedRules] = useState({});
+  const [showResetAllConfirm, setShowResetAllConfirm] = useState(false);
 
   // Initialize edited rules from current roleRules
   useEffect(() => {
@@ -37,7 +41,7 @@ export default function EditRulesModal({ isOpen, onClose }) {
     for (const role of ROLE_OPTIONS) {
       const rules = editedRules[role];
       if (!rules || rules.green <= 0 || rules.yellow <= rules.green || rules.red <= rules.yellow) {
-        alert(`Invalid timing rules for ${role}. Green must be > 0, Yellow must be > Green, and Red must be > Yellow.`);
+        showToast(`Invalid timing rules for ${role}. Green must be > 0, Yellow must be > Green, and Red must be > Yellow.`, 'error');
         return;
       }
     }
@@ -59,9 +63,12 @@ export default function EditRulesModal({ isOpen, onClose }) {
   };
 
   const handleResetAll = () => {
-    if (window.confirm('Are you sure you want to reset all timing rules to defaults?')) {
-      setEditedRules({ ...DEFAULT_ROLE_RULES });
-    }
+    setShowResetAllConfirm(true);
+  };
+
+  const handleConfirmResetAll = () => {
+    setEditedRules({ ...DEFAULT_ROLE_RULES });
+    setShowResetAllConfirm(false);
   };
 
   if (!isOpen) return null;
@@ -182,6 +189,18 @@ export default function EditRulesModal({ isOpen, onClose }) {
           </button>
         </div>
       </div>
+
+      {/* Reset All Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showResetAllConfirm}
+        title="Reset All Rules"
+        message="Are you sure you want to reset all timing rules to defaults?"
+        confirmText="Reset All"
+        cancelText="Cancel"
+        onConfirm={handleConfirmResetAll}
+        onCancel={() => setShowResetAllConfirm(false)}
+        confirmButtonClass="bg-blue-500 hover:bg-blue-600"
+      />
     </div>
   );
 }

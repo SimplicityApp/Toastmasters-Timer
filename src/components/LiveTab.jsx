@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTimer } from '../context/TimerContext';
+import { useToast } from '../context/ToastContext';
 import { Play, Square, RotateCcw, Eye, EyeOff, Video } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
@@ -21,6 +22,7 @@ export default function LiveTab() {
     finishCurrentSpeech,
     roleRules,
   } = useTimer();
+  const { showToast } = useToast();
 
   const [speakerName, setSpeakerName] = useState(currentSpeaker?.name || '');
   const [selectedRole, setSelectedRole] = useState(currentSpeaker?.role || 'Standard Speech');
@@ -39,7 +41,6 @@ export default function LiveTab() {
   // Debug panel feature flag - can be disabled via environment variable for production
   // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
   const DEBUG_PANEL_ENABLED = import.meta.env.VITE_ENABLE_DEBUG_PANEL !== 'false';
-  console.log('DEBUG_PANEL_ENABLED', DEBUG_PANEL_ENABLED);
 
   // Debug panel state - collapsed by default, remember user preference in localStorage
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
@@ -295,7 +296,7 @@ export default function LiveTab() {
     if (selectedRole === 'Custom') {
       // Validate custom rules
       if (customRules.green <= 0 || customRules.yellow <= customRules.green || customRules.red <= customRules.yellow) {
-        alert('Invalid timing rules. Green must be > 0, Yellow must be > Green, and Red must be > Yellow.');
+        showToast('Invalid timing rules. Green must be > 0, Yellow must be > Green, and Red must be > Yellow.', 'error');
         return;
       }
     }
@@ -303,7 +304,7 @@ export default function LiveTab() {
     // Get rules from roleRules if not Custom, or use customRules if Custom
     const rules = selectedRole === 'Custom' ? customRules : roleRules[selectedRole];
     if (!rules) {
-      alert('Please set timing rules first');
+      showToast('Please set timing rules first', 'warning');
       return;
     }
     
@@ -356,11 +357,11 @@ export default function LiveTab() {
       const isVideoOn = await getVideoState();
       setVideoStateLocal(isVideoOn);
       if (!isVideoOn) {
-        alert('Failed to turn video on. Please turn on video manually in Zoom.');
+        showToast('Failed to turn video on. Please turn on video manually in Zoom.', 'error');
       }
     } catch (error) {
       console.error('Failed to turn video on:', error);
-      alert('Failed to turn video on. Please turn on video manually in Zoom.');
+      showToast('Failed to turn video on. Please turn on video manually in Zoom.', 'error');
     } finally {
       setIsEnablingVideo(false);
     }
@@ -373,6 +374,7 @@ export default function LiveTab() {
         onClick={handleToggleRevealFace}
         className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors z-10"
         data-tooltip={isHidden ? 'Reveal Face' : 'Hide Face'}
+        data-tooltip-direction="right"
       >
         {isHidden ? (
           <EyeOff className="h-5 w-5 text-gray-700" />
