@@ -34,14 +34,50 @@ export function detectRoleFromText(text) {
     return 'Speech Evaluation';
   }
   
-  // "Ice Breaker" or "Icebreaker"
-  if (normalized.includes('ice breaker') || normalized.includes('icebreaker')) {
+  // "Ice Breaker" or "Icebreaker" - also check for project descriptions
+  if (normalized.includes('ice breaker') || 
+      normalized.includes('icebreaker') ||
+      normalized.includes('ice breaker #') ||
+      normalized.includes('icebreaker #')) {
     return 'Ice Breaker';
   }
   
   // "Table Topics" (after checking for "Table Topics Evaluation")
   if (normalized.includes('table topics')) {
     return 'Table Topics';
+  }
+  
+  // EasySpeak-style speaker roles (1st Speaker, 2nd Speaker, etc.)
+  // Check if it contains "speaker" and potentially project info
+  if (normalized.match(/\d+(st|nd|rd|th)\s+speaker/) || 
+      (normalized.includes('speaker') && !normalized.includes('evaluator'))) {
+    // Check for Ice Breaker indicators in the text
+    if (normalized.includes('ice breaker') || normalized.includes('icebreaker')) {
+      return 'Ice Breaker';
+    }
+    // Default speakers to Standard Speech
+    return 'Standard Speech';
+  }
+  
+  // EasySpeak-style evaluator roles
+  if (normalized.match(/\d+(st|nd|rd|th)\s+evaluator/) ||
+      normalized.includes('general evaluator') ||
+      (normalized.includes('evaluator') && !normalized.includes('table topics'))) {
+    return 'Speech Evaluation';
+  }
+  
+  // EasySpeak short roles
+  if (normalized.includes('timer') ||
+      normalized.includes('grammarian') ||
+      normalized.includes('toast') ||
+      normalized.includes('moment of humour') ||
+      normalized.includes('moment of reflection') ||
+      normalized.includes('table topics master') ||
+      normalized.includes('chairperson') ||
+      normalized.includes('toastmaster') ||
+      normalized.includes('sergeant at arms') ||
+      normalized.includes('ah counter')) {
+    return 'Short Roles';
   }
   
   // "Short Roles"

@@ -96,12 +96,16 @@ export default function AgendaTab({ onSwitchToLive }) {
     reorderAgenda,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
+    importEasySpeakSpeakers,
+    clearAllAgenda,
     roleRules,
   } = useTimer();
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [importTab, setImportTab] = useState('simple'); // 'simple' | 'easyspeak'
   const [importText, setImportText] = useState('');
+  const [easySpeakText, setEasySpeakText] = useState('');
   const [editItem, setEditItem] = useState(null);
   const [newSpeakerName, setNewSpeakerName] = useState('');
   const [newSpeakerRole, setNewSpeakerRole] = useState('Standard Speech');
@@ -129,11 +133,20 @@ export default function AgendaTab({ onSwitchToLive }) {
     }
   };
 
-  const handleImport = () => {
+  const handleSimpleImport = () => {
     if (importText.trim()) {
       const count = importBulkSpeakers(importText);
       alert(`Imported ${count} speaker(s)`);
       setImportText('');
+      setShowImportModal(false);
+    }
+  };
+
+  const handleEasySpeakImport = () => {
+    if (easySpeakText.trim()) {
+      const count = importEasySpeakSpeakers(easySpeakText);
+      alert(`Imported ${count} speaker(s)`);
+      setEasySpeakText('');
       setShowImportModal(false);
     }
   };
@@ -196,6 +209,12 @@ export default function AgendaTab({ onSwitchToLive }) {
     }
   };
 
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure you want to clear all agendas? This action cannot be undone.')) {
+      clearAllAgenda();
+    }
+  };
+
   // Helper to format seconds as MM:SS for display
   const formatTimeForInput = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -238,7 +257,12 @@ export default function AgendaTab({ onSwitchToLive }) {
     <div className="p-4 space-y-4">
       <div className="flex gap-2">
         <button
-          onClick={() => setShowImportModal(true)}
+          onClick={() => {
+            setImportTab('simple');
+            setImportText('');
+            setEasySpeakText('');
+            setShowImportModal(true);
+          }}
           className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
         >
           <Upload className="h-4 w-4" />
@@ -257,6 +281,15 @@ export default function AgendaTab({ onSwitchToLive }) {
           <Plus className="h-4 w-4" />
           Add Item
         </button>
+        {agenda.length > 0 && (
+          <button
+            onClick={handleClearAll}
+            className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear All
+          </button>
+        )}
       </div>
 
       {agenda.length === 0 ? (
@@ -293,45 +326,126 @@ export default function AgendaTab({ onSwitchToLive }) {
       {/* Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Import Speakers</h3>
               <button
                 onClick={() => {
                   setShowImportModal(false);
                   setImportText('');
+                  setEasySpeakText('');
+                  setImportTab('simple');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-sm text-gray-600 mb-3">
-              Enter one speaker per line. Roles will be auto-detected from text (e.g., "Ice Breaker", "Table Topics").
-            </p>
-            <textarea
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder="John Doe (Ice Breaker)&#10;Sarah Smith (Standard Speech)&#10;Alex (Table Topics)"
-              className="w-full h-32 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="flex gap-2 mt-4">
+            
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 mb-4">
               <button
-                onClick={handleImport}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                onClick={() => setImportTab('simple')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  importTab === 'simple'
+                    ? 'border-b-2 border-blue-500 text-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
-                Import
+                Simple Format
               </button>
               <button
-                onClick={() => {
-                  setShowImportModal(false);
-                  setImportText('');
-                }}
-                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+                onClick={() => setImportTab('easyspeak')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  importTab === 'easyspeak'
+                    ? 'border-b-2 border-blue-500 text-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
-                Cancel
+                EasySpeak Format
               </button>
             </div>
+
+            {/* Tab Content */}
+            {importTab === 'simple' ? (
+              <div>
+                <div className="mb-3 space-y-2">
+                  <p className="text-sm text-gray-700 font-medium">
+                    Simple Format
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Enter one speaker per line with role in parentheses. Roles will be auto-detected from text.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Example: "John Doe (Ice Breaker)" or "Sarah Smith (Standard Speech)"
+                  </p>
+                </div>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="John Doe (Ice Breaker)&#10;Sarah Smith (Standard Speech)&#10;Alex (Table Topics)"
+                  className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handleSimpleImport}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Import
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportText('');
+                      setEasySpeakText('');
+                      setImportTab('simple');
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="mb-3 space-y-2">
+                  <p className="text-sm text-gray-700 font-medium">
+                    EasySpeak Format
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Paste meeting details from EasySpeak website. Supports both "show speech details" and "hide speech details" modes.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Roles will be automatically detected and mapped to timing rules.
+                  </p>
+                </div>
+                <textarea
+                  value={easySpeakText}
+                  onChange={(e) => setEasySpeakText(e.target.value)}
+                  placeholder="Paste EasySpeak meeting details here..."
+                  className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handleEasySpeakImport}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Import
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportText('');
+                      setEasySpeakText('');
+                      setImportTab('simple');
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

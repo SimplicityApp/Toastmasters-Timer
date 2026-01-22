@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { DEFAULT_ROLE_RULES, detectRoleFromText } from '../constants/timingRules';
 import { calculateStatus, formatTime } from '../utils/timerLogic';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules } from '../utils/storage';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, clearAgenda } from '../utils/storage';
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
+import { parseEasySpeakText } from '../utils/easySpeakParser';
 
 const TimerContext = createContext(null);
 
@@ -175,6 +176,12 @@ export function TimerProvider({ children }) {
     setAgenda(newOrder);
   }, []);
 
+  const clearAllAgenda = useCallback(() => {
+    setAgenda([]);
+    setActiveSpeakerId(null);
+    clearAgenda();
+  }, []);
+
   const markCompleted = useCallback((id) => {
     setAgenda(prev => prev.map(item => 
       item.id === id ? { ...item, completed: true } : item
@@ -197,7 +204,7 @@ export function TimerProvider({ children }) {
     }
   }, [agenda, setCurrentSpeakerAction]);
 
-  // Bulk import
+  // Simple format bulk import
   const importBulkSpeakers = useCallback((text) => {
     const lines = text.split('\n').filter(line => line.trim());
     const newItems = lines.map((line, index) => {
@@ -209,6 +216,26 @@ export function TimerProvider({ children }) {
       return {
         id: `${Date.now()}-${index}`,
         name,
+        role,
+        rules,
+        completed: false
+      };
+    });
+
+    setAgenda(prev => [...prev, ...newItems]);
+    return newItems.length;
+  }, [roleRules]);
+
+  // EasySpeak format bulk import
+  const importEasySpeakSpeakers = useCallback((text) => {
+    const parsedItems = parseEasySpeakText(text);
+    const newItems = parsedItems.map((item, index) => {
+      const role = item.role;
+      const rules = roleRules[role] || DEFAULT_ROLE_RULES['Standard Speech'];
+      
+      return {
+        id: `${Date.now()}-${index}`,
+        name: item.name,
         role,
         rules,
         completed: false
@@ -320,6 +347,8 @@ export function TimerProvider({ children }) {
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
+    importEasySpeakSpeakers,
+    clearAllAgenda,
     
     // Report actions
     addReport,

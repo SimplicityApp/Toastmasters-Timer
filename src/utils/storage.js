@@ -31,6 +31,17 @@ export function loadAgenda() {
 }
 
 /**
+ * Clear agenda from localStorage
+ */
+export function clearAgenda() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.AGENDA);
+  } catch (error) {
+    console.error('Failed to clear agenda:', error);
+  }
+}
+
+/**
  * Save reports to localStorage
  * @param {Array} reports - Reports array
  */
