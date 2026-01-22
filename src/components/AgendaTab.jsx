@@ -62,7 +62,13 @@ function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }
       
       <div className="flex-1 min-w-0">
         <div className="font-medium text-gray-900">{item.name}</div>
-        <div className="text-sm text-gray-500">({item.role})</div>
+        <div className="text-sm text-gray-500">
+          ({item.role}
+          {item.role === 'Short Roles' && item.originalShortRole && (
+            <span className="ml-1 text-gray-400">- {item.originalShortRole}</span>
+          )}
+          )
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

@@ -240,6 +240,7 @@ export function TimerProvider({ children }) {
         id: `${Date.now()}-${index}`,
         name: item.name,
         role,
+        originalShortRole: item.originalShortRole || null,
         rules,
         completed: false
       };

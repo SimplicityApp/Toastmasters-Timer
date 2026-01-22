@@ -1,33 +1,12 @@
 import { DEFAULT_ROLE_RULES } from '../constants/timingRules';
 
 /**
- * Maps EasySpeak role names to app role names
+ * Extracts the original short role name from EasySpeak role
+ * Returns the matched short role name with proper capitalization, or null if not a short role
  */
-function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
+function extractOriginalShortRole(easySpeakRole) {
   const normalized = easySpeakRole.toLowerCase().trim();
   
-  // Speaker roles - check speech details for Ice Breaker
-  if (normalized.includes('speaker')) {
-    if (speechDetails) {
-      const detailsLower = speechDetails.toLowerCase();
-      if (detailsLower.includes('icebreaker') || detailsLower.includes('ice breaker')) {
-        return 'Ice Breaker';
-      }
-    }
-    return 'Standard Speech';
-  }
-  
-  // Evaluator roles - check for General Evaluator first
-  if (normalized.includes('general evaluator')) {
-    return 'General Evaluation';
-  }
-  
-  // Other evaluator roles (1st Evaluator, 2nd Evaluator, etc.)
-  if (normalized.includes('evaluator')) {
-    return 'Speech Evaluation';
-  }
-  
-  // Short roles - various meeting roles
   const shortRoles = [
     'timer',
     'grammarian',
@@ -44,12 +23,61 @@ function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
   
   for (const shortRole of shortRoles) {
     if (normalized.includes(shortRole)) {
-      return 'Short Roles';
+      // Try to extract the original casing from easySpeakRole
+      const index = normalized.indexOf(shortRole);
+      if (index !== -1) {
+        const extracted = easySpeakRole.substring(index, index + shortRole.length);
+        // Capitalize first letter of each word for better display
+        return extracted.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+      }
+      // Fallback: capitalize the shortRole
+      return shortRole.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
     }
   }
   
+  return null;
+}
+
+/**
+ * Maps EasySpeak role names to app role names
+ * Returns an object with { role, originalShortRole } where originalShortRole is only set for short roles
+ */
+function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
+  const normalized = easySpeakRole.toLowerCase().trim();
+  
+  // Speaker roles - check speech details for Ice Breaker
+  if (normalized.includes('speaker')) {
+    if (speechDetails) {
+      const detailsLower = speechDetails.toLowerCase();
+      if (detailsLower.includes('icebreaker') || detailsLower.includes('ice breaker')) {
+        return { role: 'Ice Breaker' };
+      }
+    }
+    return { role: 'Standard Speech' };
+  }
+  
+  // Evaluator roles - check for General Evaluator first
+  if (normalized.includes('general evaluator')) {
+    return { role: 'General Evaluation' };
+  }
+  
+  // Other evaluator roles (1st Evaluator, 2nd Evaluator, etc.)
+  if (normalized.includes('evaluator')) {
+    return { role: 'Speech Evaluation' };
+  }
+  
+  // Short roles - various meeting roles
+  const originalShortRole = extractOriginalShortRole(easySpeakRole);
+  if (originalShortRole) {
+    return { role: 'Short Roles', originalShortRole };
+  }
+  
   // Default fallback
-  return 'Standard Speech';
+  return { role: 'Standard Speech' };
 }
 
 /**
@@ -197,9 +225,11 @@ export function parseEasySpeakText(text) {
     if (!line) {
       // If we were collecting speech details, finalize the current item (only if not excluded)
       if (currentName && currentRole && collectingSpeechDetails && !shouldExcludeRole(currentRole)) {
+        const roleMapping = mapEasySpeakRoleToAppRole(currentRole, speechDetails);
         items.push({
           name: currentName,
-          role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
+          role: roleMapping.role,
+          originalShortRole: roleMapping.originalShortRole || null,
           speechDetails: showSpeechDetailsMode ? speechDetails : null
         });
         currentName = null;
@@ -226,9 +256,11 @@ export function parseEasySpeakText(text) {
     if (tabSeparated) {
       // Finalize previous item if exists (only if not excluded)
       if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
+        const roleMapping = mapEasySpeakRoleToAppRole(currentRole, speechDetails);
         items.push({
           name: currentName,
-          role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
+          role: roleMapping.role,
+          originalShortRole: roleMapping.originalShortRole || null,
           speechDetails: showSpeechDetailsMode ? speechDetails : null
         });
       }
@@ -292,9 +324,11 @@ export function parseEasySpeakText(text) {
     if (isRoleHeader) {
       // Finalize previous item if exists (only if not excluded)
       if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
+        const roleMapping = mapEasySpeakRoleToAppRole(currentRole, speechDetails);
         items.push({
           name: currentName,
-          role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
+          role: roleMapping.role,
+          originalShortRole: roleMapping.originalShortRole || null,
           speechDetails: showSpeechDetailsMode ? speechDetails : null
         });
       }
@@ -378,9 +412,11 @@ export function parseEasySpeakText(text) {
           !line.match(/^[a-z0-9]+\s+\d+\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i)) {
         // This might be a new name, finalize current item (only if not excluded)
         if (!shouldExcludeRole(currentRole)) {
+          const roleMapping = mapEasySpeakRoleToAppRole(currentRole, speechDetails);
           items.push({
             name: currentName,
-            role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
+            role: roleMapping.role,
+            originalShortRole: roleMapping.originalShortRole || null,
             speechDetails: showSpeechDetailsMode ? speechDetails : null
           });
         }
@@ -457,9 +493,11 @@ export function parseEasySpeakText(text) {
   
   // Finalize last item if exists (only if not excluded)
   if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
+    const roleMapping = mapEasySpeakRoleToAppRole(currentRole, speechDetails);
     items.push({
       name: currentName,
-      role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
+      role: roleMapping.role,
+      originalShortRole: roleMapping.originalShortRole || null,
       speechDetails: showSpeechDetailsMode ? speechDetails : null
     });
   }
