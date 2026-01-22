@@ -503,8 +503,8 @@ export default function LiveTab() {
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     setVideoFilter: {sdkStatus.hasSetVideoFilter ? 'Yes' : 'No'}
                   </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasRemoveVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    removeVideoFilter: {sdkStatus.hasRemoveVideoFilter ? 'Yes' : 'No'}
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasDeleteVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    deleteVideoFilter: {sdkStatus.hasDeleteVideoFilter ? 'Yes' : 'No'}
                   </div>
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     setVirtualBackground: {sdkStatus.hasSetVirtualBackground ? 'Yes' : 'No'}

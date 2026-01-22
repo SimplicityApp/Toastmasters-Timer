@@ -198,7 +198,7 @@ export function getSdkStatus() {
     available: sdkAvailable,
     sdkExists: typeof zoomSdk !== 'undefined',
     hasSetVideoFilter: zoomSdk && typeof zoomSdk.setVideoFilter === 'function',
-    hasRemoveVideoFilter: zoomSdk && typeof zoomSdk.removeVideoFilter === 'function',
+    hasDeleteVideoFilter: zoomSdk && typeof zoomSdk.deleteVideoFilter === 'function',
     hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
     hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
     hasGetVideoState: zoomSdk && typeof zoomSdk.getVideoState === 'function',
@@ -417,11 +417,11 @@ export async function removeVideoFilter() {
 
   try {
     if (sdkAvailable && zoomSdk) {
-      // Try removeVideoFilter first, fallback to setVideoFilter with null
-      if (typeof zoomSdk.removeVideoFilter === 'function') {
-        log('Attempting to remove video filter', 'info');
-        await zoomSdk.removeVideoFilter();
-        log('Successfully removed video filter', 'info');
+      // Try deleteVideoFilter first, fallback to setVideoFilter with null
+      if (typeof zoomSdk.deleteVideoFilter === 'function') {
+        log('Attempting to delete video filter', 'info');
+        await zoomSdk.deleteVideoFilter();
+        log('Successfully deleted video filter', 'info');
       } else if (typeof zoomSdk.setVideoFilter === 'function') {
         log('Attempting to remove video filter via setVideoFilter(null)', 'info');
         await zoomSdk.setVideoFilter({ fileUrl: null });
@@ -434,6 +434,18 @@ export async function removeVideoFilter() {
     }
   } catch (error) {
     console.error('Failed to remove video filter:', error);
+    log(`Failed to remove video filter: ${error.message || error.name}`, 'error');
+    if (error.code) {
+      log(`Error code: ${error.code}`, 'error');
+      // Handle specific error codes from deleteVideoFilter
+      if (error.code === 10195) {
+        log('No video filter exists to delete', 'warn');
+      } else if (error.code === 10196) {
+        log('Failed to set or remove video filter', 'error');
+      } else if (error.code === 10198) {
+        log('Video filter feature is disabled', 'error');
+      }
+    }
     // Don't throw - allow app to continue functioning
   }
 }
