@@ -32,6 +32,34 @@ let sdkAvailable = false;
 // Track last error for debugging
 let lastError = null;
 
+// Log callback function - will be set by LiveTab component
+let logCallback = null;
+
+/**
+ * Set log callback for debug panel
+ * @param {Function} callback - Function to call with log messages
+ */
+export function setLogCallback(callback) {
+  logCallback = callback;
+}
+
+/**
+ * Internal logging function
+ */
+function log(message, type = 'info') {
+  if (logCallback) {
+    logCallback(message, type);
+  }
+  // Also log to console
+  if (type === 'error') {
+    console.error(message);
+  } else if (type === 'warn') {
+    console.warn(message);
+  } else {
+    console.log(message);
+  }
+}
+
 /**
  * Set virtual background using Zoom SDK
  * @param {'white' | 'green' | 'yellow' | 'red'} color - Background color to set
@@ -123,7 +151,7 @@ export async function initializeZoomSdk() {
   try {
     // Check if we're in a Zoom environment
     // The SDK will be available when running in Zoom client
-    console.log('Initializing Zoom SDK...');
+    log('Initializing Zoom SDK...', 'info');
     const configResult = await zoomSdk.config({
       popoutSize: { width: 400, height: 600 },
       capabilities: [
@@ -135,19 +163,15 @@ export async function initializeZoomSdk() {
     });
 
     sdkAvailable = true;
-    console.log('Zoom SDK initialized successfully', configResult);
-    console.log('Virtual background capability is available');
+    log(`Zoom SDK initialized successfully. Config: ${JSON.stringify(configResult)}`, 'info');
+    log('Virtual background capability is available', 'info');
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
     sdkAvailable = false;
-    console.warn('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)');
-    console.warn('SDK initialization error:', {
-      message: error.message,
-      code: error.code,
-      name: error.name
-    });
-    console.warn('Note: Virtual backgrounds will only work when running inside Zoom client');
+    log('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)', 'warn');
+    log(`SDK initialization error: ${error.message || error.name} (Code: ${error.code || 'N/A'})`, 'warn');
+    log('Note: Virtual backgrounds will only work when running inside Zoom client', 'warn');
     return false;
   }
 }
@@ -202,28 +226,26 @@ export async function applyOverlay(imageUrl) {
     if (sdkAvailable && zoomSdk) {
       // Try setVideoFilter first (newer API)
       if (typeof zoomSdk.setVideoFilter === 'function') {
-        console.log(`Zoom SDK: Attempting to apply video filter overlay`);
-        console.log(`File URL: ${imageUrl}`);
+        log(`Attempting to apply video filter overlay: ${imageUrl}`, 'info');
         
         const result = await zoomSdk.setVideoFilter({ fileUrl: imageUrl });
-        console.log(`Zoom SDK: Successfully applied video filter overlay`, result);
+        log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
         
         // Clear error on success
         lastError = null;
         
         // Verify the filter was set (some SDKs return a status)
         if (result && result.status) {
-          console.log(`Filter set status: ${result.status}`);
+          log(`Filter set status: ${result.status}`, 'info');
         }
         return;
       }
       // Fallback to setVirtualBackground if setVideoFilter is not available
       else if (typeof zoomSdk.setVirtualBackground === 'function') {
-        console.log(`Zoom SDK: setVideoFilter not available, using setVirtualBackground as fallback`);
-        console.log(`File URL: ${imageUrl}`);
+        log(`setVideoFilter not available, using setVirtualBackground as fallback: ${imageUrl}`, 'warn');
         
         const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
-        console.log(`Zoom SDK: Successfully applied virtual background`, result);
+        log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
         
         // Clear error on success
         lastError = null;
@@ -232,24 +254,19 @@ export async function applyOverlay(imageUrl) {
     }
     
     // SDK not available or function not found
-    console.warn(`[MOCK] Zoom SDK: Would apply video filter overlay (${imageUrl})`);
+    log(`[MOCK] Would apply video filter overlay (${imageUrl})`, 'warn');
     if (!sdkAvailable) {
-      console.warn(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`);
+      log(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`, 'warn');
     }
     if (!zoomSdk) {
-      console.warn(`[MOCK] zoomSdk object is not available`);
+      log(`[MOCK] zoomSdk object is not available`, 'warn');
     } else {
-      console.warn(`[MOCK] setVideoFilter and setVirtualBackground functions are not available on zoomSdk object`);
-      console.warn(`[MOCK] Available methods:`, Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function'));
+      const availableMethods = Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function');
+      log(`[MOCK] setVideoFilter and setVirtualBackground functions are not available. Available methods: ${availableMethods.join(', ')}`, 'warn');
     }
   } catch (error) {
-    console.error('Failed to apply video filter overlay:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      name: error.name,
-      stack: error.stack
-    });
+    log(`Failed to apply video filter overlay: ${error.message || error.name}`, 'error');
+    log(`Error details: ${JSON.stringify({ message: error.message, code: error.code, name: error.name })}`, 'error');
     
     // Store error for debug panel
     let errorMessage = `Failed to apply overlay: ${error.message || error.name || 'Unknown error'}`;
@@ -260,13 +277,13 @@ export async function applyOverlay(imageUrl) {
     // Provide helpful error message
     if (error.message && error.message.includes('permission')) {
       errorMessage = 'Permission error: Make sure video filters are enabled in your Zoom settings';
-      console.error('⚠️ ' + errorMessage);
+      log('⚠️ ' + errorMessage, 'error');
     } else if (error.message && error.message.includes('video')) {
       errorMessage = 'Video error: Make sure your video is turned on in the Zoom meeting';
-      console.error('⚠️ ' + errorMessage);
+      log('⚠️ ' + errorMessage, 'error');
     } else if (error.code) {
       errorMessage = `Error code: ${error.code}. Check Zoom SDK documentation for this error code.`;
-      console.error(`⚠️ ${errorMessage}`);
+      log(`⚠️ ${errorMessage}`, 'error');
     }
     
     lastError = errorMessage;
@@ -289,18 +306,18 @@ export async function removeVideoFilter() {
     if (sdkAvailable && zoomSdk) {
       // Try removeVideoFilter first, fallback to setVideoFilter with null
       if (typeof zoomSdk.removeVideoFilter === 'function') {
-        console.log('Zoom SDK: Attempting to remove video filter');
+        log('Attempting to remove video filter', 'info');
         await zoomSdk.removeVideoFilter();
-        console.log('Zoom SDK: Successfully removed video filter');
+        log('Successfully removed video filter', 'info');
       } else if (typeof zoomSdk.setVideoFilter === 'function') {
-        console.log('Zoom SDK: Attempting to remove video filter via setVideoFilter(null)');
+        log('Attempting to remove video filter via setVideoFilter(null)', 'info');
         await zoomSdk.setVideoFilter({ fileUrl: null });
-        console.log('Zoom SDK: Successfully removed video filter');
+        log('Successfully removed video filter', 'info');
       } else {
-        console.warn('[MOCK] Zoom SDK: Would remove video filter');
+        log('[MOCK] Would remove video filter', 'warn');
       }
     } else {
-      console.warn('[MOCK] Zoom SDK: Would remove video filter (SDK not available)');
+      log('[MOCK] Would remove video filter (SDK not available)', 'warn');
     }
   } catch (error) {
     console.error('Failed to remove video filter:', error);

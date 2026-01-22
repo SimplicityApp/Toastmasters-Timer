@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTimer } from '../context/TimerContext';
 import { Play, Square, RotateCcw, Eye, EyeOff, Video } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
 import { ROLE_OPTIONS } from '../constants/timingRules';
-import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl, getSdkStatus } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl, getSdkStatus, setLogCallback } from '../utils/zoomSdk';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function LiveTab() {
@@ -40,7 +40,7 @@ export default function LiveTab() {
   // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
   const DEBUG_PANEL_ENABLED = import.meta.env.VITE_ENABLE_DEBUG_PANEL !== 'false';
   console.log('DEBUG_PANEL_ENABLED', DEBUG_PANEL_ENABLED);
-  
+
   // Debug panel state - collapsed by default, remember user preference in localStorage
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
     const saved = localStorage.getItem('debugPanelExpanded');
@@ -48,6 +48,8 @@ export default function LiveTab() {
   });
   const [sdkStatus, setSdkStatus] = useState(null);
   const [lastError, setLastError] = useState(null);
+  const [debugLogs, setDebugLogs] = useState([]);
+  const logsEndRef = useRef(null);
   
   // Save expanded state to localStorage
   const toggleDebugPanel = () => {
@@ -55,6 +57,24 @@ export default function LiveTab() {
     setDebugPanelExpanded(newState);
     localStorage.setItem('debugPanelExpanded', String(newState));
   };
+  
+  // Add log entry
+  const addDebugLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = { timestamp, message, type };
+    setDebugLogs(prev => {
+      const newLogs = [...prev, logEntry];
+      // Keep only last 100 logs to prevent memory issues
+      return newLogs.slice(-100);
+    });
+  };
+  
+  // Auto-scroll to bottom when new logs are added
+  useEffect(() => {
+    if (logsEndRef.current && debugPanelExpanded) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [debugLogs, debugPanelExpanded]);
 
   // Update local state when currentSpeaker changes (but preserve custom rules if Custom role)
   useEffect(() => {
@@ -79,6 +99,13 @@ export default function LiveTab() {
       setCustomRules(roleRules['Custom']);
     }
   }, [selectedRole]);
+
+  // Set up log callback for zoomSdk
+  useEffect(() => {
+    setLogCallback(addDebugLog);
+    addDebugLog('Debug panel initialized', 'info');
+    return () => setLogCallback(null);
+  }, []);
 
   // Check SDK status on mount and periodically
   useEffect(() => {
@@ -147,12 +174,15 @@ export default function LiveTab() {
   useEffect(() => {
     if (!isHidden) {
       // Remove filter to show face (override any overlays from TimerContext)
+      addDebugLog('Removing video filter (reveal face mode)', 'info');
       removeVideoFilter();
     } else {
       // When toggling back to hidden, reapply current overlay
       // TimerContext will handle future status changes
       if (currentStatus) {
-        applyOverlay(getBackgroundUrl(currentStatus));
+        const imageUrl = getBackgroundUrl(currentStatus);
+        addDebugLog(`Applying overlay (hidden mode): ${currentStatus} -> ${imageUrl}`, 'info');
+        applyOverlay(imageUrl);
       }
     }
   }, [isHidden]); // Only depend on isHidden, not currentStatus
@@ -162,9 +192,26 @@ export default function LiveTab() {
   useEffect(() => {
     if (!isHidden) {
       // Remove filter whenever status changes if we're in reveal mode
+      addDebugLog('Status changed but in reveal mode - removing filter', 'info');
       removeVideoFilter();
     }
   }, [currentStatus, isHidden]);
+  
+  // Log when status changes
+  useEffect(() => {
+    if (currentStatus) {
+      addDebugLog(`Timer status changed to: ${currentStatus}`, 'info');
+    }
+  }, [currentStatus]);
+  
+  // Log when timer starts/stops
+  useEffect(() => {
+    if (isRunning) {
+      addDebugLog('Timer started', 'info');
+    } else if (isRunning === false && elapsedTime === 0) {
+      addDebugLog('Timer stopped/reset', 'info');
+    }
+  }, [isRunning]);
 
   const handleSpeakerChange = (name) => {
     setSpeakerName(name || '');
@@ -358,10 +405,45 @@ export default function LiveTab() {
             )}
             
             <div className="pt-2 border-t border-gray-200">
-              <div className="text-gray-600">
+              <div className="text-gray-600 mb-2">
                 <div>Video State: {videoState === null ? 'Unknown' : videoState ? 'ON' : 'OFF'}</div>
                 <div>Current Status: {currentStatus || 'None'}</div>
                 <div>Is Hidden: {isHidden ? 'Yes' : 'No'}</div>
+              </div>
+              
+              {/* Debug Logs */}
+              <div className="mt-3">
+                <div className="font-semibold text-gray-700 mb-2">Debug Logs ({debugLogs.length}):</div>
+                <div className="bg-gray-900 text-gray-100 p-2 rounded font-mono text-xs max-h-48 overflow-y-auto">
+                  {debugLogs.length === 0 ? (
+                    <div className="text-gray-500">No logs yet...</div>
+                  ) : (
+                    <>
+                      {debugLogs.map((log, index) => (
+                        <div
+                          key={index}
+                          className={`mb-1 ${
+                            log.type === 'error' ? 'text-red-400' :
+                            log.type === 'warn' ? 'text-yellow-400' :
+                            'text-gray-300'
+                          }`}
+                        >
+                          <span className="text-gray-500">[{log.timestamp}]</span>{' '}
+                          <span>{log.message}</span>
+                        </div>
+                      ))}
+                      <div ref={logsEndRef} />
+                    </>
+                  )}
+                </div>
+                {debugLogs.length > 0 && (
+                  <button
+                    onClick={() => setDebugLogs([])}
+                    className="mt-2 text-xs text-gray-600 hover:text-gray-800 underline"
+                  >
+                    Clear Logs
+                  </button>
+                )}
               </div>
             </div>
           </div>
