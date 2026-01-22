@@ -33,6 +33,7 @@ function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
     'grammarian',
     'toast',
     'moment of humour',
+    'public speaking tip',
     'moment of reflection',
     'table topics master',
     'chairperson',

@@ -83,6 +83,7 @@ export function detectRoleFromText(text) {
       normalized.includes('grammarian') ||
       normalized.includes('toast') ||
       normalized.includes('moment of humour') ||
+      normalized.includes('public speaking tip') ||
       normalized.includes('moment of reflection') ||
       normalized.includes('table topics master') ||
       normalized.includes('chairperson') ||
