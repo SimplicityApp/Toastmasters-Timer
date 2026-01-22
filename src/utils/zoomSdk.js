@@ -212,32 +212,104 @@ export function getSdkStatus() {
  * @returns {Promise<ImageData>} ImageData object
  */
 async function loadImageAsImageData(imageUrl) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous'; // Allow CORS
+  log(`Loading image: ${imageUrl}`, 'info');
+  
+  // Use fetch first (more reliable, especially for CORS)
+  try {
+    log(`Fetching image via fetch API...`, 'info');
+    const response = await fetch(imageUrl, {
+      mode: 'cors',
+      credentials: 'omit'
+    });
     
-    img.onload = () => {
-      try {
-        // Create a canvas to convert image to ImageData
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        log(`Loaded image: ${img.width}x${img.height}, size: ${imageData.data.length} bytes`, 'info');
-        resolve(imageData);
-      } catch (error) {
-        reject(error);
-      }
-    };
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
     
-    img.onerror = (error) => {
-      reject(new Error(`Failed to load image from ${imageUrl}: ${error.message || 'Unknown error'}`));
-    };
+    const blob = await response.blob();
+    log(`Fetched blob: ${blob.size} bytes, type: ${blob.type}`, 'info');
     
-    img.src = imageUrl;
-  });
+    // Create object URL from blob
+    const objectUrl = URL.createObjectURL(blob);
+    
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+      }, 10000);
+      
+      img.onload = () => {
+        clearTimeout(timeout);
+        try {
+          // Create a canvas to convert image to ImageData
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(objectUrl);
+          log(`Loaded image via fetch: ${img.width}x${img.height}, ImageData size: ${imageData.data.length} bytes`, 'info');
+          resolve(imageData);
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          log(`Error converting image to ImageData: ${error.message}`, 'error');
+          reject(error);
+        }
+      };
+      
+      img.onerror = (event) => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(objectUrl);
+        const errorMsg = `Image load failed: ${event.message || event.type || 'Unknown error'}`;
+        log(`Image onerror event: ${errorMsg}`, 'error');
+        log(`Image naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`, 'error');
+        log(`Image complete: ${img.complete}`, 'error');
+        reject(new Error(`Failed to load image from ${imageUrl}: ${errorMsg}`));
+      };
+      
+      img.src = objectUrl;
+    });
+  } catch (fetchError) {
+    log(`Fetch failed, trying direct Image() load: ${fetchError.message}`, 'warn');
+    
+    // Fallback to direct Image() load
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      const timeout = setTimeout(() => {
+        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+      }, 10000);
+      
+      img.onload = () => {
+        clearTimeout(timeout);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          log(`Loaded image via direct Image(): ${img.width}x${img.height}`, 'info');
+          resolve(imageData);
+        } catch (error) {
+          log(`Error converting image to ImageData: ${error.message}`, 'error');
+          reject(error);
+        }
+      };
+      
+      img.onerror = (event) => {
+        clearTimeout(timeout);
+        const errorMsg = event.message || event.type || 'Unknown error';
+        log(`Direct Image() load also failed: ${errorMsg}`, 'error');
+        reject(new Error(`Failed to load image from ${imageUrl} (both fetch and Image() failed): ${errorMsg}`));
+      };
+      
+      img.src = imageUrl;
+    });
+  }
 }
 
 /**
