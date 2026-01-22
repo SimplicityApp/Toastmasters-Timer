@@ -220,102 +220,109 @@ export function useSurveys() {
     }
 
     try {
-      setIsLoading(true);
-      
-      // Wait for surveys to be loaded with timeout to prevent infinite loading
-      await new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-          resolve();
-        }, 3000); // 3 second timeout
-        
-        if (posthog.__surveysLoaded) {
-          clearTimeout(timeout);
-          resolve();
-        } else if (typeof posthog.onSurveysLoaded === 'function') {
-          posthog.onSurveysLoaded(() => {
-            clearTimeout(timeout);
-            resolve();
-          });
-        } else {
-          // Fallback: wait a bit for surveys to load
-          setTimeout(() => {
-            clearTimeout(timeout);
-            resolve();
-          }, 2000);
-        }
-      });
-
+      // If specific survey ID provided, display it directly
       if (surveyId) {
-        // Track survey shown
         trackEvent('survey_shown', { surveyId });
         
-          // Display specific survey by ID (will work even if not in matching surveys)
-          if (typeof posthog.displaySurvey === 'function') {
-            // Mark as manual display to allow it
-            if (typeof posthog._allowManualSurveyDisplay === 'function') {
-              posthog._allowManualSurveyDisplay();
-            }
-            posthog.displaySurvey(surveyId);
-            return true;
+        if (typeof posthog.displaySurvey === 'function') {
+          // Mark as manual display to allow it
+          if (typeof posthog._allowManualSurveyDisplay === 'function') {
+            posthog._allowManualSurveyDisplay();
+          }
+          posthog.displaySurvey(surveyId);
+          return true;
         }
-      } else {
-        // Try to get matching surveys first
-        const surveys = await fetchActiveSurveys();
+        return false;
+      }
+
+      // Check cached data FIRST before fetching
+      // This prevents infinite loading in production when onSurveysLoaded never fires
+      let surveyIdToDisplay = null;
+      let surveyName = 'Unknown';
+      let fromCache = false;
+
+      // Priority 1: Use cached survey ID if available
+      if (cachedSurveyId) {
+        surveyIdToDisplay = cachedSurveyId;
+        fromCache = true;
+      }
+      // Priority 2: Use allSurveys cache if available
+      else if (allSurveys.length > 0) {
+        const survey = allSurveys[0];
+        surveyIdToDisplay = survey.id || survey.surveyId;
+        surveyName = survey.name || 'Unknown';
+        fromCache = true;
+      }
+      // Priority 3: Try to access surveys directly from posthog instance
+      else if (posthog.surveys && Array.isArray(posthog.surveys) && posthog.surveys.length > 0) {
+        const directSurveys = posthog.surveys;
+        const survey = directSurveys[0];
+        surveyIdToDisplay = survey.id || survey.surveyId;
+        surveyName = survey.name || 'Unknown';
+        setAllSurveys(directSurveys);
+        setCachedSurveyId(surveyIdToDisplay);
+        fromCache = true;
+      }
+
+      // If we have cached data, use it immediately without fetching
+      if (surveyIdToDisplay) {
+        trackEvent('survey_shown', { 
+          surveyId: surveyIdToDisplay,
+          surveyName: surveyName,
+          fromCache: fromCache
+        });
         
-        // Use cached survey ID if no matching surveys (survey was dismissed)
-        // This allows manual activation even after dismissal
-        let surveyIdToDisplay = null;
-        let surveyName = 'Unknown';
-        
-        if (surveys.length > 0) {
-          // Use first available matching survey
-          const survey = surveys[0];
-          surveyIdToDisplay = survey.id || survey.surveyId;
-          surveyName = survey.name || 'Unknown';
-          // Update cache if needed
-          if (surveyIdToDisplay && surveyIdToDisplay !== cachedSurveyId) {
-            setCachedSurveyId(surveyIdToDisplay);
+        if (typeof posthog.displaySurvey === 'function') {
+          // Mark as manual display to allow it
+          if (typeof posthog._allowManualSurveyDisplay === 'function') {
+            posthog._allowManualSurveyDisplay();
           }
-        } else if (allSurveys.length > 0) {
-          // No matching surveys, but we have all surveys - use first one
-          const survey = allSurveys[0];
-          surveyIdToDisplay = survey.id || survey.surveyId;
-          surveyName = survey.name || 'Unknown';
-          // Update cache
-          if (surveyIdToDisplay && surveyIdToDisplay !== cachedSurveyId) {
-            setCachedSurveyId(surveyIdToDisplay);
-          }
-        } else if (cachedSurveyId) {
-          // No matching surveys and no all surveys, use cached ID
-          surveyIdToDisplay = cachedSurveyId;
-        } else if (posthog.surveys && Array.isArray(posthog.surveys) && posthog.surveys.length > 0) {
-          // Last resort: try to access surveys directly from posthog instance
-          const directSurveys = posthog.surveys;
-          const survey = directSurveys[0];
-          surveyIdToDisplay = survey.id || survey.surveyId;
-          surveyName = survey.name || 'Unknown';
-          setAllSurveys(directSurveys);
+          posthog.displaySurvey(surveyIdToDisplay);
+          return true;
+        }
+        return false;
+      }
+
+      // Only fetch if we don't have cached data
+      // fetchActiveSurveys manages its own loading state
+      const surveys = await fetchActiveSurveys();
+      
+      // After fetching, try to find a survey to display
+      if (surveys.length > 0) {
+        const survey = surveys[0];
+        surveyIdToDisplay = survey.id || survey.surveyId;
+        surveyName = survey.name || 'Unknown';
+        // Update cache if needed
+        if (surveyIdToDisplay && surveyIdToDisplay !== cachedSurveyId) {
           setCachedSurveyId(surveyIdToDisplay);
         }
+      } else if (allSurveys.length > 0) {
+        // Use cached allSurveys if fetch returned nothing
+        const survey = allSurveys[0];
+        surveyIdToDisplay = survey.id || survey.surveyId;
+        surveyName = survey.name || 'Unknown';
+      } else if (cachedSurveyId) {
+        // Use cached ID as last resort
+        surveyIdToDisplay = cachedSurveyId;
+      }
+      
+      if (surveyIdToDisplay) {
+        trackEvent('survey_shown', { 
+          surveyId: surveyIdToDisplay,
+          surveyName: surveyName,
+          fromCache: surveys.length === 0
+        });
         
-        if (surveyIdToDisplay) {
-          trackEvent('survey_shown', { 
-            surveyId: surveyIdToDisplay,
-            surveyName: surveyName,
-            fromCache: surveys.length === 0 && !!cachedSurveyId
-          });
-          
-          // Display the survey by ID (works even if dismissed)
-          if (typeof posthog.displaySurvey === 'function') {
-            // Mark as manual display to allow it
-            if (typeof posthog._allowManualSurveyDisplay === 'function') {
-              posthog._allowManualSurveyDisplay();
-            }
-            posthog.displaySurvey(surveyIdToDisplay);
-            return true;
+        if (typeof posthog.displaySurvey === 'function') {
+          // Mark as manual display to allow it
+          if (typeof posthog._allowManualSurveyDisplay === 'function') {
+            posthog._allowManualSurveyDisplay();
           }
+          posthog.displaySurvey(surveyIdToDisplay);
+          return true;
         }
       }
+      
       return false;
     } catch (error) {
       console.error('Error showing survey:', error);
@@ -324,8 +331,6 @@ export function useSurveys() {
         error: error.message 
       });
       return false;
-    } finally {
-      setIsLoading(false);
     }
   }, [posthog, fetchActiveSurveys, cachedSurveyId, allSurveys]);
 
