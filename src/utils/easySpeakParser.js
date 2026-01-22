@@ -17,7 +17,12 @@ function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
     return 'Standard Speech';
   }
   
-  // Evaluator roles
+  // Evaluator roles - check for General Evaluator first
+  if (normalized.includes('general evaluator')) {
+    return 'General Evaluation';
+  }
+  
+  // Other evaluator roles (1st Evaluator, 2nd Evaluator, etc.)
   if (normalized.includes('evaluator')) {
     return 'Speech Evaluation';
   }
@@ -34,19 +39,45 @@ function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
     'toastmaster',
     'sergeant at arms',
     'ah counter',
-    'general evaluator', // This is also a short role, but we map it to Speech Evaluation above
   ];
   
   for (const shortRole of shortRoles) {
     if (normalized.includes(shortRole)) {
-      // General Evaluator is already handled above, so skip it here
-      if (shortRole === 'general evaluator') continue;
       return 'Short Roles';
     }
   }
   
   // Default fallback
   return 'Standard Speech';
+}
+
+/**
+ * Checks if a role should be excluded from the agenda
+ * Non-timing roles that don't need to be tracked
+ */
+function shouldExcludeRole(role) {
+  if (!role) return false;
+  
+  const normalized = role.toLowerCase().trim();
+  
+  // Roles to exclude from agenda
+  const excludedRoles = [
+    'grammarian',
+    'chairperson',
+    'sergeant at arms',
+    'timer',
+    'table topics master',
+    'toastmaster',
+  ];
+  
+  // Check if role matches any excluded role (including numbered variants like "1st Sergeant at Arms")
+  for (const excludedRole of excludedRoles) {
+    if (normalized.includes(excludedRole)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -163,8 +194,8 @@ export function parseEasySpeakText(text) {
     
     // Skip empty lines
     if (!line) {
-      // If we were collecting speech details, finalize the current item
-      if (currentName && currentRole && collectingSpeechDetails) {
+      // If we were collecting speech details, finalize the current item (only if not excluded)
+      if (currentName && currentRole && collectingSpeechDetails && !shouldExcludeRole(currentRole)) {
         items.push({
           name: currentName,
           role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
@@ -192,8 +223,8 @@ export function parseEasySpeakText(text) {
     // First, check if this line contains both role and name (tab or space-separated)
     const tabSeparated = parseTabSeparatedRoleName(originalLine);
     if (tabSeparated) {
-      // Finalize previous item if exists
-      if (currentName && currentRole) {
+      // Finalize previous item if exists (only if not excluded)
+      if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
         items.push({
           name: currentName,
           role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
@@ -202,6 +233,16 @@ export function parseEasySpeakText(text) {
       }
       
       // Process the tab-separated role and name
+      // If this role should be excluded, skip processing it
+      if (shouldExcludeRole(tabSeparated.role)) {
+        currentRole = null;
+        currentName = null;
+        speechDetails = null;
+        collectingSpeechDetails = false;
+        skipPreviousEvaluators = false;
+        continue;
+      }
+      
       currentRole = tabSeparated.role;
       currentName = tabSeparated.name;
       speechDetails = null;
@@ -248,8 +289,8 @@ export function parseEasySpeakText(text) {
     );
     
     if (isRoleHeader) {
-      // Finalize previous item if exists
-      if (currentName && currentRole) {
+      // Finalize previous item if exists (only if not excluded)
+      if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
         items.push({
           name: currentName,
           role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
@@ -258,6 +299,16 @@ export function parseEasySpeakText(text) {
       }
       
       // Start new role (use trimmed line to remove indentation)
+      // If this role should be excluded, skip processing it
+      if (shouldExcludeRole(trimmedLine)) {
+        currentRole = null;
+        currentName = null;
+        speechDetails = null;
+        collectingSpeechDetails = false;
+        skipPreviousEvaluators = false;
+        continue;
+      }
+      
       currentRole = trimmedLine;
       currentName = null;
       speechDetails = null;
@@ -324,12 +375,14 @@ export function parseEasySpeakText(text) {
           !line.toLowerCase().includes('present') &&
           !line.match(/^\d+\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i) &&
           !line.match(/^[a-z0-9]+\s+\d+\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i)) {
-        // This might be a new name, finalize current item
-        items.push({
-          name: currentName,
-          role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
-          speechDetails: showSpeechDetailsMode ? speechDetails : null
-        });
+        // This might be a new name, finalize current item (only if not excluded)
+        if (!shouldExcludeRole(currentRole)) {
+          items.push({
+            name: currentName,
+            role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),
+            speechDetails: showSpeechDetailsMode ? speechDetails : null
+          });
+        }
         currentName = null;
         currentRole = null;
         speechDetails = null;
@@ -401,8 +454,8 @@ export function parseEasySpeakText(text) {
     }
   }
   
-  // Finalize last item if exists
-  if (currentName && currentRole) {
+  // Finalize last item if exists (only if not excluded)
+  if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
     items.push({
       name: currentName,
       role: mapEasySpeakRoleToAppRole(currentRole, speechDetails),

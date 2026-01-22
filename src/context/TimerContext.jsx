@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { DEFAULT_ROLE_RULES, detectRoleFromText } from '../constants/timingRules';
 import { calculateStatus, formatTime } from '../utils/timerLogic';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, clearAgenda } from '../utils/storage';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, clearAgenda, clearReports } from '../utils/storage';
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '../utils/easySpeakParser';
 
@@ -279,6 +279,11 @@ export function TimerProvider({ children }) {
     setReports(prev => [...prev, reportEntry]);
   }, []);
 
+  const clearAllReports = useCallback(() => {
+    setReports([]);
+    clearReports();
+  }, []);
+
   const finishCurrentSpeech = useCallback(() => {
     if (currentSpeaker && elapsedTime > 0) {
       // Calculate comment if speaker passed red
@@ -353,6 +358,7 @@ export function TimerProvider({ children }) {
     // Report actions
     addReport,
     finishCurrentSpeech,
+    clearAllReports,
     
     // Role rules actions
     updateRoleRules,

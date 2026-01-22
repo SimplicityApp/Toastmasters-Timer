@@ -68,6 +68,17 @@ export function loadReports() {
 }
 
 /**
+ * Clear reports from localStorage
+ */
+export function clearReports() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.REPORTS);
+  } catch (error) {
+    console.error('Failed to clear reports:', error);
+  }
+}
+
+/**
  * Save custom role rules to localStorage
  * @param {Object} roleRules - Role rules object
  */

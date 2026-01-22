@@ -1,5 +1,5 @@
 import { useTimer } from '../context/TimerContext';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 function ColorDot({ color }) {
@@ -16,7 +16,7 @@ function ColorDot({ color }) {
 }
 
 export default function ReportTab() {
-  const { reports } = useTimer();
+  const { reports, clearAllReports } = useTimer();
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -39,6 +39,15 @@ export default function ReportTab() {
     } catch (error) {
       console.error('Failed to copy:', error);
       alert('Failed to copy to clipboard');
+    }
+  };
+
+  const handleClear = () => {
+    if (reports.length === 0) {
+      return;
+    }
+    if (window.confirm('Are you sure you want to clear all reports? This action cannot be undone.')) {
+      clearAllReports();
     }
   };
 
@@ -100,22 +109,31 @@ export default function ReportTab() {
             </div>
           </div>
 
-          <button
-            onClick={copyToClipboard}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-          >
-            {copied ? (
-              <>
-                <Check className="h-5 w-5" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy className="h-5 w-5" />
-                Copy Report to Clipboard
-              </>
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={copyToClipboard}
+              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-5 w-5" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-5 w-5" />
+                  Copy Report to Clipboard
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleClear}
+              className="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              <Trash2 className="h-5 w-5" />
+              Clear
+            </button>
+          </div>
         </>
       )}
     </div>

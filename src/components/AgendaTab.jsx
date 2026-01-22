@@ -103,7 +103,7 @@ export default function AgendaTab({ onSwitchToLive }) {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [importTab, setImportTab] = useState('simple'); // 'simple' | 'easyspeak'
+  const [importTab, setImportTab] = useState('easyspeak'); // 'simple' | 'easyspeak'
   const [importText, setImportText] = useState('');
   const [easySpeakText, setEasySpeakText] = useState('');
   const [editItem, setEditItem] = useState(null);
@@ -258,7 +258,7 @@ export default function AgendaTab({ onSwitchToLive }) {
       <div className="flex gap-2">
         <button
           onClick={() => {
-            setImportTab('simple');
+            setImportTab('easyspeak');
             setImportText('');
             setEasySpeakText('');
             setShowImportModal(true);
@@ -334,7 +334,7 @@ export default function AgendaTab({ onSwitchToLive }) {
                   setShowImportModal(false);
                   setImportText('');
                   setEasySpeakText('');
-                  setImportTab('simple');
+                  setImportTab('easyspeak');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -345,16 +345,6 @@ export default function AgendaTab({ onSwitchToLive }) {
             {/* Tabs */}
             <div className="flex border-b border-gray-200 mb-4">
               <button
-                onClick={() => setImportTab('simple')}
-                className={`px-4 py-2 font-medium text-sm transition-colors ${
-                  importTab === 'simple'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Simple Format
-              </button>
-              <button
                 onClick={() => setImportTab('easyspeak')}
                 className={`px-4 py-2 font-medium text-sm transition-colors ${
                   importTab === 'easyspeak'
@@ -364,49 +354,20 @@ export default function AgendaTab({ onSwitchToLive }) {
               >
                 EasySpeak Format
               </button>
+              <button
+                onClick={() => setImportTab('simple')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  importTab === 'simple'
+                    ? 'border-b-2 border-blue-500 text-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Simple Format
+              </button>
             </div>
 
             {/* Tab Content */}
-            {importTab === 'simple' ? (
-              <div>
-                <div className="mb-3 space-y-2">
-                  <p className="text-sm text-gray-700 font-medium">
-                    Simple Format
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Enter one speaker per line with role in parentheses. Roles will be auto-detected from text.
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Example: "John Doe (Ice Breaker)" or "Sarah Smith (Standard Speech)"
-                  </p>
-                </div>
-                <textarea
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                  placeholder="John Doe (Ice Breaker)&#10;Sarah Smith (Standard Speech)&#10;Alex (Table Topics)"
-                  className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={handleSimpleImport}
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-                  >
-                    Import
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowImportModal(false);
-                      setImportText('');
-                      setEasySpeakText('');
-                      setImportTab('simple');
-                    }}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
+            {importTab === 'easyspeak' ? (
               <div>
                 <div className="mb-3 space-y-2">
                   <p className="text-sm text-gray-700 font-medium">
@@ -437,7 +398,46 @@ export default function AgendaTab({ onSwitchToLive }) {
                       setShowImportModal(false);
                       setImportText('');
                       setEasySpeakText('');
-                      setImportTab('simple');
+                      setImportTab('easyspeak');
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="mb-3 space-y-2">
+                  <p className="text-sm text-gray-700 font-medium">
+                    Simple Format
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Enter one speaker per line with role in parentheses. Roles will be auto-detected from text.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Example: "John Doe (Ice Breaker)" or "Sarah Smith (Standard Speech)"
+                  </p>
+                </div>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="John Doe (Ice Breaker)&#10;Sarah Smith (Standard Speech)&#10;Alex (Table Topics)"
+                  className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={handleSimpleImport}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Import
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportText('');
+                      setEasySpeakText('');
+                      setImportTab('easyspeak');
                     }}
                     className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
                   >
