@@ -428,6 +428,35 @@ export default function LiveTab() {
         )}
       </button>
 
+      {/* Video off warning banner - Always visible when video is off */}
+      {videoState === false && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+            <p className="text-sm text-yellow-800 font-medium">
+              Your video is turned off. Please turn on your video to use the Timer Card.
+            </p>
+          </div>
+          <button
+            onClick={handleTurnVideoOn}
+            disabled={isEnablingVideo}
+            className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors flex-shrink-0"
+          >
+            {isEnablingVideo ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Turning On...</span>
+              </>
+            ) : (
+              <>
+                <Video className="h-4 w-4" />
+                <span>Turn Video On</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Debug Panel - Only show if enabled via feature flag */}
       {DEBUG_PANEL_ENABLED && (
         <div className="bg-gray-50 border border-gray-300 rounded-lg overflow-hidden">
@@ -482,6 +511,9 @@ export default function LiveTab() {
                   </div>
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasGetUserContext ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     getUserContext: {sdkStatus.hasGetUserContext ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasGetVideoState ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    getVideoState: {sdkStatus.hasGetVideoState ? 'Yes' : 'No'}
                   </div>
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoState ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     setVideoState: {sdkStatus.hasSetVideoState ? 'Yes' : 'No'}
@@ -673,35 +705,6 @@ export default function LiveTab() {
                   START
                 </button>
               </div>
-              
-              {/* Video state warning and button */}
-              {videoState === false && (
-                <div className="space-y-2">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800">
-                      Turn on video to enable Timer Card
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleTurnVideoOn}
-                    disabled={isEnablingVideo}
-                    data-tooltip="Turn on your video in Zoom"
-                    className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                  >
-                    {isEnablingVideo ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Turning Video On...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Video className="h-4 w-4" />
-                        <span>Turn Video On</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
 
               <div className="flex gap-2">
                 <button
@@ -733,35 +736,6 @@ export default function LiveTab() {
                   CONTINUE
                 </button>
               </div>
-              
-              {/* Video state warning and button */}
-              {videoState === false && (
-                <div className="space-y-2">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800">
-                      Turn on video to enable Timer Card
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleTurnVideoOn}
-                    disabled={isEnablingVideo}
-                    data-tooltip="Turn on your video in Zoom"
-                    className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                  >
-                    {isEnablingVideo ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Turning Video On...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Video className="h-4 w-4" />
-                        <span>Turn Video On</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
 
               <div className="flex gap-2">
                 <button

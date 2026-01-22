@@ -201,6 +201,7 @@ export function getSdkStatus() {
     hasRemoveVideoFilter: zoomSdk && typeof zoomSdk.removeVideoFilter === 'function',
     hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
     hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
+    hasGetVideoState: zoomSdk && typeof zoomSdk.getVideoState === 'function',
     hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
   };
   
@@ -449,28 +450,45 @@ export async function getVideoState() {
   }
 
   try {
-    if (sdkAvailable && zoomSdk && typeof zoomSdk.getUserContext === 'function') {
-      const context = await zoomSdk.getUserContext();
-      const videoState = context?.videoState;
+    if (sdkAvailable && zoomSdk && typeof zoomSdk.getVideoState === 'function') {
+      const result = await zoomSdk.getVideoState();
+      
+      // Handle different possible return formats:
+      // 1. Direct boolean: true/false
+      // 2. Object with 'on' property: { on: true/false }
+      // 3. Object with 'videoState' property: { videoState: true/false }
+      let videoState;
+      if (typeof result === 'boolean') {
+        videoState = result;
+      } else if (result && typeof result === 'object') {
+        videoState = result.on !== undefined ? result.on : result.videoState;
+      } else {
+        videoState = undefined;
+      }
       
       // Only return false if explicitly false, otherwise return null if undefined
       if (videoState === false) {
         console.log('Zoom SDK: Video state: OFF');
+        log('Zoom SDK: Video state: OFF', 'info');
         return false;
       } else if (videoState === true) {
         console.log('Zoom SDK: Video state: ON');
+        log('Zoom SDK: Video state: ON', 'info');
         return true;
       } else {
         console.warn('Zoom SDK: Video state is undefined, cannot determine');
+        log('Zoom SDK: Video state is undefined, cannot determine', 'warn');
         return null; // Return null if we can't determine
       }
     } else {
       console.warn('[MOCK] Zoom SDK: Would get video state (SDK not available)');
+      log('[MOCK] Zoom SDK: Would get video state (SDK not available)', 'warn');
       // Return null in mock mode to indicate we can't determine (don't show warning)
       return null;
     }
   } catch (error) {
     console.error('Failed to get video state:', error);
+    log(`Failed to get video state: ${error.message || error.name}`, 'error');
     // Return null on error to indicate we can't determine (don't show warning)
     return null;
   }
