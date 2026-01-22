@@ -6,6 +6,18 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/support",
+      "destination": "/support.html"
+    },
+    {
+      "source": "/terms-of-use",
+      "destination": "/terms-of-use.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
