@@ -15,3 +15,66 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* Custom tooltip styles */
+[data-tooltip] {
+  position: relative;
+}
+
+/* Default: tooltip appears above (upward) */
+[data-tooltip]:hover::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background-color: rgba(0, 0, 0, 0.9);
+  color: white;
+  font-size: 12px;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: center;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 1;
+  /* Constrain tooltip to stay within viewport */
+  max-width: min(250px, calc(100vw - 20px));
+  min-width: 120px;
+  /* Adjust position to prevent overflow */
+  left: clamp(10px, 50%, calc(100% - 10px));
+  transform: translateX(clamp(calc(-100% + 10px), -50%, calc(-10px)));
+}
+
+[data-tooltip]:hover::after {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 1;
+}
+
+/* Tooltip appears below (downward) */
+[data-tooltip-direction="down"]:hover::before {
+  bottom: auto;
+  top: calc(100% + 8px);
+  /* Apply same viewport constraints as upward tooltips */
+  max-width: min(250px, calc(100vw - 20px));
+  min-width: 120px;
+  /* Adjust position to prevent horizontal overflow */
+  left: clamp(10px, 50%, calc(100% - 10px));
+  transform: translateX(clamp(calc(-100% + 10px), -50%, calc(-10px)));
+}
+
+[data-tooltip-direction="down"]:hover::after {
+  bottom: auto;
+  top: calc(100% + 2px);
+  border-top-color: transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.9);
+}

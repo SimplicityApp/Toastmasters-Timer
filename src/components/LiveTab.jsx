@@ -4,7 +4,7 @@ import { Play, Square, RotateCcw, Eye, EyeOff, Video } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
-import { ROLE_OPTIONS } from '../constants/timingRules';
+import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
 import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl, getSdkStatus, setLogCallback } from '../utils/zoomSdk';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -50,6 +50,7 @@ export default function LiveTab() {
   const [lastError, setLastError] = useState(null);
   const [debugLogs, setDebugLogs] = useState([]);
   const logsEndRef = useRef(null);
+  const initializedRef = useRef(false);
   
   // Save expanded state to localStorage
   const toggleDebugPanel = () => {
@@ -75,6 +76,19 @@ export default function LiveTab() {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [debugLogs, debugPanelExpanded]);
+
+  // Initialize currentSpeaker on mount if it's null
+  useEffect(() => {
+    if (!initializedRef.current && !currentSpeaker && selectedRole && roleRules && Object.keys(roleRules).length > 0) {
+      // Initialize with default role (Standard Speech)
+      // setCurrentSpeaker will automatically add rules from roleRules
+      setCurrentSpeaker({
+        name: '',
+        role: selectedRole,
+      });
+      initializedRef.current = true;
+    }
+  }, [roleRules, selectedRole, currentSpeaker, setCurrentSpeaker]); // Include all dependencies
 
   // Update local state when currentSpeaker changes (but preserve custom rules if Custom role)
   useEffect(() => {
@@ -257,6 +271,25 @@ export default function LiveTab() {
     return `${mins}:${String(secs).padStart(2, '0')}`;
   };
 
+  // Helper to format seconds as readable time
+  const formatTimeReadable = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) {
+      return `${secs} second${secs !== 1 ? 's' : ''}`;
+    }
+    if (secs === 0) {
+      return `${mins} minute${mins !== 1 ? 's' : ''}`;
+    }
+    return `${mins} min ${secs} sec`;
+  };
+
+  // Get explanation text for each role
+  const getRoleExplanation = (role) => {
+    const rules = roleRules[role] || DEFAULT_ROLE_RULES[role] || DEFAULT_ROLE_RULES['Standard Speech'];
+    return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
+  };
+
   const handleStart = () => {
     // Speaker name is optional, but validate custom rules if Custom role is selected
     if (selectedRole === 'Custom') {
@@ -267,14 +300,29 @@ export default function LiveTab() {
       }
     }
     // Ensure current speaker is set with correct rules
-    if (!currentSpeaker || (selectedRole === 'Custom' && !currentSpeaker.rules)) {
-      const rules = selectedRole === 'Custom' ? customRules : undefined;
-      setCurrentSpeaker({
-        name: speakerName || '',
-        role: selectedRole,
-        ...(rules && { rules }),
-      });
+    // Get rules from roleRules if not Custom, or use customRules if Custom
+    const rules = selectedRole === 'Custom' ? customRules : roleRules[selectedRole];
+    if (!rules) {
+      alert('Please set timing rules first');
+      return;
     }
+    
+    // Always set current speaker before starting timer
+    // setCurrentSpeaker will automatically add rules from roleRules if not provided for non-Custom roles
+    setCurrentSpeaker({
+      name: speakerName || '',
+      role: selectedRole,
+      ...(selectedRole === 'Custom' && { rules }),
+    });
+    
+    // Note: setCurrentSpeaker is async, but it will add rules automatically via setCurrentSpeakerAction
+    // So we call startTimer, and if currentSpeaker still doesn't have rules, 
+    // the initialization useEffect should have set it up by now
+    startTimer();
+  };
+
+  const handleContinue = () => {
+    // Continue is the same as start - it resumes the timer
     startTimer();
   };
 
@@ -324,7 +372,7 @@ export default function LiveTab() {
       <button
         onClick={handleToggleRevealFace}
         className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors z-10"
-        title={isHidden ? 'Reveal Face' : 'Hide Face'}
+        data-tooltip={isHidden ? 'Reveal Face' : 'Hide Face'}
       >
         {isHidden ? (
           <EyeOff className="h-5 w-5 text-gray-700" />
@@ -460,6 +508,12 @@ export default function LiveTab() {
         onEditRules={() => setShowEditRulesModal(true)}
       />
 
+      {selectedRole !== 'Custom' && (
+        <p className="text-xs text-gray-500 mt-1">
+          Timing rules: {getRoleExplanation(selectedRole)}
+        </p>
+      )}
+
       {selectedRole === 'Custom' && (
         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Custom Timing Rules</h3>
@@ -532,77 +586,158 @@ export default function LiveTab() {
         rules={currentSpeaker?.rules}
       />
 
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          {!isRunning ? (
-            <button
-              onClick={handleStart}
-              disabled={videoState === false}
-              className={`flex-1 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors ${
-                videoState === false
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-green-500 hover:bg-green-600 text-white'
-              }`}
-            >
-              <Play className="h-5 w-5" />
-              START
-            </button>
-          ) : (
+      <div className="space-y-2 pb-20">
+        {/* When timer is running, show STOP button */}
+        {isRunning ? (
+          <div className="flex gap-2">
             <button
               onClick={handleStop}
+              data-tooltip="Pause the timer (can be resumed later)"
               className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
             >
               <Square className="h-5 w-5" />
               STOP
             </button>
-          )}
-        </div>
-
-        {/* Video state warning and button */}
-        {videoState === false && (
-          <div className="space-y-2">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-sm text-yellow-800">
-                Turn on video to enable Timer Card
-              </p>
-            </div>
-            <button
-              onClick={handleTurnVideoOn}
-              disabled={isEnablingVideo}
-              className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-              {isEnablingVideo ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Turning Video On...</span>
-                </>
-              ) : (
-                <>
-                  <Video className="h-4 w-4" />
-                  <span>Turn Video On</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleReset}
-            className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-          >
-            <RotateCcw className="h-4 w-4" />
-            RESET
-          </button>
-          {isRunning && (
             <button
               onClick={handleFinish}
-              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+              data-tooltip="Complete the current speech and save it to reports"
+              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
             >
               FINISH
             </button>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* When timer is not running */
+          elapsedTime === 0 ? (
+            /* Start state: no timing started at all - only START and RESET */
+            <>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleStart}
+                  disabled={videoState === false}
+                  data-tooltip="Start the timer for the current speaker"
+                  className={`flex-1 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                    videoState === false
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-500 hover:bg-green-600 text-white'
+                  }`}
+                >
+                  <Play className="h-5 w-5" />
+                  START
+                </button>
+              </div>
+              
+              {/* Video state warning and button */}
+              {videoState === false && (
+                <div className="space-y-2">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      Turn on video to enable Timer Card
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleTurnVideoOn}
+                    disabled={isEnablingVideo}
+                    data-tooltip="Turn on your video in Zoom"
+                    className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {isEnablingVideo ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Turning Video On...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-4 w-4" />
+                        <span>Turn Video On</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  data-tooltip="Reset the timer to 00:00 and clear the current speaker"
+                  data-tooltip-direction="down"
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  RESET
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Continue state: timing started and then stopped - CONTINUE, RESET, and FINISH */
+            <>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleContinue}
+                  disabled={videoState === false}
+                  data-tooltip="Resume the timer from where it was stopped"
+                  className={`flex-1 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                    videoState === false
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-500 hover:bg-green-600 text-white'
+                  }`}
+                >
+                  <Play className="h-5 w-5" />
+                  CONTINUE
+                </button>
+              </div>
+              
+              {/* Video state warning and button */}
+              {videoState === false && (
+                <div className="space-y-2">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      Turn on video to enable Timer Card
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleTurnVideoOn}
+                    disabled={isEnablingVideo}
+                    data-tooltip="Turn on your video in Zoom"
+                    className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {isEnablingVideo ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Turning Video On...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Video className="h-4 w-4" />
+                        <span>Turn Video On</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  data-tooltip="Reset the timer to 00:00 and clear the current speaker"
+                  data-tooltip-direction="down"
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  RESET
+                </button>
+                <button
+                  onClick={handleFinish}
+                  data-tooltip="Complete the current speech and save it to reports"
+                  data-tooltip-direction="down"
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  FINISH
+                </button>
+              </div>
+            </>
+          )
+        )}
       </div>
 
       <EditRulesModal
