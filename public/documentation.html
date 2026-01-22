@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - Toastmaster Timer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        h2 {
+            color: #374151;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.75em;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        h3 {
+            color: #4b5563;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        p {
+            margin-bottom: 15px;
+        }
+        .intro {
+            color: #6b7280;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+        }
+        a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        ul, ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+        li {
+            margin-bottom: 10px;
+        }
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .step-box {
+            background: #f9fafb;
+            border-left: 4px solid #2563eb;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .step-box h3 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .info-box {
+            background: #dbeafe;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+        }
+        .feature-item strong {
+            display: block;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Toastmaster Timer Documentation</h1>
+        <p class="intro">
+            Complete guide for adding, using, and removing Toastmaster Timer in Zoom. 
+            This app helps Toastmasters manage meeting timings, track speakers, and generate timing reports.
+        </p>
+
+        <h2>1. Adding the App to Zoom</h2>
+        
+        <h3>Prerequisites</h3>
+        <ul>
+            <li>Zoom client version 5.13.0 or higher</li>
+            <li>Administrator access to install apps (for organization-wide installation)</li>
+            <li>An active Zoom account</li>
+        </ul>
+
+        <h3>Installation Methods</h3>
+
+        <div class="step-box">
+            <h3>Method 1: Install from Zoom Marketplace (Recommended)</h3>
+            <ol>
+                <li>Log in to your Zoom account at <a href="https://zoom.us" target="_blank">zoom.us</a></li>
+                <li>Navigate to <strong>Zoom Marketplace</strong> (Apps → Zoom Marketplace)</li>
+                <li>Search for "Toastmaster Timer"</li>
+                <li>Click on the app listing</li>
+                <li>Click the <strong>Install</strong> or <strong>Add</strong> button</li>
+                <li>Review and accept the required permissions:
+                    <ul>
+                        <li><strong>Virtual Background Control:</strong> Allows the app to change your virtual background to indicate timing phases (green, yellow, red)</li>
+                        <li><strong>Participant Information:</strong> Allows the app to access participant names for speaker selection</li>
+                    </ul>
+                </li>
+                <li>Authorize the app installation</li>
+                <li>The app will now be available in your Zoom client</li>
+            </ol>
+        </div>
+
+        <div class="step-box">
+            <h3>Method 2: Developer Mode Installation (For Testing)</h3>
+            <p>This method is for developers or users testing the app before it's published:</p>
+            <ol>
+                <li>Open your Zoom client</li>
+                <li>Go to <strong>Settings</strong> → <strong>Apps</strong> → <strong>Developer Mode</strong></li>
+                <li>Enable <strong>Developer Mode</strong></li>
+                <li>Navigate to <strong>Zoom Marketplace</strong> → <strong>Your Apps</strong> → <strong>Local Test</strong></li>
+                <li>Click <strong>Add</strong> or <strong>Upload</strong></li>
+                <li>Upload the <code>manifest.json</code> file from the Toastmaster Timer app</li>
+                <li>Grant the required permissions when prompted</li>
+                <li>The app will be available for testing in your Zoom client</li>
+            </ol>
+        </div>
+
+        <div class="info-box">
+            <strong>Note:</strong> After installation, you may need to restart your Zoom client for the app to appear in the Apps menu.
+        </div>
+
+        <h3>Verifying Installation</h3>
+        <p>To verify the app is installed correctly:</p>
+        <ol>
+            <li>Start or join a Zoom meeting</li>
+            <li>Click on <strong>Apps</strong> in the meeting toolbar</li>
+            <li>Look for <strong>Toastmaster Timer</strong> in the list of available apps</li>
+            <li>Click on it to launch the app</li>
+        </ol>
+
+        <h2>2. Using the App</h2>
+
+        <h3>Launching the App</h3>
+        <ol>
+            <li>Start or join a Zoom meeting</li>
+            <li>Click <strong>Apps</strong> in the meeting toolbar (bottom of the screen)</li>
+            <li>Select <strong>Toastmaster Timer</strong> from the apps list</li>
+            <li>The app window will open, displaying the timer interface</li>
+        </ol>
+
+        <h3>Main Features</h3>
+        <div class="feature-list">
+            <div class="feature-item">
+                <strong>Live Timer Tab</strong>
+                <p>Start, pause, and manage timers for individual speakers with automatic virtual background changes.</p>
+            </div>
+            <div class="feature-item">
+                <strong>Agenda Tab</strong>
+                <p>Manage multiple speakers, import agendas, and organize your meeting schedule.</p>
+            </div>
+            <div class="feature-item">
+                <strong>Report Tab</strong>
+                <p>View and export timing reports for all completed speeches.</p>
+            </div>
+        </div>
+
+        <h3>Using the Timer</h3>
+        <div class="step-box">
+            <h3>Basic Timer Operation</h3>
+            <ol>
+                <li><strong>Select a Timing Role:</strong> Choose from predefined roles (Standard Speech, Ice Breaker, Table Topics, etc.) or select "Custom" to set your own timing thresholds</li>
+                <li><strong>Enter Speaker Name (Optional):</strong> 
+                    <ul>
+                        <li>Type a name manually, or</li>
+                        <li>Click the dropdown to select from Zoom meeting participants</li>
+                    </ul>
+                </li>
+                <li><strong>Start the Timer:</strong> Click the <strong>START</strong> button to begin timing</li>
+                <li><strong>Monitor Timing:</strong> The timer will automatically change your virtual background:
+                    <ul>
+                        <li><strong>Green:</strong> Within the green zone (good timing)</li>
+                        <li><strong>Yellow:</strong> Entered the yellow zone (warning)</li>
+                        <li><strong>Red:</strong> Exceeded the red threshold (over time)</li>
+                    </ul>
+                </li>
+                <li><strong>Control the Timer:</strong>
+                    <ul>
+                        <li><strong>STOP:</strong> Pause the timer</li>
+                        <li><strong>RESET:</strong> Clear the timer and start over</li>
+                        <li><strong>FINISH:</strong> Save the timing result to the report</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <h3>Managing Multiple Speakers (Agenda Tab)</h3>
+        <ol>
+            <li>Click the <strong>AGENDA</strong> tab</li>
+            <li><strong>Add Speakers:</strong>
+                <ul>
+                    <li>Click "Add Speaker" to add manually</li>
+                    <li>Or use "Import from Text" to paste a list of names</li>
+                    <li>Or use "Import from Easy-Speak" if you use Easy-Speak for meeting management</li>
+                </ul>
+            </li>
+            <li><strong>Reorder Speakers:</strong> Drag and drop speakers to reorder them</li>
+            <li><strong>Load Speaker:</strong> Click on a speaker's name to load them into the timer</li>
+            <li><strong>Mark Complete:</strong> Speakers with completed timings will show a checkmark</li>
+        </ol>
+
+        <h3>Customizing Timing Rules</h3>
+        <ol>
+            <li>In the Live Timer tab, click <strong>"Edit timing rules"</strong> next to the role dropdown</li>
+            <li>Modify the green, yellow, and red thresholds for each speech type</li>
+            <li>Click <strong>Save</strong> to apply changes</li>
+            <li>Your custom rules are saved locally and will persist across sessions</li>
+        </ol>
+
+        <h3>Viewing and Exporting Reports</h3>
+        <ol>
+            <li>Click the <strong>REPORT</strong> tab</li>
+            <li>View all completed timings with speaker names, roles, and timing results</li>
+            <li>Click <strong>"Copy Report to Clipboard"</strong> to export</li>
+            <li>Paste the report into Excel, Google Sheets, or any text editor</li>
+            <li>The report is formatted as tab-separated values for easy import</li>
+        </ol>
+
+        <h3>Virtual Background Feature</h3>
+        <div class="info-box">
+            <p><strong>How it works:</strong> The app automatically changes your Zoom virtual background to indicate timing phases:</p>
+            <ul>
+                <li><strong>Green background:</strong> Speaker is within the acceptable time range</li>
+                <li><strong>Yellow background:</strong> Speaker has entered the warning zone</li>
+                <li><strong>Red background:</strong> Speaker has exceeded the time limit</li>
+            </ul>
+            <p><strong>Requirements:</strong> You must grant virtual background permissions during installation for this feature to work.</p>
+        </div>
+
+        <h3>Tips for Best Results</h3>
+        <ul>
+            <li>Ensure you're in a Zoom meeting before launching the app</li>
+            <li>Grant all requested permissions during installation for full functionality</li>
+            <li>Use the Agenda tab to prepare your speaker list before the meeting starts</li>
+            <li>Customize timing rules to match your club's specific requirements</li>
+            <li>Export reports immediately after meetings to avoid data loss</li>
+        </ul>
+
+        <h2>3. Removing the App</h2>
+
+        <h3>Uninstalling from Zoom</h3>
+        <div class="step-box">
+            <h3>Method 1: Remove via Zoom Web Portal</h3>
+            <ol>
+                <li>Log in to your Zoom account at <a href="https://zoom.us" target="_blank">zoom.us</a></li>
+                <li>Navigate to <strong>Zoom Marketplace</strong></li>
+                <li>Click on <strong>Manage</strong> → <strong>Installed Apps</strong> (or go to <strong>My Apps</strong>)</li>
+                <li>Find <strong>Toastmaster Timer</strong> in the list of installed apps</li>
+                <li>Click on the app</li>
+                <li>Click the <strong>Uninstall</strong> or <strong>Remove</strong> button</li>
+                <li>Confirm the uninstallation when prompted</li>
+                <li>The app will be removed from your Zoom account</li>
+            </ol>
+        </div>
+
+        <div class="step-box">
+            <h3>Method 2: Remove via Zoom Client</h3>
+            <ol>
+                <li>Open your Zoom client</li>
+                <li>Go to <strong>Settings</strong> → <strong>Apps</strong></li>
+                <li>Find <strong>Toastmaster Timer</strong> in the list of installed apps</li>
+                <li>Click on the app</li>
+                <li>Select <strong>Uninstall</strong> or <strong>Remove</strong></li>
+                <li>Confirm the removal</li>
+            </ol>
+        </div>
+
+        <h3>Clearing Local Data</h3>
+        <p>After uninstalling the app, you may want to clear any locally stored data:</p>
+        <ol>
+            <li>Open your web browser</li>
+            <li>Access browser settings/preferences</li>
+            <li>Navigate to <strong>Privacy</strong> or <strong>Site Settings</strong></li>
+            <li>Find <strong>Storage</strong> or <strong>Local Storage</strong></li>
+            <li>Search for the Toastmaster Timer domain</li>
+            <li>Clear the stored data (this will remove your agenda, reports, and custom timing rules)</li>
+        </ol>
+
+        <div class="warning-box">
+            <strong>Important:</strong> Clearing local data will permanently delete all your saved agendas, timing reports, and custom timing rules. Make sure to export any important reports before clearing data.
+        </div>
+
+        <h3>Reinstalling the App</h3>
+        <p>If you want to reinstall the app after removal, simply follow the installation instructions in Section 1 above. 
+        Note that any previously stored local data will be lost unless you've backed it up.</p>
+
+        <h2>4. Troubleshooting</h2>
+
+        <h3>Common Issues</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Issue</th>
+                    <th>Solution</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>App doesn't appear in Apps menu</td>
+                    <td>Restart Zoom client, verify installation in Zoom Marketplace, check that you're in a meeting</td>
+                </tr>
+                <tr>
+                    <td>Virtual background not changing</td>
+                    <td>Verify permissions were granted, ensure you're in a meeting, check Zoom client version (5.13.0+)</td>
+                </tr>
+                <tr>
+                    <td>Participant list is empty</td>
+                    <td>Check Zoom API permissions, ensure you're in a meeting with participants, try refreshing the app</td>
+                </tr>
+                <tr>
+                    <td>Data not saving</td>
+                    <td>Check browser localStorage permissions, ensure cookies/local storage is enabled</td>
+                </tr>
+                <tr>
+                    <td>App crashes or freezes</td>
+                    <td>Close and reopen the app, refresh the Zoom client, check for Zoom client updates</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Getting Additional Help</h3>
+        <p>
+            If you encounter issues not covered in this documentation, please visit our 
+            <a href="/support">Support page</a> or contact us at 
+            <a href="mailto:shuhao.qgg.zhang@gmail.com">shuhao.qgg.zhang@gmail.com</a>.
+        </p>
+
+        <h2>5. System Requirements</h2>
+        <ul>
+            <li><strong>Zoom Client:</strong> Version 5.13.0 or higher</li>
+            <li><strong>Operating System:</strong> Windows, macOS, or Linux (as supported by Zoom)</li>
+            <li><strong>Browser:</strong> Modern browser with localStorage support (for data storage)</li>
+            <li><strong>Permissions:</strong> Virtual background control and participant information access</li>
+        </ul>
+
+        <h2>6. Privacy and Data</h2>
+        <p>
+            Toastmaster Timer stores all data locally on your device. No information is transmitted to external servers. 
+            For detailed information about data handling, please review our 
+            <a href="/privacy">Privacy Policy</a>.
+        </p>
+
+        <h2>7. Additional Resources</h2>
+        <ul>
+            <li><a href="/support">Support & Help</a> - Frequently asked questions and troubleshooting</li>
+            <li><a href="/privacy">Privacy Policy</a> - How we handle your data</li>
+            <li><a href="/terms-of-use">Terms of Use</a> - Terms and conditions for using the app</li>
+        </ul>
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 0.9em;">
+            <p><strong>Last Updated:</strong> January 21, 2025</p>
+            <p><strong>Contact:</strong> <a href="mailto:shuhao.qgg.zhang@gmail.com">shuhao.qgg.zhang@gmail.com</a></p>
+        </div>
+    </div>
+</body>
+</html>

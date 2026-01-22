@@ -18,6 +18,10 @@
       "destination": "/terms-of-use.html"
     },
     {
+      "source": "/documentation",
+      "destination": "/documentation.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
