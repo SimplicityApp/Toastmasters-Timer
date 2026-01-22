@@ -39,6 +39,7 @@ export default function LiveTab() {
   // Debug panel feature flag - can be disabled via environment variable for production
   // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
   const DEBUG_PANEL_ENABLED = import.meta.env.VITE_ENABLE_DEBUG_PANEL !== 'false';
+  console.log('DEBUG_PANEL_ENABLED', DEBUG_PANEL_ENABLED);
   
   // Debug panel state - collapsed by default, remember user preference in localStorage
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
