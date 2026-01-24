@@ -130,10 +130,8 @@ export default function LiveTab() {
           setLastError('Zoom SDK not initialized');
         } else if (!status.available) {
           setLastError('Zoom SDK not available - Make sure you are running inside Zoom client');
-        } else if (!status.hasSetVideoFilter && !status.hasSetVirtualBackground) {
-          setLastError('setVideoFilter and setVirtualBackground are not available. Available methods: ' + (status.availableMethods?.join(', ') || 'none'));
         } else if (!status.hasSetVideoFilter) {
-          setLastError('setVideoFilter is not a function. Using setVirtualBackground as fallback.');
+          setLastError('setVideoFilter is not available. Available methods: ' + (status.availableMethods?.join(', ') || 'none'));
         } else {
           setLastError(null);
         }
@@ -498,9 +496,6 @@ export default function LiveTab() {
                   </div>
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasDeleteVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     deleteVideoFilter: {sdkStatus.hasDeleteVideoFilter ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    setVirtualBackground: {sdkStatus.hasSetVirtualBackground ? 'Yes' : 'No'}
                   </div>
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasGetUserContext ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     getUserContext: {sdkStatus.hasGetUserContext ? 'Yes' : 'No'}
