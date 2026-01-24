@@ -53,7 +53,7 @@ export default function Footer() {
         aria-label="Provide feedback or request features"
       >
         <MessageSquare className="w-4 h-4" />
-        <span>{isHandlingClick || isLoading ? 'Loading...' : 'Feedback / Request'}</span>
+        <span>{isHandlingClick || isLoading ? 'Loading...' : 'Send Us Feedback / Request New Features'}</span>
       </button>
     </footer>
   );
