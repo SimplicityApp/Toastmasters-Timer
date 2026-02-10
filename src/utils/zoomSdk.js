@@ -3,18 +3,25 @@ import zoomSdk from '@zoom/appssdk';
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
+// Zoom overlay image filenames (Toastmasters-branded backgrounds)
+const ZOOM_OVERLAY_FILES = {
+  white: 'timer-blue-background.jpg',
+  green: 'timer-green-background.jpg',
+  yellow: 'timer-yellow-background.jpg',
+  red: 'timer-red-background.png',
+};
+
 // Get the base URL for static assets (works in both dev and production)
 export function getBackgroundUrl(color) {
-  // Map 'white' status to 'grey' image file
-  const imageFile = color === 'white' ? 'grey' : color;
-  
+  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.white;
+
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
     const baseUrl = window.location.origin;
-    return `${baseUrl}/backgrounds/${imageFile}.png`;
+    return `${baseUrl}/backgrounds/${imageFile}`;
   }
   // Fallback to production URL if window is not available
-  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}.png`;
+  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}`;
 }
 
 // Track SDK initialization state
@@ -205,12 +212,12 @@ async function loadImageAsImageData(imageUrl) {
  * This should be called when the app initializes
  */
 export async function preloadBackgroundImages() {
-  // Map status colors to actual image files (white status uses grey.png)
+  // Map status colors to Zoom overlay image URLs (timer-*-background.*)
   const colors = ['white', 'green', 'yellow', 'red'];
   log('Pre-loading background images...', 'info');
   
   const loadPromises = colors.map(async (color) => {
-    const url = getBackgroundUrl(color); // getBackgroundUrl maps white -> grey automatically
+    const url = getBackgroundUrl(color);
     try {
       await loadImageAsImageData(url);
       log(`Pre-loaded ${color} status`, 'info');
