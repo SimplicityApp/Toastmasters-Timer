@@ -8,7 +8,7 @@ const ZOOM_OVERLAY_FILES = {
   white: 'timer-blue-background.jpg',
   green: 'timer-green-background.jpg',
   yellow: 'timer-yellow-background.jpg',
-  red: 'timer-red-background.png',
+  red: 'timer-red-background.jpg',
 };
 
 // Get the base URL for static assets (works in both dev and production)
