@@ -82,7 +82,10 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
             <Combobox.Input
               className="w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               displayValue={(name) => name || query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                onChange(event.target.value);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Select participant or type name..."
             />

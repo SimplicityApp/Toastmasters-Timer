@@ -526,21 +526,12 @@ export async function getZoomParticipants() {
       return [];
     } else {
       // Mock participants for local development
-      return [
-        { id: '1', name: 'John Doe' },
-        { id: '2', name: 'Sarah Smith' },
-        { id: '3', name: 'Alex Johnson' },
-        { id: '4', name: 'Mike Chen' },
-      ];
+      console.error('Failed to get Zoom sdk:', error);
+      return [];
     }
   } catch (error) {
     console.error('Failed to get Zoom participants:', error);
     // Return mock data as fallback
-    return [
-      { id: '1', name: 'John Doe' },
-      { id: '2', name: 'Sarah Smith' },
-      { id: '3', name: 'Alex Johnson' },
-      { id: '4', name: 'Mike Chen' },
-    ];
+    return [];
   }
 }
