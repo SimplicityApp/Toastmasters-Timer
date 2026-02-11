@@ -178,7 +178,8 @@ async function loadImageAsImageData(imageUrl) {
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -img.naturalWidth, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
         // Cache the ImageData for future use
