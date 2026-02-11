@@ -301,7 +301,7 @@ export default function LiveTab() {
   const handlePreviewColor = async (color) => {
     if (color === previewColor) {
       setPreviewColor(null);
-      removeVideoFilter();
+      // removeVideoFilter();
     } else {
       setPreviewColor(color);
       applyOverlay(getBackgroundUrl(color));
