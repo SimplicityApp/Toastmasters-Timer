@@ -5,10 +5,10 @@ const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
 // Zoom overlay image filenames (Toastmasters-branded backgrounds)
 const ZOOM_OVERLAY_FILES = {
-  white: 'timer-blue-background.jpg',
-  green: 'timer-green-background.jpg',
-  yellow: 'timer-yellow-background.jpg',
-  red: 'timer-red-background.jpg',
+  white: 'timer-blue-background.png',
+  green: 'timer-green-background.png',
+  yellow: 'timer-yellow-background.png',
+  red: 'timer-red-background.png',
 };
 
 // Get the base URL for static assets (works in both dev and production)
