@@ -3,6 +3,9 @@ import zoomSdk from '@zoom/appssdk';
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
+// Bump this version when background images are updated to bust CDN/browser cache
+const BACKGROUND_VERSION = '2';
+
 // Zoom overlay image filenames (Toastmasters-branded backgrounds)
 const ZOOM_OVERLAY_FILES = {
   white: 'timer-blue-background.png',
@@ -18,10 +21,10 @@ export function getBackgroundUrl(color) {
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
     const baseUrl = window.location.origin;
-    return `${baseUrl}/backgrounds/${imageFile}`;
+    return `${baseUrl}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
   }
   // Fallback to production URL if window is not available
-  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}`;
+  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
 }
 
 // Track SDK initialization state
