@@ -27,6 +27,11 @@ export function getBackgroundUrl(color) {
   return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
 }
 
+// Overlay mode constants
+export const OVERLAY_MODE_CARD = 'card';
+export const OVERLAY_MODE_CAMERA = 'camera';
+let currentOverlayMode = OVERLAY_MODE_CARD;
+
 // Track SDK initialization state
 let sdkInitialized = false;
 let sdkAvailable = false;
@@ -84,7 +89,8 @@ export async function initializeZoomSdk() {
       popoutSize: { width: 400, height: 600 },
       capabilities: [
         'shareApp',
-        'videoFilter'
+        'videoFilter',
+        'virtualBackground'
       ],
       version: '1.0.0'
     });
@@ -123,6 +129,9 @@ export function getSdkStatus() {
     hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
     hasGetVideoState: zoomSdk && typeof zoomSdk.getVideoState === 'function',
     hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
+    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
+    hasRemoveVirtualBackground: zoomSdk && typeof zoomSdk.removeVirtualBackground === 'function',
+    overlayMode: currentOverlayMode,
   };
   
   // Get available methods for debugging
@@ -235,6 +244,77 @@ export async function preloadBackgroundImages() {
 }
 
 /**
+ * Get current overlay mode
+ * @returns {string} Current overlay mode ('card' or 'camera')
+ */
+export function getOverlayMode() {
+  return currentOverlayMode;
+}
+
+/**
+ * Set overlay mode and reapply overlay if needed
+ * @param {string} mode - New overlay mode ('card' or 'camera')
+ * @param {string|null} currentImageUrl - Current image URL to reapply, or null to skip reapply
+ */
+export async function setOverlayMode(mode, currentImageUrl) {
+  if (mode === currentOverlayMode) return;
+  // Remove overlay using the old mode
+  await removeOverlayInternal(currentOverlayMode);
+  currentOverlayMode = mode;
+  // Reapply with new mode if an image URL is provided
+  if (currentImageUrl) {
+    await applyOverlay(currentImageUrl);
+  }
+}
+
+/**
+ * Internal helper to remove overlay by mode type
+ * @param {string} mode - Overlay mode to remove ('card' or 'camera')
+ */
+async function removeOverlayInternal(mode) {
+  if (!sdkInitialized) {
+    log('SDK not initialized yet, initializing now...', 'warn');
+    await initializeZoomSdk();
+  }
+
+  try {
+    if (sdkAvailable && zoomSdk) {
+      if (mode === OVERLAY_MODE_CAMERA) {
+        if (typeof zoomSdk.removeVirtualBackground === 'function') {
+          log('Removing virtual background', 'info');
+          await zoomSdk.removeVirtualBackground();
+          log('Successfully removed virtual background', 'info');
+        } else {
+          log('[MOCK] Would remove virtual background', 'warn');
+        }
+      } else {
+        if (typeof zoomSdk.deleteVideoFilter === 'function') {
+          log('Deleting video filter', 'info');
+          await zoomSdk.deleteVideoFilter();
+          log('Successfully deleted video filter', 'info');
+        } else if (typeof zoomSdk.setVideoFilter === 'function') {
+          log('Removing video filter via setVideoFilter(null)', 'info');
+          await zoomSdk.setVideoFilter({ fileUrl: null });
+          log('Successfully removed video filter', 'info');
+        } else {
+          log('[MOCK] Would remove video filter', 'warn');
+        }
+      }
+    } else {
+      log(`[MOCK] Would remove overlay (mode: ${mode}, SDK not available)`, 'warn');
+    }
+  } catch (error) {
+    log(`Failed to remove overlay (mode: ${mode}): ${error.message || error.name}`, 'error');
+    if (error.code) {
+      log(`Error code: ${error.code}`, 'error');
+      if (error.code === 10195) {
+        log('No overlay exists to remove', 'warn');
+      }
+    }
+  }
+}
+
+/**
  * Apply video filter overlay using Zoom SDK
  * @param {string} imageUrl - URL of the image to use as overlay
  */
@@ -252,32 +332,35 @@ export async function applyOverlay(imageUrl) {
 
   try {
     if (sdkAvailable && zoomSdk) {
-      // Try setVideoFilter first (newer API)
-      if (typeof zoomSdk.setVideoFilter === 'function') {
-        log(`Loading image for video filter: ${imageUrl}`, 'info');
-        
-        // Load image and convert to ImageData
-        const imageData = await loadImageAsImageData(imageUrl);
-        
-        log(`Applying video filter overlay with ImageData (${imageData.width}x${imageData.height})`, 'info');
-        
-        // setVideoFilter expects { imageData: ImageData } not { fileUrl: string }
-        const result = await zoomSdk.setVideoFilter({ imageData });
-        log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
-        
-        // Clear error on success
-        lastError = null;
-        
-        // Verify the filter was set (some SDKs return a status)
-        if (result && result.status) {
-          log(`Filter set status: ${result.status}`, 'info');
+      // Load image and convert to ImageData (shared for both modes)
+      log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+      const imageData = await loadImageAsImageData(imageUrl);
+      log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
+
+      if (currentOverlayMode === OVERLAY_MODE_CAMERA) {
+        // Camera mode: use setVirtualBackground so user's face shows on top
+        if (typeof zoomSdk.setVirtualBackground === 'function') {
+          const result = await zoomSdk.setVirtualBackground({ imageData });
+          log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
+          lastError = null;
+          return;
         }
-        return;
+      } else {
+        // Card mode: use setVideoFilter (covers entire video)
+        if (typeof zoomSdk.setVideoFilter === 'function') {
+          const result = await zoomSdk.setVideoFilter({ imageData });
+          log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
+          lastError = null;
+          if (result && result.status) {
+            log(`Filter set status: ${result.status}`, 'info');
+          }
+          return;
+        }
       }
     }
-    
+
     // SDK not available or function not found
-    log(`[MOCK] Would apply video filter overlay (${imageUrl})`, 'warn');
+    log(`[MOCK] Would apply overlay (mode: ${currentOverlayMode}, ${imageUrl})`, 'warn');
     if (!sdkAvailable) {
       log(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`, 'warn');
     }
@@ -285,7 +368,7 @@ export async function applyOverlay(imageUrl) {
       log(`[MOCK] zoomSdk object is not available`, 'warn');
     } else {
       const availableMethods = Object.keys(zoomSdk).filter(key => typeof zoomSdk[key] === 'function');
-      log(`[MOCK] setVideoFilter function is not available. Available methods: ${availableMethods.join(', ')}`, 'warn');
+      log(`[MOCK] Required overlay function not available. Available methods: ${availableMethods.join(', ')}`, 'warn');
     }
   } catch (error) {
     log(`Failed to apply video filter overlay: ${error.message || error.name}`, 'error');
@@ -316,48 +399,10 @@ export async function applyOverlay(imageUrl) {
 }
 
 /**
- * Remove video filter overlay
+ * Remove current overlay (dispatches to correct removal based on current mode)
  */
-export async function removeVideoFilter() {
-  // Ensure SDK is initialized
-  if (!sdkInitialized) {
-    console.warn('SDK not initialized yet, initializing now...');
-    await initializeZoomSdk();
-  }
-
-  try {
-    if (sdkAvailable && zoomSdk) {
-      // Try deleteVideoFilter first, fallback to setVideoFilter with null
-      if (typeof zoomSdk.deleteVideoFilter === 'function') {
-        log('Attempting to delete video filter', 'info');
-        await zoomSdk.deleteVideoFilter();
-        log('Successfully deleted video filter', 'info');
-      } else if (typeof zoomSdk.setVideoFilter === 'function') {
-        log('Attempting to remove video filter via setVideoFilter(null)', 'info');
-        await zoomSdk.setVideoFilter({ fileUrl: null });
-        log('Successfully removed video filter', 'info');
-      } else {
-        log('[MOCK] Would remove video filter', 'warn');
-      }
-    } else {
-      log('[MOCK] Would remove video filter (SDK not available)', 'warn');
-    }
-  } catch (error) {
-    console.error('Failed to remove video filter:', error);
-    log(`Failed to remove video filter: ${error.message || error.name}`, 'error');
-    if (error.code) {
-      log(`Error code: ${error.code}`, 'error');
-      // Handle specific error codes from deleteVideoFilter
-      if (error.code === 10195) {
-        log('No video filter exists to delete', 'warn');
-      } else if (error.code === 10196) {
-        log('Failed to set or remove video filter', 'error');
-      } else if (error.code === 10198) {
-        log('Video filter feature is disabled', 'error');
-      }
-    }
-    // Don't throw - allow app to continue functioning
-  }
+export async function removeOverlay() {
+  await removeOverlayInternal(currentOverlayMode);
 }
 
 /**
@@ -481,21 +526,12 @@ export async function getZoomParticipants() {
       return [];
     } else {
       // Mock participants for local development
-      return [
-        { id: '1', name: 'John Doe' },
-        { id: '2', name: 'Sarah Smith' },
-        { id: '3', name: 'Alex Johnson' },
-        { id: '4', name: 'Mike Chen' },
-      ];
+      console.error('Failed to get Zoom sdk:', error);
+      return [];
     }
   } catch (error) {
     console.error('Failed to get Zoom participants:', error);
     // Return mock data as fallback
-    return [
-      { id: '1', name: 'John Doe' },
-      { id: '2', name: 'Sarah Smith' },
-      { id: '3', name: 'Alex Johnson' },
-      { id: '4', name: 'Mike Chen' },
-    ];
+    return [];
   }
 }

@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   AGENDA: 'toastmaster_agenda',
   REPORTS: 'toastmaster_reports',
   ROLE_RULES: 'toastmaster_role_rules',
+  OVERLAY_MODE: 'toastmaster_overlay_mode',
 };
 
 /**
@@ -100,6 +101,31 @@ export function loadRoleRules() {
     return stored ? JSON.parse(stored) : null;
   } catch (error) {
     console.error('Failed to load role rules:', error);
+    return null;
+  }
+}
+
+/**
+ * Save overlay mode to localStorage
+ * @param {string} mode - Overlay mode ('card' or 'camera')
+ */
+export function saveOverlayMode(mode) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.OVERLAY_MODE, mode);
+  } catch (error) {
+    console.error('Failed to save overlay mode:', error);
+  }
+}
+
+/**
+ * Load overlay mode from localStorage
+ * @returns {string|null} Overlay mode or null
+ */
+export function loadOverlayMode() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.OVERLAY_MODE);
+  } catch (error) {
+    console.error('Failed to load overlay mode:', error);
     return null;
   }
 }

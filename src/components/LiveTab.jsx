@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { Play, Square, RotateCcw, Eye, EyeOff, Video } from 'lucide-react';
+import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
 import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
-import { getVideoState, setVideoState, applyOverlay, removeVideoFilter, getBackgroundUrl, getSdkStatus, setLogCallback } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA } from '../utils/zoomSdk';
+import { saveOverlayMode, loadOverlayMode } from '../utils/storage';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -22,6 +23,9 @@ export default function LiveTab() {
     setCurrentSpeaker,
     finishCurrentSpeech,
     roleRules,
+    agenda,
+    activeSpeakerId,
+    loadSpeakerFromAgenda,
   } = useTimer();
   const { showToast } = useToast();
 
@@ -39,7 +43,8 @@ export default function LiveTab() {
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
-  
+  const [overlayMode, setOverlayModeLocal] = useState(() => loadOverlayMode() || OVERLAY_MODE_CARD);
+
   // Debug panel feature flag - can be disabled via environment variable for production
   // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
   const DEBUG_PANEL_ENABLED = import.meta.env.VITE_ENABLE_DEBUG_PANEL !== 'false';
@@ -117,6 +122,14 @@ export default function LiveTab() {
     return () => setLogCallback(null);
   }, []);
 
+  // Sync persisted overlay mode to zoomSdk module on mount
+  useEffect(() => {
+    const persisted = loadOverlayMode();
+    if (persisted && persisted !== getOverlayMode()) {
+      setOverlayMode(persisted, null);
+    }
+  }, []);
+
   // Check SDK status on mount and periodically
   useEffect(() => {
     const updateSdkStatus = () => {
@@ -179,31 +192,29 @@ export default function LiveTab() {
 
   // Handle overlay removal based on isHidden state
   // TimerContext handles applying overlays, we only need to remove them when isHidden is false
+  // Skip in camera mode — face is always visible
   useEffect(() => {
+    if (overlayMode === OVERLAY_MODE_CAMERA) return;
     if (!isHidden) {
-      // Remove filter to show face (override any overlays from TimerContext)
-      addDebugLog('Removing video filter (reveal face mode)', 'info');
-      removeVideoFilter();
+      addDebugLog('Removing overlay (reveal face mode)', 'info');
+      removeOverlay();
     } else {
-      // When toggling back to hidden, reapply current overlay
-      // TimerContext will handle future status changes
       if (currentStatus) {
         const imageUrl = getBackgroundUrl(currentStatus);
         addDebugLog(`Applying overlay (hidden mode): ${currentStatus} -> ${imageUrl}`, 'info');
         applyOverlay(imageUrl);
       }
     }
-  }, [isHidden]); // Only depend on isHidden, not currentStatus
+  }, [isHidden, overlayMode]);
 
-  // Watch for status changes and remove filter if not hidden
-  // This ensures TimerContext overlays are immediately removed when isHidden is false
+  // Watch for status changes and remove overlay if not hidden (card mode only)
   useEffect(() => {
+    if (overlayMode === OVERLAY_MODE_CAMERA) return;
     if (!isHidden) {
-      // Remove filter whenever status changes if we're in reveal mode
-      addDebugLog('Status changed but in reveal mode - removing filter', 'info');
-      removeVideoFilter();
+      addDebugLog('Status changed but in reveal mode - removing overlay', 'info');
+      removeOverlay();
     }
-  }, [currentStatus, isHidden]);
+  }, [currentStatus, isHidden, overlayMode]);
   
   // Log when status changes
   useEffect(() => {
@@ -301,7 +312,6 @@ export default function LiveTab() {
   const handlePreviewColor = async (color) => {
     if (color === previewColor) {
       setPreviewColor(null);
-      // removeVideoFilter();
     } else {
       setPreviewColor(color);
       applyOverlay(getBackgroundUrl(color));
@@ -375,7 +385,6 @@ export default function LiveTab() {
     const previousStatus = currentStatus;
     resetTimer();
     setSpeakerName('');
-    setSelectedRole('Standard Speech');
     // Track timer reset
     trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
@@ -384,9 +393,22 @@ export default function LiveTab() {
   };
 
   const handleFinish = () => {
+    const currentAgendaId = activeSpeakerId;
     finishCurrentSpeech();
-    setSpeakerName('');
-    setSelectedRole('Standard Speech');
+
+    // Auto-load next uncompleted speaker from agenda
+    if (currentAgendaId) {
+      const currentIndex = agenda.findIndex(item => item.id === currentAgendaId);
+      const nextSpeaker = agenda.slice(currentIndex + 1).find(item => !item.completed);
+      if (nextSpeaker) {
+        loadSpeakerFromAgenda(nextSpeaker.id);
+        setSpeakerName(nextSpeaker.name || '');
+        setSelectedRole(nextSpeaker.role);
+        return;
+      }
+    } else {
+      setSpeakerName('');
+    }
   };
 
   const handleToggleRevealFace = () => {
@@ -397,6 +419,16 @@ export default function LiveTab() {
       status: newIsHidden ? 'hidden' : 'revealed',
       current_timer_status: currentStatus
     });
+  };
+
+  const handleModeSwitch = async (newMode) => {
+    if (newMode === overlayMode) return;
+    setOverlayModeLocal(newMode);
+    saveOverlayMode(newMode);
+    const imageUrl = getBackgroundUrl(previewColor || currentStatus);
+    await setOverlayMode(newMode, isHidden ? imageUrl : null);
+    if (newMode === OVERLAY_MODE_CAMERA) setIsHidden(true);
+    trackEvent('overlay_mode_switched', { new_mode: newMode });
   };
 
   const handleTurnVideoOn = async () => {
@@ -421,19 +453,51 @@ export default function LiveTab() {
 
   return (
     <div className="p-4 space-y-4 relative">
-      {/* "Reveal Face" toggle button in top right */}
-      <button
-        onClick={handleToggleRevealFace}
-        className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors z-10"
-        data-tooltip={isHidden ? 'Reveal Face' : 'Hide Face'}
-        data-tooltip-direction="right"
-      >
-        {isHidden ? (
-          <EyeOff className="h-5 w-5 text-gray-700" />
-        ) : (
-          <Eye className="h-5 w-5 text-gray-700" />
+      {/* Reveal Face + Overlay mode toggle in top right */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+        {/* Reveal Face button — only in Timer Card mode */}
+        {overlayMode === OVERLAY_MODE_CARD && (
+          <button
+            onClick={handleToggleRevealFace}
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+            data-tooltip={isHidden ? 'Reveal Face' : 'Hide Face'}
+            data-tooltip-direction="down"
+          >
+            {isHidden ? (
+              <EyeOff className="h-5 w-5 text-gray-700" />
+            ) : (
+              <Eye className="h-5 w-5 text-gray-700" />
+            )}
+          </button>
         )}
-      </button>
+        {/* Segmented mode toggle: Timer Card | Timer + Camera */}
+        <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <button
+            onClick={() => handleModeSwitch(OVERLAY_MODE_CARD)}
+            className={`p-1.5 rounded-md transition-all ${
+              overlayMode === OVERLAY_MODE_CARD
+                ? 'bg-white shadow-sm text-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            data-tooltip="Timer Card"
+            data-tooltip-direction="down"
+          >
+            <Monitor className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleModeSwitch(OVERLAY_MODE_CAMERA)}
+            className={`p-1.5 rounded-md transition-all ${
+              overlayMode === OVERLAY_MODE_CAMERA
+                ? 'bg-white shadow-sm text-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            data-tooltip="Timer + Camera"
+            data-tooltip-direction="down-left"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
       {/* Video off warning banner - Always visible when video is off */}
       {videoState === false && (
@@ -522,6 +586,12 @@ export default function LiveTab() {
                   <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoState ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     setVideoState: {sdkStatus.hasSetVideoState ? 'Yes' : 'No'}
                   </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    setVirtualBg: {sdkStatus.hasSetVirtualBackground ? 'Yes' : 'No'}
+                  </div>
+                  <div className={`px-2 py-1 rounded ${sdkStatus.hasRemoveVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    removeVirtualBg: {sdkStatus.hasRemoveVirtualBackground ? 'Yes' : 'No'}
+                  </div>
                 </div>
                 
                 {sdkStatus.availableMethods && sdkStatus.availableMethods.length > 0 && (
@@ -540,6 +610,7 @@ export default function LiveTab() {
                 <div>Video State: {videoState === null ? 'Unknown' : videoState ? 'ON' : 'OFF'}</div>
                 <div>Current Status: {currentStatus || 'None'}</div>
                 <div>Is Hidden: {isHidden ? 'Yes' : 'No'}</div>
+                <div>Overlay Mode: {overlayMode === OVERLAY_MODE_CARD ? 'Timer Card' : 'Timer + Camera'}</div>
               </div>
               
               {/* Debug Logs */}
