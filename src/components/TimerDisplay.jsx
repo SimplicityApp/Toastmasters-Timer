@@ -6,36 +6,26 @@ export default function TimerDisplay({ elapsedTime, status, rules }) {
 
   // Background color based on status
   const statusColors = {
-    white: 'bg-white',
+    blue: 'bg-blue-500',
     green: 'bg-green-500',
     yellow: 'bg-yellow-500',
     red: 'bg-red-500',
   };
 
-  const bgColor = statusColors[status] || 'bg-white';
-  
+  const bgColor = statusColors[status] || 'bg-blue-500';
+
   // Text color and shadow based on status
-  // For white background, use dark text with strong shadow
-  // For colored backgrounds, use white text with shadow
-  const isWhiteBackground = status === 'white';
-  const textColor = isWhiteBackground ? 'text-gray-900' : 'text-white';
-  
+  // All colored backgrounds use white text with shadow
+  const textColor = 'text-white';
+
   // Enhanced shadow styles for better contrast
-  const timerTextStyle = isWhiteBackground
-    ? {
-        textShadow: '0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2), 0 8px 16px rgba(0,0,0,0.15), 0 0 20px rgba(255,255,255,0.8)',
-      }
-    : {
-        textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3)',
-      };
-  
-  const phaseTextStyle = isWhiteBackground
-    ? {
-        textShadow: '0 1px 2px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2)',
-      }
-    : {
-        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-      };
+  const timerTextStyle = {
+    textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3)',
+  };
+
+  const phaseTextStyle = {
+    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+  };
 
   return (
     <div className={`w-full aspect-square rounded-lg ${bgColor} flex flex-col items-center justify-center shadow-lg transition-colors duration-300`}>

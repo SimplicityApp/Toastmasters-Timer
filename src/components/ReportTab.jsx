@@ -9,7 +9,7 @@ function ColorDot({ color }) {
     green: 'bg-green-500',
     yellow: 'bg-yellow-500',
     red: 'bg-red-500',
-    white: 'bg-gray-300',
+    blue: 'bg-blue-500',
   };
 
   return (

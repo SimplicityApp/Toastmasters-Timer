@@ -2,15 +2,15 @@
  * Calculate the current status color based on elapsed time and rules
  * @param {number} elapsedSeconds - Elapsed time in seconds
  * @param {Object} rules - Timing rules with green, yellow, red thresholds
- * @returns {'white' | 'green' | 'yellow' | 'red'} Current status color
+ * @returns {'blue' | 'green' | 'yellow' | 'red'} Current status color
  */
 export function calculateStatus(elapsedSeconds, rules) {
   if (!rules || typeof rules.green !== 'number') {
-    return 'white';
+    return 'blue';
   }
 
   if (elapsedSeconds < rules.green) {
-    return 'white';
+    return 'blue';
   } else if (elapsedSeconds < rules.yellow) {
     return 'green';
   } else if (elapsedSeconds < rules.red) {
@@ -35,15 +35,15 @@ export function formatTime(seconds) {
  * Calculate the end time for the current phase
  * @param {number} elapsedSeconds - Current elapsed time
  * @param {Object} rules - Timing rules
- * @param {'white' | 'green' | 'yellow' | 'red'} currentStatus - Current status
+ * @param {'blue' | 'green' | 'yellow' | 'red'} currentStatus - Current status
  * @returns {Object} { phase: string, endsAt: number } or null if in red phase
  */
 export function getPhaseInfo(elapsedSeconds, rules, currentStatus) {
   if (!rules) return null;
 
-  if (currentStatus === 'white') {
+  if (currentStatus === 'blue') {
     return {
-      phase: 'White phase',
+      phase: 'Blue phase',
       endsAt: rules.green,
       nextPhase: 'Green'
     };

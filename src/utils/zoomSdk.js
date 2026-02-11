@@ -8,7 +8,7 @@ const BACKGROUND_VERSION = '2';
 
 // Zoom overlay image filenames (Toastmasters-branded backgrounds)
 const ZOOM_OVERLAY_FILES = {
-  white: 'timer-blue-background.png',
+  blue: 'timer-blue-background.png',
   green: 'timer-green-background.png',
   yellow: 'timer-yellow-background.png',
   red: 'timer-red-background.png',
@@ -16,7 +16,7 @@ const ZOOM_OVERLAY_FILES = {
 
 // Get the base URL for static assets (works in both dev and production)
 export function getBackgroundUrl(color) {
-  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.white;
+  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.blue;
 
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
@@ -217,7 +217,7 @@ async function loadImageAsImageData(imageUrl) {
  */
 export async function preloadBackgroundImages() {
   // Map status colors to Zoom overlay image URLs (timer-*-background.*)
-  const colors = ['white', 'green', 'yellow', 'red'];
+  const colors = ['blue', 'green', 'yellow', 'red'];
   log('Pre-loading background images...', 'info');
   
   const loadPromises = colors.map(async (color) => {
