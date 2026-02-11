@@ -101,6 +101,26 @@ body {
   border-bottom-color: transparent;
 }
 
+/* Tooltip appears below, anchored to the right (extends leftward) */
+[data-tooltip-direction="down-left"]:hover::before {
+  bottom: auto;
+  top: calc(100% + 8px);
+  left: auto;
+  right: 0;
+  transform: none;
+  max-width: min(250px, calc(100vw - 20px));
+  min-width: 120px;
+}
+
+[data-tooltip-direction="down-left"]:hover::after {
+  bottom: auto;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.9);
+}
+
 /* Toast animations */
 @keyframes slide-in-right {
   from {

@@ -438,8 +438,23 @@ export default function LiveTab() {
 
   return (
     <div className="p-4 space-y-4 relative">
-      {/* Overlay mode toggle + Reveal Face in top right */}
+      {/* Reveal Face + Overlay mode toggle in top right */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+        {/* Reveal Face button — only in Timer Card mode */}
+        {overlayMode === OVERLAY_MODE_CARD && (
+          <button
+            onClick={handleToggleRevealFace}
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+            data-tooltip={isHidden ? 'Reveal Face' : 'Hide Face'}
+            data-tooltip-direction="down"
+          >
+            {isHidden ? (
+              <EyeOff className="h-5 w-5 text-gray-700" />
+            ) : (
+              <Eye className="h-5 w-5 text-gray-700" />
+            )}
+          </button>
+        )}
         {/* Segmented mode toggle: Timer Card | Timer + Camera */}
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           <button
@@ -450,7 +465,7 @@ export default function LiveTab() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             data-tooltip="Timer Card"
-            data-tooltip-direction="left"
+            data-tooltip-direction="down"
           >
             <Monitor className="h-4 w-4" />
           </button>
@@ -462,26 +477,11 @@ export default function LiveTab() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             data-tooltip="Timer + Camera"
-            data-tooltip-direction="left"
+            data-tooltip-direction="down-left"
           >
             <Camera className="h-4 w-4" />
           </button>
         </div>
-        {/* Reveal Face button — only in Timer Card mode */}
-        {overlayMode === OVERLAY_MODE_CARD && (
-          <button
-            onClick={handleToggleRevealFace}
-            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
-            data-tooltip={isHidden ? 'Reveal Face' : 'Hide Face'}
-            data-tooltip-direction="left"
-          >
-            {isHidden ? (
-              <EyeOff className="h-5 w-5 text-gray-700" />
-            ) : (
-              <Eye className="h-5 w-5 text-gray-700" />
-            )}
-          </button>
-        )}
       </div>
 
       {/* Video off warning banner - Always visible when video is off */}
