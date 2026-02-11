@@ -3,25 +3,28 @@ import zoomSdk from '@zoom/appssdk';
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
+// Bump this version when background images are updated to bust CDN/browser cache
+const BACKGROUND_VERSION = '2';
+
 // Zoom overlay image filenames (Toastmasters-branded backgrounds)
 const ZOOM_OVERLAY_FILES = {
-  white: 'timer-blue-background.jpg',
-  green: 'timer-green-background.jpg',
-  yellow: 'timer-yellow-background.jpg',
+  blue: 'timer-blue-background.png',
+  green: 'timer-green-background.png',
+  yellow: 'timer-yellow-background.png',
   red: 'timer-red-background.png',
 };
 
 // Get the base URL for static assets (works in both dev and production)
 export function getBackgroundUrl(color) {
-  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.white;
+  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.blue;
 
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
     const baseUrl = window.location.origin;
-    return `${baseUrl}/backgrounds/${imageFile}`;
+    return `${baseUrl}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
   }
   // Fallback to production URL if window is not available
-  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}`;
+  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
 }
 
 // Track SDK initialization state
@@ -175,7 +178,8 @@ async function loadImageAsImageData(imageUrl) {
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -img.naturalWidth, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
         // Cache the ImageData for future use
@@ -213,7 +217,7 @@ async function loadImageAsImageData(imageUrl) {
  */
 export async function preloadBackgroundImages() {
   // Map status colors to Zoom overlay image URLs (timer-*-background.*)
-  const colors = ['white', 'green', 'yellow', 'red'];
+  const colors = ['blue', 'green', 'yellow', 'red'];
   log('Pre-loading background images...', 'info');
   
   const loadPromises = colors.map(async (color) => {

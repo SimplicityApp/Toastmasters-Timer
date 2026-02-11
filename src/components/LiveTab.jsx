@@ -38,6 +38,7 @@ export default function LiveTab() {
   const [isHidden, setIsHidden] = useState(true);
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
+  const [previewColor, setPreviewColor] = useState(null);
   
   // Debug panel feature flag - can be disabled via environment variable for production
   // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
@@ -211,6 +212,11 @@ export default function LiveTab() {
     }
   }, [currentStatus]);
   
+  // Clear preview when the timer starts running
+  useEffect(() => {
+    if (isRunning) setPreviewColor(null);
+  }, [isRunning]);
+
   // Log when timer starts/stops
   useEffect(() => {
     if (isRunning) {
@@ -290,6 +296,16 @@ export default function LiveTab() {
   const getRoleExplanation = (role) => {
     const rules = roleRules[role] || DEFAULT_ROLE_RULES[role] || DEFAULT_ROLE_RULES['Standard Speech'];
     return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
+  };
+
+  const handlePreviewColor = async (color) => {
+    if (color === previewColor) {
+      setPreviewColor(null);
+      // removeVideoFilter();
+    } else {
+      setPreviewColor(color);
+      applyOverlay(getBackgroundUrl(color));
+    }
   };
 
   const handleStart = () => {
@@ -648,9 +664,31 @@ export default function LiveTab() {
 
       <TimerDisplay
         elapsedTime={elapsedTime}
-        status={currentStatus}
+        status={previewColor || currentStatus}
         rules={currentSpeaker?.rules}
       />
+
+      {!isRunning && (
+        <div className="flex items-center justify-center gap-3">
+          <span className="text-xs text-gray-500">Preview:</span>
+          {[
+            { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
+            { color: 'green', bg: 'bg-green-500', ring: 'ring-green-300', label: 'Green' },
+            { color: 'yellow', bg: 'bg-yellow-500', ring: 'ring-yellow-300', label: 'Yellow' },
+            { color: 'red', bg: 'bg-red-500', ring: 'ring-red-300', label: 'Red' },
+          ].map(({ color, bg, ring, label }) => (
+            <button
+              key={color}
+              onClick={() => handlePreviewColor(color)}
+              disabled={videoState === false}
+              className={`w-8 h-8 rounded-full ${bg} transition-all ${
+                previewColor === color ? `ring-2 ${ring} scale-110` : 'opacity-70 hover:opacity-100'
+              } ${videoState === false ? 'cursor-not-allowed opacity-30' : ''}`}
+              data-tooltip={`Preview ${label}`}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="space-y-2 pb-20">
         {/* When timer is running, show STOP button */}

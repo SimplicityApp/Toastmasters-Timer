@@ -23,7 +23,7 @@ export function TimerProvider({ children }) {
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [currentStatus, setCurrentStatus] = useState('white');
+  const [currentStatus, setCurrentStatus] = useState('blue');
   const [currentSpeaker, setCurrentSpeaker] = useState(null);
 
   // Agenda state
@@ -38,7 +38,7 @@ export function TimerProvider({ children }) {
 
   // Timer interval ref
   const intervalRef = useRef(null);
-  const previousStatusRef = useRef('white');
+  const previousStatusRef = useRef('blue');
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -115,7 +115,7 @@ export function TimerProvider({ children }) {
       return;
     }
     setIsRunning(true);
-    // Apply initial overlay when timer starts (status will be 'white' initially)
+    // Apply initial overlay when timer starts (status will be 'blue' initially)
     const initialStatus = calculateStatus(0, currentSpeaker.rules);
     applyOverlay(getBackgroundUrl(initialStatus));
     previousStatusRef.current = initialStatus;
@@ -128,9 +128,9 @@ export function TimerProvider({ children }) {
   const resetTimer = useCallback(() => {
     setIsRunning(false);
     setElapsedTime(0);
-    setCurrentStatus('white');
-    previousStatusRef.current = 'white';
-    applyOverlay(getBackgroundUrl('white'));
+    setCurrentStatus('blue');
+    previousStatusRef.current = 'blue';
+    applyOverlay(getBackgroundUrl('blue'));
   }, []);
 
   // Speaker management
