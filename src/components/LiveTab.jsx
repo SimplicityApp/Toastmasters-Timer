@@ -23,6 +23,9 @@ export default function LiveTab() {
     setCurrentSpeaker,
     finishCurrentSpeech,
     roleRules,
+    agenda,
+    activeSpeakerId,
+    loadSpeakerFromAgenda,
   } = useTimer();
   const { showToast } = useToast();
 
@@ -382,7 +385,6 @@ export default function LiveTab() {
     const previousStatus = currentStatus;
     resetTimer();
     setSpeakerName('');
-    setSelectedRole('Standard Speech');
     // Track timer reset
     trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
@@ -391,9 +393,22 @@ export default function LiveTab() {
   };
 
   const handleFinish = () => {
+    const currentAgendaId = activeSpeakerId;
     finishCurrentSpeech();
-    setSpeakerName('');
-    setSelectedRole('Standard Speech');
+
+    // Auto-load next uncompleted speaker from agenda
+    if (currentAgendaId) {
+      const currentIndex = agenda.findIndex(item => item.id === currentAgendaId);
+      const nextSpeaker = agenda.slice(currentIndex + 1).find(item => !item.completed);
+      if (nextSpeaker) {
+        loadSpeakerFromAgenda(nextSpeaker.id);
+        setSpeakerName(nextSpeaker.name || '');
+        setSelectedRole(nextSpeaker.role);
+        return;
+      }
+    } else {
+      setSpeakerName('');
+    }
   };
 
   const handleToggleRevealFace = () => {
