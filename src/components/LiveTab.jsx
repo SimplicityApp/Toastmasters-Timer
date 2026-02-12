@@ -5,7 +5,7 @@ import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera } from 'lu
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
-import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '../constants/timingRules';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA } from '../utils/zoomSdk';
 import { saveOverlayMode, loadOverlayMode } from '../utils/storage';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
@@ -23,6 +23,7 @@ export default function LiveTab() {
     setCurrentSpeaker,
     finishCurrentSpeech,
     roleRules,
+    roleOptions,
     agenda,
     activeSpeakerId,
     loadSpeakerFromAgenda,
@@ -31,11 +32,7 @@ export default function LiveTab() {
 
   const [speakerName, setSpeakerName] = useState(currentSpeaker?.name || '');
   const [selectedRole, setSelectedRole] = useState(currentSpeaker?.role || 'Standard Speech');
-  const [customRules, setCustomRules] = useState({
-    green: 300, // 5 minutes in seconds
-    yellow: 360, // 6 minutes in seconds
-    red: 420, // 7 minutes in seconds
-  });
+  const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
   
   // State for "Reveal Face" toggle and video control
@@ -96,9 +93,9 @@ export default function LiveTab() {
     if (currentSpeaker) {
       setSpeakerName(currentSpeaker.name || '');
       setSelectedRole(currentSpeaker.role);
-      // If custom role and has custom rules, update local state
+      // If custom role and has custom rules, update local state (merge so missing graceAfterRed is filled)
       if (currentSpeaker.role === 'Custom' && currentSpeaker.rules) {
-        setCustomRules(currentSpeaker.rules);
+        setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...currentSpeaker.rules });
       }
       // If switching to Custom role but no rules yet, keep current customRules (don't reset)
     } else {
@@ -108,12 +105,12 @@ export default function LiveTab() {
     }
   }, [currentSpeaker]);
 
-  // When switching to Custom role for the first time, use the default from roleRules
+  // When switching to Custom role for the first time, use the default from roleRules (merge for graceAfterRed)
   useEffect(() => {
     if (selectedRole === 'Custom' && roleRules['Custom'] && !currentSpeaker) {
-      setCustomRules(roleRules['Custom']);
+      setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...roleRules['Custom'] });
     }
-  }, [selectedRole]);
+  }, [selectedRole, roleRules]);
 
   // Set up log callback for zoomSdk
   useEffect(() => {
@@ -269,7 +266,10 @@ export default function LiveTab() {
   };
 
   const handleCustomRuleChange = (field, value) => {
-    const numValue = parseInt(value) || 0;
+    const numValue =
+      field === 'graceAfterRed'
+        ? Math.max(0, parseInt(value, 10) || 0)
+        : (parseInt(value, 10) || 0);
     const newRules = { ...customRules, [field]: numValue };
     setCustomRules(newRules);
     
@@ -657,7 +657,7 @@ export default function LiveTab() {
         onChange={handleSpeakerChange}
         onRoleChange={handleRoleChange}
         selectedRole={selectedRole}
-        roleOptions={ROLE_OPTIONS}
+        roleOptions={roleOptions}
         onEditRules={() => setShowEditRulesModal(true)}
       />
 
@@ -681,7 +681,7 @@ export default function LiveTab() {
                 value={customRules.green}
                 onChange={(e) => handleCustomRuleChange('green', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="300"
+                placeholder={String(DEFAULT_CUSTOM_RULES.green)}
               />
               <div className="text-xs text-gray-500 mt-1">
                 {formatTimeForInput(customRules.green)}
@@ -697,7 +697,7 @@ export default function LiveTab() {
                 value={customRules.yellow}
                 onChange={(e) => handleCustomRuleChange('yellow', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="360"
+                placeholder={String(DEFAULT_CUSTOM_RULES.yellow)}
               />
               <div className="text-xs text-gray-500 mt-1">
                 {formatTimeForInput(customRules.yellow)}
@@ -713,10 +713,26 @@ export default function LiveTab() {
                 value={customRules.red}
                 onChange={(e) => handleCustomRuleChange('red', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                placeholder="420"
+                placeholder={String(DEFAULT_CUSTOM_RULES.red)}
               />
               <div className="text-xs text-gray-500 mt-1">
                 {formatTimeForInput(customRules.red)}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Grace (sec)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={customRules.graceAfterRed ?? DEFAULT_CUSTOM_RULES.graceAfterRed}
+                onChange={(e) => handleCustomRuleChange('graceAfterRed', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                placeholder={String(DEFAULT_CUSTOM_RULES.graceAfterRed)}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                After red before DQ
               </div>
             </div>
           </div>

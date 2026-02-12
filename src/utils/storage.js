@@ -2,6 +2,8 @@ const STORAGE_KEYS = {
   AGENDA: 'toastmaster_agenda',
   REPORTS: 'toastmaster_reports',
   ROLE_RULES: 'toastmaster_role_rules',
+  ROLE_ORDER: 'toastmaster_role_order',
+  HIDDEN_BUILTIN_ROLES: 'toastmaster_hidden_builtin_roles',
   OVERLAY_MODE: 'toastmaster_overlay_mode',
 };
 
@@ -102,6 +104,58 @@ export function loadRoleRules() {
   } catch (error) {
     console.error('Failed to load role rules:', error);
     return null;
+  }
+}
+
+/**
+ * Load custom role names order from localStorage (user-added roles only, in order)
+ * @returns {string[]} Array of custom role names or empty array
+ */
+export function loadRoleOrder() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.ROLE_ORDER);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Failed to load role order:', error);
+    return [];
+  }
+}
+
+/**
+ * Save custom role names order to localStorage
+ * @param {string[]} order - Array of custom role names
+ */
+export function saveRoleOrder(order) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.ROLE_ORDER, JSON.stringify(order));
+  } catch (error) {
+    console.error('Failed to save role order:', error);
+  }
+}
+
+/**
+ * Load hidden built-in role names from localStorage (removed by user; restored by "Reset All to Defaults")
+ * @returns {string[]} Array of built-in role names to hide
+ */
+export function loadHiddenBuiltinRoles() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.HIDDEN_BUILTIN_ROLES);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Failed to load hidden built-in roles:', error);
+    return [];
+  }
+}
+
+/**
+ * Save hidden built-in role names to localStorage
+ * @param {string[]} hidden - Array of built-in role names to hide
+ */
+export function saveHiddenBuiltinRoles(hidden) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.HIDDEN_BUILTIN_ROLES, JSON.stringify(hidden));
+  } catch (error) {
+    console.error('Failed to save hidden built-in roles:', error);
   }
 }
 
