@@ -32,9 +32,9 @@ export default function ReportTab() {
     }
 
     // Format as tab-separated values
-    const header = 'Name\tRole\tDuration\tStatus\tComments\n';
-    const rows = reports.map(r => 
-      `${r.name}\t${r.role}\t${r.duration}\t${r.color}\t${r.comments || ''}`
+    const header = 'Name\tRole\tDuration\tStatus\tOver time\tComments\n';
+    const rows = reports.map(r =>
+      `${r.name}\t${r.role}\t${r.duration}\t${r.color}\t${r.disqualified ? 'Yes' : ''}\t${r.comments || ''}`
     ).join('\n');
     const text = header + rows;
 
@@ -96,6 +96,9 @@ export default function ReportTab() {
                       Status
                     </th>
                     <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-xs">
+                      Over time
+                    </th>
+                    <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-xs">
                       Comments
                     </th>
                   </tr>
@@ -117,6 +120,9 @@ export default function ReportTab() {
                           <ColorDot color={report.color} />
                           <span className="capitalize text-xs">{report.color}</span>
                         </div>
+                      </td>
+                      <td className="border border-gray-300 px-2 py-2 text-gray-700 text-xs">
+                        {report.disqualified ? 'Yes' : ''}
                       </td>
                       <td className="border border-gray-300 px-2 py-2 text-gray-700 text-xs">
                         {report.comments || ''}

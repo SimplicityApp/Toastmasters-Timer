@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { DEFAULT_ROLE_RULES, detectRoleFromText } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '../constants/timingRules';
 import { calculateStatus, formatTime } from '../utils/timerLogic';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, clearAgenda, clearReports } from '../utils/storage';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '../utils/storage';
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '../utils/easySpeakParser';
 import { useToast } from './ToastContext';
@@ -35,16 +35,31 @@ export function TimerProvider({ children }) {
 
   // Role rules (can be customized)
   const [roleRules, setRoleRules] = useState(DEFAULT_ROLE_RULES);
+  // Custom role names in display order (user-added only)
+  const [customRoleOrder, setCustomRoleOrder] = useState([]);
+  // Built-in roles that the user has removed (restored by "Reset All to Defaults")
+  const [hiddenBuiltinRoles, setHiddenBuiltinRoles] = useState([]);
 
   // Timer interval ref
   const intervalRef = useRef(null);
   const previousStatusRef = useRef('blue');
+
+  // Dynamic role list: built-in (excluding hidden) then custom roles
+  const BUILT_IN_ORDER = Object.keys(DEFAULT_ROLE_RULES);
+  const visibleBuiltins = BUILT_IN_ORDER.filter((r) => !hiddenBuiltinRoles.includes(r));
+  const customOrder = customRoleOrder.filter((r) => roleRules[r]);
+  const otherCustom = Object.keys(roleRules).filter(
+    (r) => !(r in DEFAULT_ROLE_RULES) && !customOrder.includes(r)
+  );
+  const roleOptions = [...visibleBuiltins, ...customOrder, ...otherCustom];
 
   // Load data from localStorage on mount
   useEffect(() => {
     const savedAgenda = loadAgenda();
     const savedReports = loadReports();
     const savedRules = loadRoleRules();
+    const savedOrder = loadRoleOrder();
+    const savedHidden = loadHiddenBuiltinRoles();
 
     if (savedAgenda.length > 0) {
       setAgenda(savedAgenda);
@@ -52,8 +67,16 @@ export function TimerProvider({ children }) {
     if (savedReports.length > 0) {
       setReports(savedReports);
     }
-    if (savedRules) {
-      setRoleRules({ ...DEFAULT_ROLE_RULES, ...savedRules });
+    const merged = savedRules
+      ? { ...DEFAULT_ROLE_RULES, ...savedRules }
+      : { ...DEFAULT_ROLE_RULES };
+    (savedHidden || []).forEach((r) => delete merged[r]);
+    setRoleRules(merged);
+    if (savedHidden && savedHidden.length > 0) {
+      setHiddenBuiltinRoles(savedHidden);
+    }
+    if (savedOrder && savedOrder.length > 0) {
+      setCustomRoleOrder(savedOrder);
     }
   }, []);
 
@@ -235,7 +258,7 @@ export function TimerProvider({ children }) {
     const lines = text.split('\n').filter(line => line.trim());
     const newItems = lines.map((line, index) => {
       const trimmed = line.trim();
-      const role = detectRoleFromText(trimmed);
+      const role = detectRoleFromText(trimmed, customRoleOrder);
       const name = trimmed.replace(/\(.*?\)/g, '').trim() || `Speaker ${index + 1}`;
       const rules = roleRules[role] || DEFAULT_ROLE_RULES['Standard Speech'];
       
@@ -257,7 +280,7 @@ export function TimerProvider({ children }) {
     });
     
     return newItems.length;
-  }, [roleRules]);
+  }, [roleRules, customRoleOrder]);
 
   // EasySpeak format bulk import
   const importEasySpeakSpeakers = useCallback((text) => {
@@ -336,7 +359,8 @@ export function TimerProvider({ children }) {
       role: entry.role,
       duration: formatTime(entry.duration),
       color: entry.color,
-      comments: entry.comments || ''
+      comments: entry.comments || '',
+      disqualified: entry.disqualified === true
     };
     setReports(prev => [...prev, reportEntry]);
   }, []);
@@ -348,13 +372,20 @@ export function TimerProvider({ children }) {
 
   const finishCurrentSpeech = useCallback(() => {
     if (currentSpeaker && elapsedTime > 0) {
+      const rules = currentSpeaker.rules;
+      const grace = rules
+        ? (rules.graceAfterRed ?? getDefaultGraceAfterRed(currentSpeaker.role))
+        : 30;
+      const disqualified = rules ? elapsedTime > rules.red + grace : false;
+
       // Calculate comment if speaker passed red or finished before green
       let comment = '';
-      if (currentSpeaker.rules) {
-        if (elapsedTime > currentSpeaker.rules.red) {
-          comment = formatPassedRedComment(elapsedTime, currentSpeaker.rules.red);
-        } else if (elapsedTime < currentSpeaker.rules.green) {
-          comment = formatBeforeGreenComment(elapsedTime, currentSpeaker.rules.green);
+      if (rules) {
+        if (elapsedTime > rules.red) {
+          comment = formatPassedRedComment(elapsedTime, rules.red);
+          if (disqualified) comment += ' (Disqualified)';
+        } else if (elapsedTime < rules.green) {
+          comment = formatBeforeGreenComment(elapsedTime, rules.green);
         }
       }
 
@@ -363,7 +394,8 @@ export function TimerProvider({ children }) {
         role: currentSpeaker.role,
         duration: elapsedTime,
         color: currentStatus,
-        comments: comment
+        comments: comment,
+        disqualified
       });
 
       // Track speech finished
@@ -396,6 +428,60 @@ export function TimerProvider({ children }) {
     });
   }, []);
 
+  const addRoleRules = useCallback((role, rules) => {
+    setRoleRules(prev => {
+      const updated = { ...prev, [role]: rules };
+      saveRoleRules(updated);
+      return updated;
+    });
+    setCustomRoleOrder(prev => {
+      if (prev.includes(role)) return prev;
+      const next = [...prev, role];
+      saveRoleOrder(next);
+      return next;
+    });
+  }, []);
+
+  const removeRoleRules = useCallback((role) => {
+    if (role in DEFAULT_ROLE_RULES) {
+      setHiddenBuiltinRoles(prev => {
+        if (prev.includes(role)) return prev;
+        const next = [...prev, role];
+        saveHiddenBuiltinRoles(next);
+        return next;
+      });
+      setRoleRules(prev => {
+        const { [role]: _, ...rest } = prev;
+        saveRoleRules(rest);
+        return rest;
+      });
+      return;
+    }
+    setRoleRules(prev => {
+      const { [role]: _, ...rest } = prev;
+      saveRoleRules(rest);
+      return rest;
+    });
+    setCustomRoleOrder(prev => {
+      const next = prev.filter((r) => r !== role);
+      saveRoleOrder(next);
+      return next;
+    });
+  }, []);
+
+  const resetAllRoleRulesToDefaults = useCallback(() => {
+    setHiddenBuiltinRoles([]);
+    saveHiddenBuiltinRoles([]);
+    setRoleRules(prev => {
+      const customOnly = Object.fromEntries(
+        Object.entries(prev).filter(([r]) => !(r in DEFAULT_ROLE_RULES))
+      );
+      const updated = { ...DEFAULT_ROLE_RULES, ...customOnly };
+      saveRoleRules(updated);
+      return updated;
+    });
+  }, []);
+
   const value = {
     // Timer state
     isRunning,
@@ -412,7 +498,8 @@ export function TimerProvider({ children }) {
     
     // Role rules
     roleRules,
-    
+    roleOptions,
+
     // Timer actions
     startTimer,
     stopTimer,
@@ -438,6 +525,9 @@ export function TimerProvider({ children }) {
     
     // Role rules actions
     updateRoleRules,
+    addRoleRules,
+    removeRoleRules,
+    resetAllRoleRulesToDefaults,
   };
 
   return (

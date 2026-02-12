@@ -20,7 +20,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ROLE_OPTIONS, DEFAULT_ROLE_RULES } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '../constants/timingRules';
 
 function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }) {
   const {
@@ -108,6 +108,7 @@ export default function AgendaTab({ onSwitchToLive }) {
     importEasySpeakSpeakers,
     clearAllAgenda,
     roleRules,
+    roleOptions,
   } = useTimer();
   const { showToast } = useToast();
 
@@ -119,11 +120,7 @@ export default function AgendaTab({ onSwitchToLive }) {
   const [editItem, setEditItem] = useState(null);
   const [newSpeakerName, setNewSpeakerName] = useState('');
   const [newSpeakerRole, setNewSpeakerRole] = useState('Standard Speech');
-  const [customRules, setCustomRules] = useState({
-    green: 300,
-    yellow: 360,
-    red: 420,
-  });
+  const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteItemId, setDeleteItemId] = useState(null);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
@@ -185,7 +182,7 @@ export default function AgendaTab({ onSwitchToLive }) {
       addToAgenda(speakerData);
       setNewSpeakerName('');
       setNewSpeakerRole('Standard Speech');
-      setCustomRules({ green: 300, yellow: 360, red: 420 });
+      setCustomRules({ ...DEFAULT_CUSTOM_RULES });
       setShowAddModal(false);
     }
   };
@@ -194,11 +191,11 @@ export default function AgendaTab({ onSwitchToLive }) {
     setEditItem(item);
     setNewSpeakerName(item.name);
     setNewSpeakerRole(item.role);
-    // If item has custom rules, load them
+    // If item has custom rules, load them (merge so missing graceAfterRed is filled)
     if (item.role === 'Custom' && item.rules) {
-      setCustomRules(item.rules);
+      setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...item.rules });
     } else {
-      setCustomRules({ green: 300, yellow: 360, red: 420 });
+      setCustomRules({ ...DEFAULT_CUSTOM_RULES });
     }
     setShowAddModal(true);
   };
@@ -219,7 +216,7 @@ export default function AgendaTab({ onSwitchToLive }) {
       setEditItem(null);
       setNewSpeakerName('');
       setNewSpeakerRole('Standard Speech');
-      setCustomRules({ green: 300, yellow: 360, red: 420 });
+      setCustomRules({ ...DEFAULT_CUSTOM_RULES });
       setShowAddModal(false);
     }
   };
@@ -273,7 +270,10 @@ export default function AgendaTab({ onSwitchToLive }) {
   };
 
   const handleCustomRuleChange = (field, value) => {
-    const numValue = parseInt(value) || 0;
+    const numValue =
+      field === 'graceAfterRed'
+        ? Math.max(0, parseInt(value, 10) || 0)
+        : (parseInt(value, 10) || 0);
     setCustomRules(prev => ({ ...prev, [field]: numValue }));
   };
 
@@ -309,7 +309,7 @@ export default function AgendaTab({ onSwitchToLive }) {
             setEditItem(null);
             setNewSpeakerName('');
             setNewSpeakerRole('Standard Speech');
-            setCustomRules({ green: 300, yellow: 360, red: 420 });
+            setCustomRules({ ...DEFAULT_CUSTOM_RULES });
             setShowAddModal(true);
           }}
           className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
@@ -500,7 +500,7 @@ export default function AgendaTab({ onSwitchToLive }) {
                   setEditItem(null);
                   setNewSpeakerName('');
                   setNewSpeakerRole('Standard Speech');
-                  setCustomRules({ green: 300, yellow: 360, red: 420 });
+                  setCustomRules({ ...DEFAULT_CUSTOM_RULES });
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -529,7 +529,7 @@ export default function AgendaTab({ onSwitchToLive }) {
                   onChange={(e) => setNewSpeakerRole(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {ROLE_OPTIONS.map((role) => (
+                  {roleOptions.map((role) => (
                     <option key={role} value={role}>
                       {role}
                     </option>
@@ -555,7 +555,7 @@ export default function AgendaTab({ onSwitchToLive }) {
                         value={customRules.green}
                         onChange={(e) => handleCustomRuleChange('green', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="300"
+                        placeholder={String(DEFAULT_CUSTOM_RULES.green)}
                       />
                       <div className="text-xs text-gray-500 mt-1">
                         {formatTimeForInput(customRules.green)}
@@ -571,7 +571,7 @@ export default function AgendaTab({ onSwitchToLive }) {
                         value={customRules.yellow}
                         onChange={(e) => handleCustomRuleChange('yellow', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="360"
+                        placeholder={String(DEFAULT_CUSTOM_RULES.yellow)}
                       />
                       <div className="text-xs text-gray-500 mt-1">
                         {formatTimeForInput(customRules.yellow)}
@@ -587,10 +587,26 @@ export default function AgendaTab({ onSwitchToLive }) {
                         value={customRules.red}
                         onChange={(e) => handleCustomRuleChange('red', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        placeholder="420"
+                        placeholder={String(DEFAULT_CUSTOM_RULES.red)}
                       />
                       <div className="text-xs text-gray-500 mt-1">
                         {formatTimeForInput(customRules.red)}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Grace (sec)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={customRules.graceAfterRed ?? DEFAULT_CUSTOM_RULES.graceAfterRed}
+                        onChange={(e) => handleCustomRuleChange('graceAfterRed', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        placeholder={String(DEFAULT_CUSTOM_RULES.graceAfterRed)}
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        After red before DQ
                       </div>
                     </div>
                   </div>
@@ -620,7 +636,7 @@ export default function AgendaTab({ onSwitchToLive }) {
                   setEditItem(null);
                   setNewSpeakerName('');
                   setNewSpeakerRole('Standard Speech');
-                  setCustomRules({ green: 300, yellow: 360, red: 420 });
+                  setCustomRules({ ...DEFAULT_CUSTOM_RULES });
                 }}
                 className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
               >
