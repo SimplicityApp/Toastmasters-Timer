@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '../constants/timingRules';
-import { calculateStatus, formatTime } from '../utils/timerLogic';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '../utils/storage';
+import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
+import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
 import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
-import { parseEasySpeakText } from '../utils/easySpeakParser';
+import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
 import { trackEvent } from '../utils/posthog';
 

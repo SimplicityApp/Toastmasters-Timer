@@ -40,39 +40,39 @@ export function detectRoleFromText(text, customRoleNames = null) {
   if (normalized === 'speech evaluation') return 'Speech Evaluation';
   if (normalized === 'general evaluation') return 'General Evaluation';
   if (normalized === 'short roles') return 'Short Roles';
-  
+
   // Then check for partial matches in order of specificity (most specific first)
   // Most specific: "Table Topics Evaluation" (must check before "Table Topics")
   if (normalized.includes('table topics evaluation')) {
     return 'Table Topics Evaluation';
   }
-  
+
   // "General Evaluation" or "General Evaluator" (must check before "Speech Evaluation")
   if (normalized.includes('general evaluation') || normalized.includes('general evaluator')) {
     return 'General Evaluation';
   }
-  
+
   // "Speech Evaluation" (must check before generic "Evaluation")
   if (normalized.includes('speech evaluation')) {
     return 'Speech Evaluation';
   }
-  
+
   // "Ice Breaker" or "Icebreaker" - also check for project descriptions
-  if (normalized.includes('ice breaker') || 
+  if (normalized.includes('ice breaker') ||
       normalized.includes('icebreaker') ||
       normalized.includes('ice breaker #') ||
       normalized.includes('icebreaker #')) {
     return 'Ice Breaker';
   }
-  
+
   // "Table Topics" (after checking for "Table Topics Evaluation")
   if (normalized.includes('table topics')) {
     return 'Table Topics';
   }
-  
+
   // EasySpeak-style speaker roles (1st Speaker, 2nd Speaker, etc.)
   // Check if it contains "speaker" and potentially project info
-  if (normalized.match(/\d+(st|nd|rd|th)\s+speaker/) || 
+  if (normalized.match(/\d+(st|nd|rd|th)\s+speaker/) ||
       (normalized.includes('speaker') && !normalized.includes('evaluator'))) {
     // Check for Ice Breaker indicators in the text
     if (normalized.includes('ice breaker') || normalized.includes('icebreaker')) {
@@ -81,19 +81,19 @@ export function detectRoleFromText(text, customRoleNames = null) {
     // Default speakers to Standard Speech
     return 'Standard Speech';
   }
-  
+
   // EasySpeak-style evaluator roles
   // Check for "General Evaluator" first (before numbered evaluators)
   if (normalized.includes('general evaluator')) {
     return 'General Evaluation';
   }
-  
+
   // Numbered evaluators (1st Evaluator, 2nd Evaluator, etc.)
   if (normalized.match(/\d+(st|nd|rd|th)\s+evaluator/) ||
       (normalized.includes('evaluator') && !normalized.includes('table topics') && !normalized.includes('general'))) {
     return 'Speech Evaluation';
   }
-  
+
   // EasySpeak short roles
   if (normalized.includes('timer') ||
       normalized.includes('grammarian') ||
@@ -108,17 +108,17 @@ export function detectRoleFromText(text, customRoleNames = null) {
       normalized.includes('ah counter')) {
     return 'Short Roles';
   }
-  
+
   // "Short Roles"
   if (normalized.includes('short roles') || normalized.includes('short role')) {
     return 'Short Roles';
   }
-  
+
   // Generic "Evaluation" or "Evaluator" (only if not already matched)
   if (normalized.includes('evaluation') || normalized.includes('evaluator')) {
     return 'Speech Evaluation';
   }
-  
+
   // Default fallback
   return 'Standard Speech';
 }

@@ -20,7 +20,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '@toastmaster-timer/shared';
 
 function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }) {
   const {

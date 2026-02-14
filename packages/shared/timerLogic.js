@@ -76,7 +76,7 @@ export function getPhaseInfo(elapsedSeconds, rules, currentStatus) {
  */
 export function formatPhaseText(phaseInfo) {
   if (!phaseInfo) return '';
-  
+
   if (phaseInfo.endsAt !== null) {
     const endTime = formatTime(phaseInfo.endsAt);
     return `${phaseInfo.phase} (ends at ${endTime})`;

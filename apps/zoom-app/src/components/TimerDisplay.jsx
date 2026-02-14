@@ -1,4 +1,4 @@
-import { formatTime, getPhaseInfo, formatPhaseText } from '../utils/timerLogic';
+import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 
 export default function TimerDisplay({ elapsedTime, status, rules }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;

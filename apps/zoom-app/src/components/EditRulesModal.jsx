@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES } from '@toastmaster-timer/shared';
 import ConfirmModal from './ConfirmModal';
 import { trackEvent } from '../utils/posthog';
 

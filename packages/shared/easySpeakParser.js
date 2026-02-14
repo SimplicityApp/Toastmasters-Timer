@@ -1,4 +1,4 @@
-import { DEFAULT_ROLE_RULES } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES } from './timingRules';
 
 /**
  * Extracts the original short role name from EasySpeak role
@@ -6,7 +6,7 @@ import { DEFAULT_ROLE_RULES } from '../constants/timingRules';
  */
 function extractOriginalShortRole(easySpeakRole) {
   const normalized = easySpeakRole.toLowerCase().trim();
-  
+
   const shortRoles = [
     'timer',
     'grammarian',
@@ -20,7 +20,7 @@ function extractOriginalShortRole(easySpeakRole) {
     'sergeant at arms',
     'ah counter',
   ];
-  
+
   for (const shortRole of shortRoles) {
     if (normalized.includes(shortRole)) {
       // Try to extract the original casing from easySpeakRole
@@ -28,17 +28,17 @@ function extractOriginalShortRole(easySpeakRole) {
       if (index !== -1) {
         const extracted = easySpeakRole.substring(index, index + shortRole.length);
         // Capitalize first letter of each word for better display
-        return extracted.split(' ').map(word => 
+        return extracted.split(' ').map(word =>
           word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         ).join(' ');
       }
       // Fallback: capitalize the shortRole
-      return shortRole.split(' ').map(word => 
+      return shortRole.split(' ').map(word =>
         word.charAt(0).toUpperCase() + word.slice(1)
       ).join(' ');
     }
   }
-  
+
   return null;
 }
 
@@ -48,7 +48,7 @@ function extractOriginalShortRole(easySpeakRole) {
  */
 function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
   const normalized = easySpeakRole.toLowerCase().trim();
-  
+
   // Speaker roles - check speech details for Ice Breaker
   if (normalized.includes('speaker')) {
     if (speechDetails) {
@@ -59,23 +59,23 @@ function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
     }
     return { role: 'Standard Speech' };
   }
-  
+
   // Evaluator roles - check for General Evaluator first
   if (normalized.includes('general evaluator')) {
     return { role: 'General Evaluation' };
   }
-  
+
   // Other evaluator roles (1st Evaluator, 2nd Evaluator, etc.)
   if (normalized.includes('evaluator')) {
     return { role: 'Speech Evaluation' };
   }
-  
+
   // Short roles - various meeting roles
   const originalShortRole = extractOriginalShortRole(easySpeakRole);
   if (originalShortRole) {
     return { role: 'Short Roles', originalShortRole };
   }
-  
+
   // Default fallback
   return { role: 'Standard Speech' };
 }
@@ -86,9 +86,9 @@ function mapEasySpeakRoleToAppRole(easySpeakRole, speechDetails = null) {
  */
 function shouldExcludeRole(role) {
   if (!role) return false;
-  
+
   const normalized = role.toLowerCase().trim();
-  
+
   // Roles to exclude from agenda
   const excludedRoles = [
     'grammarian',
@@ -98,14 +98,14 @@ function shouldExcludeRole(role) {
     'table topics master',
     'toastmaster',
   ];
-  
+
   // Check if role matches any excluded role (including numbered variants like "1st Sergeant at Arms")
   for (const excludedRole of excludedRoles) {
     if (normalized.includes(excludedRole)) {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -115,7 +115,7 @@ function shouldExcludeRole(role) {
 export function isEasySpeakFormat(text) {
   const lines = text.split('\n');
   const textLower = text.toLowerCase();
-  
+
   // Check for EasySpeak indicators
   return (
     textLower.includes('actual meeting roles') ||
@@ -134,13 +134,13 @@ export function isEasySpeakFormat(text) {
 function parseTabSeparatedRoleName(line) {
   const trimmed = line.trim();
   if (!trimmed) return null;
-  
+
   // Check for tab-separated: "Role\tName" or "Role\t\tName"
   const tabMatch = trimmed.match(/^(.+?)\t+(.+)$/);
   if (tabMatch) {
     const potentialRole = tabMatch[1].trim();
     const potentialName = tabMatch[2].trim();
-    
+
     // Check if first part looks like a role
     const rolePatterns = [
       /^\d+(st|nd|rd|th)\s+speaker/i,
@@ -148,27 +148,27 @@ function parseTabSeparatedRoleName(line) {
       /moment\s+of\s+(humour|reflection)/i,
       /timer|grammarian|toast|table\s+topics\s+master|chairperson|toastmaster|sergeant\s+at\s+arms|general\s+evaluator/i
     ];
-    
+
     const looksLikeRole = rolePatterns.some(pattern => pattern.test(potentialRole));
-    
+
     // Check if second part looks like a name (not too long, doesn't contain role indicators)
     const looksLikeName = potentialName.length < 100 &&
                           !potentialName.match(/\(.*#\d+.*\)/i) &&
                           !potentialName.match(/\(\d+:\d+-\d+:\d+\s+min\)/i) &&
                           !potentialName.toLowerCase().includes('effective coaching') &&
                           !potentialName.toLowerCase().includes('dynamic leadership');
-    
+
     if (looksLikeRole && looksLikeName) {
       return { role: potentialRole, name: potentialName };
     }
   }
-  
+
   // Check for space-separated (2+ spaces): "Role    Name"
   const spaceMatch = trimmed.match(/^(.+?)\s{2,}(.+)$/);
   if (spaceMatch) {
     const potentialRole = spaceMatch[1].trim();
     const potentialName = spaceMatch[2].trim();
-    
+
     // Check if first part looks like a role
     const rolePatterns = [
       /^\d+(st|nd|rd|th)\s+speaker/i,
@@ -176,21 +176,21 @@ function parseTabSeparatedRoleName(line) {
       /moment\s+of\s+(humour|reflection)/i,
       /timer|grammarian|toast|table\s+topics\s+master|chairperson|toastmaster|sergeant\s+at\s+arms|general\s+evaluator/i
     ];
-    
+
     const looksLikeRole = rolePatterns.some(pattern => pattern.test(potentialRole));
-    
+
     // Check if second part looks like a name
     const looksLikeName = potentialName.length < 100 &&
                           !potentialName.match(/\(.*#\d+.*\)/i) &&
                           !potentialName.match(/\(\d+:\d+-\d+:\d+\s+min\)/i) &&
                           !potentialName.toLowerCase().includes('effective coaching') &&
                           !potentialName.toLowerCase().includes('dynamic leadership');
-    
+
     if (looksLikeRole && looksLikeName) {
       return { role: potentialRole, name: potentialName };
     }
   }
-  
+
   return null;
 }
 
@@ -207,20 +207,20 @@ export function parseEasySpeakText(text) {
   let collectingSpeechDetails = false;
   let showSpeechDetailsMode = false;
   let skipPreviousEvaluators = false;
-  
+
   // Detect if we're in "show speech details" mode
   // This mode has speech titles and project info after speaker names
   const textLower = text.toLowerCase();
-  showSpeechDetailsMode = textLower.includes('effective coaching') || 
+  showSpeechDetailsMode = textLower.includes('effective coaching') ||
                          textLower.includes('dynamic leadership') ||
                          textLower.includes('pathways') ||
                          /\(\d+:\d+-\d+:\d+\s+min\)/.test(text);
-  
+
   for (let i = 0; i < lines.length; i++) {
     const originalLine = lines[i];
     const line = originalLine.trim();
     const isIndented = originalLine.match(/^[\s\t]+/);
-    
+
     // Skip empty lines
     if (!line) {
       // If we were collecting speech details, finalize the current item (only if not excluded)
@@ -240,7 +240,7 @@ export function parseEasySpeakText(text) {
       skipPreviousEvaluators = false;
       continue;
     }
-    
+
     // Skip header lines
     if (line.toLowerCase().includes('actual meeting roles') ||
         line.toLowerCase().includes('role\tcl\tpresenter') ||
@@ -250,7 +250,7 @@ export function parseEasySpeakText(text) {
         line.match(/^role\s+cl\s+presenter$/i)) {
       continue;
     }
-    
+
     // First, check if this line contains both role and name (tab or space-separated)
     const tabSeparated = parseTabSeparatedRoleName(originalLine);
     if (tabSeparated) {
@@ -264,7 +264,7 @@ export function parseEasySpeakText(text) {
           speechDetails: showSpeechDetailsMode ? speechDetails : null
         });
       }
-      
+
       // Process the tab-separated role and name
       // If this role should be excluded, skip processing it
       if (shouldExcludeRole(tabSeparated.role)) {
@@ -275,13 +275,13 @@ export function parseEasySpeakText(text) {
         skipPreviousEvaluators = false;
         continue;
       }
-      
+
       currentRole = tabSeparated.role;
       currentName = tabSeparated.name;
       speechDetails = null;
       collectingSpeechDetails = false;
       skipPreviousEvaluators = false;
-      
+
       // Check if next line starts speech details (in show speech details mode)
       if (showSpeechDetailsMode && i + 1 < lines.length) {
         const nextLine = lines[i + 1].trim();
@@ -294,7 +294,7 @@ export function parseEasySpeakText(text) {
                                         nextLine.toLowerCase().includes('dynamic leadership') ||
                                         nextLine.toLowerCase().includes('pathways') ||
                                         nextLine.length > 20);
-        
+
         if (looksLikeSpeechDetails) {
           collectingSpeechDetails = true;
           speechDetails = nextLine;
@@ -303,7 +303,7 @@ export function parseEasySpeakText(text) {
       }
       continue;
     }
-    
+
     // Check if this line is a role header
     // Allow role detection even on indented lines (from table copies)
     const trimmedLine = line.trim();
@@ -320,7 +320,7 @@ export function parseEasySpeakText(text) {
       trimmedLine.toLowerCase().includes('toastmaster') ||
       (trimmedLine.toLowerCase().includes('sergeant') && trimmedLine.toLowerCase().includes('arms'))
     );
-    
+
     if (isRoleHeader) {
       // Finalize previous item if exists (only if not excluded)
       if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
@@ -332,7 +332,7 @@ export function parseEasySpeakText(text) {
           speechDetails: showSpeechDetailsMode ? speechDetails : null
         });
       }
-      
+
       // Start new role (use trimmed line to remove indentation)
       // If this role should be excluded, skip processing it
       if (shouldExcludeRole(trimmedLine)) {
@@ -343,13 +343,13 @@ export function parseEasySpeakText(text) {
         skipPreviousEvaluators = false;
         continue;
       }
-      
+
       currentRole = trimmedLine;
       currentName = null;
       speechDetails = null;
       collectingSpeechDetails = false;
       skipPreviousEvaluators = false;
-      
+
       // Check if next line contains a name (even if not indented)
       if (i + 1 < lines.length) {
         const nextLine = lines[i + 1].trim();
@@ -366,7 +366,7 @@ export function parseEasySpeakText(text) {
                                 !nextLine.toLowerCase().includes('dynamic leadership') &&
                                 !nextLine.toLowerCase().includes('pathways') &&
                                 !nextLine.toLowerCase().includes('previous evaluators');
-          
+
           if (looksLikeName) {
             currentName = nextLine;
             i++; // Skip next line since we're processing it
@@ -374,16 +374,16 @@ export function parseEasySpeakText(text) {
           }
         }
       }
-      
+
       continue;
     }
-    
+
     // Skip "Previous Evaluators" section
     if (line.toLowerCase().includes('previous evaluators')) {
       skipPreviousEvaluators = true;
       continue;
     }
-    
+
     // Skip lines in "Previous Evaluators" section (username + date format)
     if (skipPreviousEvaluators) {
       if (line.match(/^[a-z0-9]+\s+\d+\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i) ||
@@ -394,13 +394,13 @@ export function parseEasySpeakText(text) {
         skipPreviousEvaluators = false;
       }
     }
-    
+
     // If we're collecting speech details, continue collecting
     // Note: Role headers are handled earlier, so if we hit one, currentName will be null
     if (collectingSpeechDetails && currentName && currentRole) {
       // Stop collecting if we hit what looks like a new name (indented line that looks like a name)
       // This handles the case where multiple speakers have the same role
-      if (isIndented && line.length < 100 && 
+      if (isIndented && line.length < 100 &&
           !line.match(/\(.*#\d+.*\)/i) &&
           !line.match(/\(\d+:\d+-\d+:\d+\s+min\)/i) &&
           !line.toLowerCase().includes('effective coaching') &&
@@ -427,21 +427,21 @@ export function parseEasySpeakText(text) {
         // Continue to process this line as potential name (will be handled in name check below)
         continue;
       }
-      
+
       // Continue collecting speech details
-      if (line && 
+      if (line &&
           !line.match(/^[a-z0-9]+\s+\d+\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i)) { // Not username + date
         speechDetails = (speechDetails ? speechDetails + ' ' : '') + line;
       }
       continue;
     }
-    
+
     // Check if this line contains a name
     // Allow both indented and non-indented lines when we have a currentRole
     // This handles cases where table copy splits role and name into separate lines
     if (currentRole && !currentName && !skipPreviousEvaluators) {
       const name = line.trim();
-      
+
       // Check if it looks like a name (not a date, not a project path, not instructions, not a role)
       const isName = name &&
                      !name.match(/^\d+(st|nd|rd|th)\s+/i) && // Not a role header
@@ -457,7 +457,7 @@ export function parseEasySpeakText(text) {
                      !name.toLowerCase().includes('previous evaluators') &&
                      name.length < 100 && // Reasonable name length
                      name.length > 0; // Not empty
-      
+
       if (isName) {
         currentName = name;
         collectingSpeechDetails = false;
@@ -465,7 +465,7 @@ export function parseEasySpeakText(text) {
         continue; // Process name, next iteration will check for speech details
       }
     }
-    
+
     // Check if current line is speech details (after a name, in show speech details mode)
     // Speech details can be indented or not, but should follow a name
     if (currentName && currentRole && !collectingSpeechDetails && showSpeechDetailsMode) {
@@ -482,7 +482,7 @@ export function parseEasySpeakText(text) {
                                        !line.toLowerCase().includes('deliver a speech') &&
                                        !line.toLowerCase().includes('present either') &&
                                        !line.toLowerCase().includes('previous evaluators')));
-      
+
       if (looksLikeSpeechDetails) {
         collectingSpeechDetails = true;
         speechDetails = line;
@@ -490,7 +490,7 @@ export function parseEasySpeakText(text) {
       }
     }
   }
-  
+
   // Finalize last item if exists (only if not excluded)
   if (currentName && currentRole && !shouldExcludeRole(currentRole)) {
     const roleMapping = mapEasySpeakRoleToAppRole(currentRole, speechDetails);
@@ -501,6 +501,6 @@ export function parseEasySpeakText(text) {
       speechDetails: showSpeechDetailsMode ? speechDetails : null
     });
   }
-  
+
   return items;
 }
