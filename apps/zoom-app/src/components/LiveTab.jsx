@@ -5,9 +5,9 @@ import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera } from 'lu
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '../constants/timingRules';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA } from '../utils/zoomSdk';
-import { saveOverlayMode, loadOverlayMode } from '../utils/storage';
+import { saveOverlayMode, loadOverlayMode } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 

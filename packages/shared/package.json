@@ -1,0 +1,14 @@
+{
+  "name": "@toastmaster-timer/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./timerLogic": "./timerLogic.js",
+    "./timingRules": "./timingRules.js",
+    "./easySpeakParser": "./easySpeakParser.js",
+    "./storage": "./storage.js"
+  }
+}
