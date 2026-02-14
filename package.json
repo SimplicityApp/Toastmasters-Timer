@@ -5,10 +5,12 @@
   "description": "Monorepo: Zoom app (apps/zoom-app) and marketing + web app (apps/web)",
   "scripts": {
     "install:zoom": "npm install --prefix apps/zoom-app",
+    "install:web": "npm install --prefix apps/web",
     "dev": "npm run dev --prefix apps/zoom-app",
-    "build": "npm run build --prefix apps/zoom-app",
+    "build": "npm run build:web && npm run build --prefix apps/zoom-app && npm run combine:dist",
+    "build:web": "npm run build --prefix apps/web",
+    "combine:dist": "rm -rf dist && mkdir -p dist && cp -r apps/web/dist/. dist/ && mkdir -p dist/zoom && cp -r apps/zoom-app/dist/. dist/zoom/",
     "preview": "npm run preview --prefix apps/zoom-app",
-    "dev:web": "npm run dev --prefix apps/web",
-    "build:web": "npm run build --prefix apps/web"
+    "dev:web": "npm run dev --prefix apps/web"
   }
 }
