@@ -1,11 +1,16 @@
 /**
- * Vercel Edge Middleware
- * Location: project root (same level as package.json).
- * Runs at the edge before the request is handled.
- * Use for host-based routing: zoom.* subdomain → serve /zoom app at path /.
+ * Vercel Routing Middleware (framework: other)
+ * @see https://vercel.com/docs/routing-middleware/api
  *
- * @see https://vercel.com/docs/functions/edge-middleware
+ * API compliance:
+ * - File at project root, default export (api#routing-middleware-file-location-and-name)
+ * - config.matcher: regex to skip static assets (api#match-paths-based-on-custom-matcher-config)
+ * - rewrite(destination: URL) from @vercel/functions for zoom subdomain → /zoom/* (api#rewrites)
+ * - next() from @vercel/functions to continue to static/rewrites (api#continuing-the-routing-middleware-chain)
+ * - request: standard Request; use request.url, request.headers (api#request)
  */
+
+import { next, rewrite } from '@vercel/functions';
 
 export const config = {
   matcher: [
@@ -14,25 +19,23 @@ export const config = {
 };
 
 export default function middleware(request) {
+  const url = new URL(request.url);
   const host = request.headers.get('host') || '';
-  const pathname = new URL(request.url).pathname;
 
-  // Zoom subdomain: serve Zoom app (from /zoom) at root of this host
-  if (host.startsWith('zoom.')) {
-    // Already serving from /zoom — no rewrite (e.g. static assets)
-    if (pathname.startsWith('/zoom/')) {
-      return Response.next();
-    }
-    const rewriteUrl = new URL(request.url);
-    if (pathname === '/' || pathname === '') {
-      rewriteUrl.pathname = '/zoom/index.html';
-    } else if (pathname.startsWith('/assets/') || pathname.startsWith('/backgrounds/')) {
-      rewriteUrl.pathname = '/zoom' + pathname;
-    } else {
-      rewriteUrl.pathname = '/zoom/index.html';
-    }
-    return Response.rewrite(rewriteUrl);
+  if (!host.startsWith('zoom.')) {
+    return next();
   }
 
-  return Response.next();
+  if (url.pathname.startsWith('/zoom/')) {
+    return next();
+  }
+
+  if (url.pathname === '/' || url.pathname === '') {
+    return rewrite(new URL('/zoom/index.html', request.url));
+  }
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/backgrounds/')) {
+    return rewrite(new URL('/zoom' + url.pathname, request.url));
+  }
+
+  return rewrite(new URL('/zoom/index.html', request.url));
 }
