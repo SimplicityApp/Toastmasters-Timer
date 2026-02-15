@@ -91,7 +91,6 @@ function shouldExcludeRole(role) {
 
   // Roles to exclude from agenda
   const excludedRoles = [
-    'grammarian',
     'chairperson',
     'sergeant at arms',
     'timer',
