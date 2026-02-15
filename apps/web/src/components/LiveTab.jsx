@@ -70,6 +70,13 @@ export default function LiveTab({ onTimerStart }) {
     setCurrentSpeaker({ name: name || '', role: selectedRole, ...(rules && { rules }) });
   };
 
+  const handleSelectSuggestion = (item) => {
+    setSpeakerName(item.name);
+    setSelectedRole(item.role);
+    const rules = item.role === 'Custom' ? customRules : undefined;
+    setCurrentSpeaker({ name: item.name, role: item.role, ...(rules && { rules }) });
+  };
+
   const handleRoleChange = (role) => {
     setSelectedRole(role);
     const rules = role === 'Custom' ? customRules : undefined;
@@ -160,6 +167,8 @@ export default function LiveTab({ onTimerStart }) {
         selectedRole={selectedRole}
         roleOptions={roleOptions}
         onEditRules={() => setShowEditRulesModal(true)}
+        agendaItems={agenda}
+        onSelectSuggestion={handleSelectSuggestion}
       />
       {selectedRole !== 'Custom' && (
         <p className="text-xs text-gray-500 mt-1">Timing rules: {getRoleExplanation(selectedRole)}</p>
