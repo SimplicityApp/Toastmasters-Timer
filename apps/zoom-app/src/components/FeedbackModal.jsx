@@ -19,9 +19,11 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
     setIsSubmitting(true);
     try {
+      const response = `[${feedbackType}] ${message.trim()}`;
       trackEvent('survey sent', {
-        $survey_id: 'inline-feedback-form',
-        $survey_response: message.trim(),
+        $survey_id: '019be741-9e6c-0000-ac0f-7d4e14f331f2',
+        $survey_response: response,
+        $survey_response_0: response,
         feedback_type: feedbackType,
       });
       setSubmitted(true);
