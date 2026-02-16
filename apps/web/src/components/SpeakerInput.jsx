@@ -11,6 +11,10 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
     !item.completed && item.name && item.name.toLowerCase().includes((value || '').toLowerCase())
   );
 
+  const isCustomName = value && value.trim() && !suggestions.some(item =>
+    item.name.toLowerCase() === value.trim().toLowerCase()
+  );
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(e.target) &&
@@ -94,7 +98,7 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
           placeholder="Type speaker name..."
           className="w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
-        {showSuggestions && suggestions.length > 0 && (
+        {showSuggestions && (suggestions.length > 0 || isCustomName) && (
           <ul
             ref={suggestionsRef}
             className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
@@ -112,6 +116,11 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
                 <span className="text-gray-500 ml-2 text-xs">{item.role}</span>
               </li>
             ))}
+            {isCustomName && (
+              <li className="px-3 py-2 text-sm text-gray-500 border-t border-gray-100">
+                New Speaker: "{value.trim()}"
+              </li>
+            )}
           </ul>
         )}
       </div>

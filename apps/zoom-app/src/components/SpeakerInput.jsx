@@ -1,43 +1,86 @@
-import { useState, useEffect } from 'react';
-import { Combobox } from '@headlessui/react';
+import { useState, useRef, useEffect } from 'react';
 import { getZoomParticipants } from '../utils/zoomSdk';
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
-export default function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules }) {
-  const [query, setQuery] = useState('');
+export default function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion }) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
   const [participants, setParticipants] = useState([]);
+  const inputRef = useRef(null);
+  const suggestionsRef = useRef(null);
 
   useEffect(() => {
-    // Load Zoom participants
     getZoomParticipants().then(setParticipants);
   }, []);
 
-  // Filter participants based on query
-  const filteredParticipants = query === ''
-    ? participants
-    : participants.filter((person) =>
-        person.name.toLowerCase().includes(query.toLowerCase())
-      );
-
-  // Check if query matches a custom name (not in participants list)
-  const isCustomName = query && !participants.some(p => 
-    p.name.toLowerCase() === query.toLowerCase()
+  // Filter agenda items (non-completed, with names, not already in participants)
+  const filteredAgendaItems = (agendaItems || []).filter(item =>
+    !item.completed && item.name &&
+    item.name.toLowerCase().includes((value || '').toLowerCase()) &&
+    !participants.some(p => p.name.toLowerCase() === item.name.toLowerCase())
   );
 
-  const handleSelect = (person) => {
-    if (person && person.name) {
-      onChange(person.name);
-      setQuery('');
+  // Filter participants based on current value
+  const filteredParticipants = (value || '') === ''
+    ? participants
+    : participants.filter((person) =>
+        person.name.toLowerCase().includes(value.toLowerCase())
+      );
+
+  const suggestions = [
+    ...filteredAgendaItems.map(item => ({ ...item, _fromAgenda: true })),
+    ...filteredParticipants.map(person => ({ ...person, _fromAgenda: false })),
+  ];
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target) &&
+          inputRef.current && !inputRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [value]);
+
+  const handleSelect = (item) => {
+    if (item._fromAgenda && onSelectSuggestion) {
+      onSelectSuggestion(item);
+    } else {
+      onChange(item.name);
     }
+    setShowSuggestions(false);
+    inputRef.current?.blur();
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && query.trim()) {
-      // Create custom entry
-      onChange(query.trim());
-      setQuery('');
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex(prev => (prev + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === 'Enter' && highlightIndex >= 0) {
+      e.preventDefault();
+      handleSelect(suggestions[highlightIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
   };
+
+  const isCustomName = value && value.trim() && !suggestions.some(item =>
+    item.name.toLowerCase() === value.trim().toLowerCase()
+  );
+
+  // Check if we need section headers (both agenda and participants have items)
+  const hasAgenda = filteredAgendaItems.length > 0;
+  const hasParticipants = filteredParticipants.length > 0;
+  const showHeaders = hasAgenda && hasParticipants;
 
   return (
     <div className="space-y-3">
@@ -63,9 +106,7 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            if (onEditRules) {
-              onEditRules();
-            }
+            if (onEditRules) onEditRules();
           }}
           className="text-xs text-blue-600 hover:text-blue-800 mt-1 inline-block"
         >
@@ -73,88 +114,84 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
         </a>
       </div>
 
-      <div>
+      <div className="relative">
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Speaker Name
         </label>
-        <Combobox value={value} onChange={handleSelect}>
-          <div className="relative">
-            <Combobox.Input
-              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              displayValue={(name) => name || query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                onChange(event.target.value);
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder="Select participant or type name..."
-            />
-            <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-2">
-              <ChevronDown className="h-5 w-5 text-gray-400" aria-hidden="true" />
-            </Combobox.Button>
-
-            {query.length > 0 && (
-              <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                {filteredParticipants.length === 0 && !isCustomName ? (
-                  <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
-                    No participants found.
-                  </div>
-                ) : (
-                  <>
-                    {filteredParticipants.map((person) => (
-                      <Combobox.Option
-                        key={person.id}
-                        value={person}
-                        className={({ active }) =>
-                          `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                            active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                          }`
-                        }
-                      >
-                        {({ selected, active }) => (
-                          <>
-                            <span
-                              className={`block truncate ${
-                                selected ? 'font-medium' : 'font-normal'
-                              }`}
-                            >
-                              {person.name}
-                            </span>
-                            {selected ? (
-                              <span
-                                className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
-                                  active ? 'text-white' : 'text-blue-600'
-                                }`}
-                              >
-                                <Check className="h-5 w-5" aria-hidden="true" />
-                              </span>
-                            ) : null}
-                          </>
-                        )}
-                      </Combobox.Option>
-                    ))}
-                    {isCustomName && (
-                      <Combobox.Option
-                        value={{ id: 'custom', name: query }}
-                        className={({ active }) =>
-                          `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                            active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                          }`
-                        }
-                      >
-                        {({ active }) => (
-                          <span className="block truncate font-normal">
-                            Create "{query}" (Press Enter)
-                          </span>
-                        )}
-                      </Combobox.Option>
-                    )}
-                  </>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value || ''}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setShowSuggestions(true);
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type speaker name..."
+          className="w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+        {showSuggestions && (suggestions.length > 0 || isCustomName) && (
+          <ul
+            ref={suggestionsRef}
+            className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
+          >
+            {hasAgenda && (
+              <>
+                {showHeaders && (
+                  <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">
+                    Agenda
+                  </li>
                 )}
-              </Combobox.Options>
+                {filteredAgendaItems.map((item, i) => {
+                  const index = i;
+                  return (
+                    <li
+                      key={`agenda-${item.id}`}
+                      onMouseDown={() => handleSelect({ ...item, _fromAgenda: true })}
+                      onMouseEnter={() => setHighlightIndex(index)}
+                      className={`px-3 py-2 cursor-pointer text-sm ${
+                        index === highlightIndex ? 'bg-blue-50 text-blue-900' : 'text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-gray-500 ml-2 text-xs">{item.role}</span>
+                    </li>
+                  );
+                })}
+              </>
             )}
-          </div>
-        </Combobox>
+            {hasParticipants && (
+              <>
+                {showHeaders && (
+                  <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">
+                    Zoom Participants
+                  </li>
+                )}
+                {filteredParticipants.map((person, i) => {
+                  const index = filteredAgendaItems.length + i;
+                  return (
+                    <li
+                      key={person.id}
+                      onMouseDown={() => handleSelect({ ...person, _fromAgenda: false })}
+                      onMouseEnter={() => setHighlightIndex(index)}
+                      className={`px-3 py-2 cursor-pointer text-sm ${
+                        index === highlightIndex ? 'bg-blue-50 text-blue-900' : 'text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-medium">{person.name}</span>
+                    </li>
+                  );
+                })}
+              </>
+            )}
+            {isCustomName && (
+              <li className="px-3 py-2 text-sm text-gray-500 border-t border-gray-100">
+                New Speaker: "{value.trim()}"
+              </li>
+            )}
+          </ul>
+        )}
       </div>
     </div>
   );

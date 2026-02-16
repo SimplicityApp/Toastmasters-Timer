@@ -16,6 +16,7 @@
     "build:zoom-standalone": "VITE_BASE_PATH=/ npm run build --prefix apps/zoom-app",
     "combine:dist": "rm -rf dist && mkdir -p dist/landing dist/zoom && cp -r apps/web/dist/. dist/landing/ && cp -r apps/zoom-app/dist/. dist/zoom/ && cp apps/zoom-app/dist/index.html dist/index.html",
     "preview": "npm run preview --prefix apps/zoom-app",
-    "dev:web": "npm run dev --prefix apps/web"
+    "dev:web": "npm run dev --prefix apps/web",
+    "dev:zoom": "npm run dev --prefix apps/zoom-app"
   }
 }
