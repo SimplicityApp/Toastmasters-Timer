@@ -16,6 +16,8 @@
     { "source": "/zoom/support", "destination": "/zoom/support.html" },
     { "source": "/zoom/terms-of-use", "destination": "/zoom/terms-of-use.html" },
     { "source": "/zoom/documentation", "destination": "/zoom/documentation.html" },
+    { "source": "/zoom/backgrounds/:path*", "destination": "/zoom/backgrounds/:path*" },
+    { "source": "/backgrounds/:path*", "destination": "/zoom/backgrounds/:path*" },
     { "source": "/zoom", "destination": "/zoom/index.html" },
     { "source": "/zoom/:path*", "destination": "/zoom/index.html" },
     { "source": "/", "destination": "/index.html" },
