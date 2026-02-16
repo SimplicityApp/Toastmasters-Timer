@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
-import FeedbackModal from './FeedbackModal';
+import FeedbackModal, { SURVEY_ID } from './FeedbackModal';
 
 export default function Footer() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const handleFeedbackClick = () => {
     trackEvent('feedback_button_clicked');
+    trackEvent('survey shown', { $survey_id: SURVEY_ID });
     setShowFeedbackModal(true);
   };
 

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
+export const SURVEY_ID = '019be741-9e6c-0000-ac0f-7d4e14f331f2';
+
 const FEEDBACK_TYPES = [
   { value: 'feedback', label: 'Feedback' },
   { value: 'feature_request', label: 'Feature Request' },
@@ -21,7 +23,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
     try {
       const response = `[${feedbackType}] ${message.trim()}`;
       trackEvent('survey sent', {
-        $survey_id: '019be741-9e6c-0000-ac0f-7d4e14f331f2',
+        $survey_id: SURVEY_ID,
         $survey_response: response,
         $survey_response_0: response,
         feedback_type: feedbackType,
@@ -35,10 +37,12 @@ export default function FeedbackModal({ isOpen, onClose }) {
     }
   };
 
+  const handleDismiss = () => {
+    trackEvent('survey dismissed', { $survey_id: SURVEY_ID });
+    onClose();
+  };
+
   const handleClose = () => {
-    setMessage('');
-    setFeedbackType('feedback');
-    setSubmitted(false);
     onClose();
   };
 
@@ -50,7 +54,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Send Us Feedback</h3>
           <button
-            onClick={handleClose}
+            onClick={handleDismiss}
             className="text-gray-400 hover:text-gray-600"
           >
             <X className="h-5 w-5" />
@@ -99,7 +103,7 @@ export default function FeedbackModal({ isOpen, onClose }) {
 
             <div className="flex gap-2 justify-end">
               <button
-                onClick={handleClose}
+                onClick={handleDismiss}
                 className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg transition-colors text-sm"
               >
                 Cancel
