@@ -51,20 +51,20 @@ export default function Landing() {
               Toastmaster Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for virtual backgrounds.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                to="/app"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 shadow-lg shadow-blue-900/40 transition-all"
-              >
-                Use in browser
-              </Link>
               <a
                 href={ZOOM_MARKETPLACE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center px-6 py-3 rounded-xl border border-white/30 bg-white/10 text-white font-medium hover:bg-white/20 backdrop-blur-sm transition-all"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-500 shadow-lg shadow-blue-900/40 transition-all"
               >
                 Add to Zoom
               </a>
+              <Link
+                to="/app"
+                className="inline-flex items-center justify-center px-6 py-3 rounded-xl border border-white/30 bg-white/10 text-white font-medium hover:bg-white/20 backdrop-blur-sm transition-all"
+              >
+                Use in Browser
+              </Link>
             </div>
             <p className="mt-5 text-sm text-gray-400">
               Already use the Zoom app?{' '}
