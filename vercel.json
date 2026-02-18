@@ -5,7 +5,8 @@
   "framework": null,
   "redirects": [
     { "source": "/web", "destination": "/landing/app", "permanent": false },
-    { "source": "/app", "destination": "/landing/app", "permanent": false }
+    { "source": "/app", "destination": "/landing/app", "permanent": false },
+    { "source": "/oauth/redirect", "destination": "/landing/oauth/redirect", "permanent": false }
   ],
   "rewrites": [
     { "source": "/landing/assets/:path*", "destination": "/landing/assets/:path*" },
