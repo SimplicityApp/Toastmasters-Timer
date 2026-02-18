@@ -26,7 +26,27 @@ export default function OAuthRedirect() {
             Open Zoom and start or join a meeting to use Toastmaster Timer. The app will appear in your meeting toolbar.
           </p>
           <p className="mt-6 text-gray-400">
-            You can close this tab and return to Zoom.
+            Return to Zoom:
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => { window.location.href = 'zoomus://' }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors cursor-pointer border-0"
+            >
+              Open Zoom app
+            </button>
+            <a
+              href="https://app.zoom.us"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors no-underline"
+            >
+              Open Zoom in browser
+            </a>
+          </div>
+          <p className="mt-4 text-sm text-gray-500">
+            You can also close this tab and open Zoom yourself.
           </p>
         </div>
       </main>
