@@ -134,9 +134,13 @@ export function useSurveys() {
 
       // Get surveys - PostHog web SDK uses getActiveMatchingSurveys() with callback
       if (typeof posthog.getActiveMatchingSurveys === 'function') {
-        const surveys = await new Promise((resolve, reject) => {
+        const surveys = await new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            resolve([]);
+          }, 5000);
           try {
             posthog.getActiveMatchingSurveys((surveys, context) => {
+              clearTimeout(timeout);
               // Try to access all surveys from context or internal state
               if (posthog.surveys && Array.isArray(posthog.surveys)) {
                 setAllSurveys(posthog.surveys);
@@ -158,6 +162,7 @@ export function useSurveys() {
               }
             });
           } catch (error) {
+            clearTimeout(timeout);
             console.error('Error calling getActiveMatchingSurveys:', error);
             resolve([]); // Resolve with empty array instead of rejecting
           }

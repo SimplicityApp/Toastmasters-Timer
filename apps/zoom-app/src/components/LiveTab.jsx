@@ -245,6 +245,13 @@ export default function LiveTab() {
     });
   };
 
+  const handleSelectSuggestion = (item) => {
+    setSpeakerName(item.name);
+    setSelectedRole(item.role);
+    const rules = item.role === 'Custom' ? customRules : undefined;
+    setCurrentSpeaker({ name: item.name, role: item.role, ...(rules && { rules }) });
+  };
+
   const handleRoleChange = (role) => {
     const previousRole = selectedRole;
     setSelectedRole(role);
@@ -659,6 +666,8 @@ export default function LiveTab() {
         selectedRole={selectedRole}
         roleOptions={roleOptions}
         onEditRules={() => setShowEditRulesModal(true)}
+        agendaItems={agenda}
+        onSelectSuggestion={handleSelectSuggestion}
       />
 
       {selectedRole !== 'Custom' && (
