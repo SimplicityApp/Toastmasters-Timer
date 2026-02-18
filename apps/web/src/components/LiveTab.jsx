@@ -5,7 +5,8 @@ import { Play, Square, RotateCcw } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import EditRulesModal from './EditRulesModal';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES } from '@toastmaster-timer/shared';
+import TimeInput, { TimeInputModeToggle } from './TimeInput';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
 
 export default function LiveTab({ onTimerStart }) {
@@ -30,6 +31,7 @@ export default function LiveTab({ onTimerStart }) {
   const [speakerName, setSpeakerName] = useState(currentSpeaker?.name || '');
   const [selectedRole, setSelectedRole] = useState(currentSpeaker?.role || 'Standard Speech');
   const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
+  const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
   const initializedRef = useRef(false);
@@ -84,18 +86,11 @@ export default function LiveTab({ onTimerStart }) {
   };
 
   const handleCustomRuleChange = (field, value) => {
-    const numValue = field === 'graceAfterRed' ? Math.max(0, parseInt(value, 10) || 0) : (parseInt(value, 10) || 0);
-    const newRules = { ...customRules, [field]: numValue };
+    const newRules = { ...customRules, [field]: value };
     setCustomRules(newRules);
     if (selectedRole === 'Custom') {
       setCurrentSpeaker({ name: speakerName || '', role: 'Custom', rules: newRules });
     }
-  };
-
-  const formatTimeForInput = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${String(secs).padStart(2, '0')}`;
   };
   const formatTimeReadable = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -175,27 +170,15 @@ export default function LiveTab({ onTimerStart }) {
       )}
       {selectedRole === 'Custom' && (
         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Custom Timing Rules</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Green (sec)</label>
-              <input type="number" min="1" value={customRules.green} onChange={(e) => handleCustomRuleChange('green', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
-              <div className="text-xs text-gray-500 mt-1">{formatTimeForInput(customRules.green)}</div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Yellow (sec)</label>
-              <input type="number" min={customRules.green + 1} value={customRules.yellow} onChange={(e) => handleCustomRuleChange('yellow', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
-              <div className="text-xs text-gray-500 mt-1">{formatTimeForInput(customRules.yellow)}</div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Red (sec)</label>
-              <input type="number" min={customRules.yellow + 1} value={customRules.red} onChange={(e) => handleCustomRuleChange('red', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
-              <div className="text-xs text-gray-500 mt-1">{formatTimeForInput(customRules.red)}</div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Grace (sec)</label>
-              <input type="number" min="0" value={customRules.graceAfterRed ?? DEFAULT_CUSTOM_RULES.graceAfterRed} onChange={(e) => handleCustomRuleChange('graceAfterRed', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">Custom Timing Rules</h3>
+            <TimeInputModeToggle mode={timeInputMode} onModeChange={(m) => { saveTimeInputMode(m); setTimeInputMode(m); }} />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <TimeInput layout="inline" label="Green" value={customRules.green} onChange={(v) => handleCustomRuleChange('green', v)} />
+            <TimeInput layout="inline" label="Yellow" value={customRules.yellow} onChange={(v) => handleCustomRuleChange('yellow', v)} />
+            <TimeInput layout="inline" label="Red" value={customRules.red} onChange={(v) => handleCustomRuleChange('red', v)} />
+            <TimeInput layout="inline" label="Grace" value={customRules.graceAfterRed ?? DEFAULT_CUSTOM_RULES.graceAfterRed} onChange={(v) => handleCustomRuleChange('graceAfterRed', v)} />
           </div>
           {(customRules.yellow <= customRules.green || customRules.red <= customRules.yellow) && (
             <div className="text-xs text-red-600">Yellow &gt; Green, Red &gt; Yellow</div>
