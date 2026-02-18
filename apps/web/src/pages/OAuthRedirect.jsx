@@ -1,3 +1,5 @@
+import React from 'react'
+
 export default function OAuthRedirect() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -29,13 +31,14 @@ export default function OAuthRedirect() {
             Return to Zoom:
           </p>
           <div className="mt-3 flex flex-wrap gap-3 justify-center">
-            <button
+            <a
               type="button"
-              onClick={() => { window.location.href = 'zoomus://' }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors cursor-pointer border-0"
+              target="_blank"
+              href="https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg/context/meeting/target/launch/deeplink"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors cursor-pointer border-0 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Open Zoom app
-            </button>
+            </a>
             <a
               href="https://app.zoom.us"
               target="_blank"

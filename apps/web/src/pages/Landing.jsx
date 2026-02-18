@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 const ZOOM_MARKETPLACE_URL = 'https://marketplace.zoom.us/apps/sWHvcm4YShyr6SXQQI8DFw'
-const ZOOM_APP_URL = 'https://www.timer.simple-tech.app'
+const ZOOM_APP_URL = 'https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg/context/meeting/target/launch/deeplink'
 
 export default function Landing() {
   return (
