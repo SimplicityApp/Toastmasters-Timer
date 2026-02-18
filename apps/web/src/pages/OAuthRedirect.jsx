@@ -6,7 +6,7 @@ export default function OAuthRedirect() {
       <header className="bg-black/25 backdrop-blur-md border-b border-white/10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <img
-            src="/landing/Toastmasters-Timer-logo.jpg"
+            src="/Toastmasters-Timer-logo.jpg"
             alt="Toastmaster Timer"
             className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-white/20"
           />

@@ -4,14 +4,9 @@
   "outputDirectory": "dist",
   "framework": null,
   "redirects": [
-    { "source": "/web", "destination": "/landing/app", "permanent": false },
-    { "source": "/app", "destination": "/landing/app", "permanent": false },
-    { "source": "/oauth/redirect", "destination": "/landing/oauth/redirect", "permanent": false }
+    { "source": "/web", "destination": "/app", "permanent": false }
   ],
   "rewrites": [
-    { "source": "/landing/assets/:path*", "destination": "/landing/assets/:path*" },
-    { "source": "/landing", "destination": "/landing/index.html" },
-    { "source": "/landing/:path*", "destination": "/landing/index.html" },
     { "source": "/zoom/assets/:path*", "destination": "/zoom/assets/:path*" },
     { "source": "/zoom/privacy", "destination": "/zoom/privacy.html" },
     { "source": "/zoom/support", "destination": "/zoom/support.html" },
@@ -21,7 +16,6 @@
     { "source": "/backgrounds/:path*", "destination": "/zoom/backgrounds/:path*" },
     { "source": "/zoom", "destination": "/zoom/index.html" },
     { "source": "/zoom/:path*", "destination": "/zoom/index.html" },
-    { "source": "/", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

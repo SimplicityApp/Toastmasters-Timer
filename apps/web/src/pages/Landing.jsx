@@ -8,7 +8,7 @@ export default function Landing() {
     <div
       className="min-h-screen relative bg-gray-900"
       style={{
-        backgroundImage: 'url(/landing/Toastmasters-Timer-cover-page.png)',
+        backgroundImage: 'url(/Toastmasters-Timer-cover-page.png)',
         backgroundSize: 'cover',
         backgroundPosition: '100% center',
         backgroundRepeat: 'no-repeat',
@@ -20,7 +20,7 @@ export default function Landing() {
       <header className="relative z-10 bg-black/25 backdrop-blur-md border-b border-white/10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <img
-            src="/landing/Toastmasters-Timer-logo.jpg"
+            src="/Toastmasters-Timer-logo.jpg"
             alt="Toastmaster Timer"
             className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-white/20"
           />
@@ -39,7 +39,7 @@ export default function Landing() {
           />
           <div className="relative px-6 py-10 sm:py-12 text-center">
             <img
-              src="/landing/Toastmasters-Timer-logo.jpg"
+              src="/Toastmasters-Timer-logo.jpg"
               alt=""
               className="mx-auto h-24 w-24 rounded-2xl object-cover shadow-lg ring-2 ring-white/30"
               aria-hidden
