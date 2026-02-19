@@ -8,6 +8,7 @@ import EditRulesModal from './EditRulesModal';
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
+import { trackEvent } from '../utils/posthog';
 
 export default function LiveTab({ onTimerStart }) {
   const {
@@ -83,6 +84,7 @@ export default function LiveTab({ onTimerStart }) {
     setSelectedRole(role);
     const rules = role === 'Custom' ? customRules : undefined;
     setCurrentSpeaker({ name: speakerName || '', role, ...(rules && { rules }) });
+    trackEvent('speaker_role_changed', { role });
   };
 
   const handleCustomRuleChange = (field, value) => {
@@ -128,12 +130,20 @@ export default function LiveTab({ onTimerStart }) {
     }
     setCurrentSpeaker({ name: speakerName || '', role: selectedRole, ...(selectedRole === 'Custom' && { rules }) });
     startTimer();
+    trackEvent('timer_started', { role: selectedRole, speaker_name: speakerName || '' });
     onTimerStart?.();
   };
 
-  const handleContinue = () => startTimer();
-  const handleStop = () => stopTimer();
+  const handleContinue = () => {
+    startTimer();
+    trackEvent('timer_continued', { role: selectedRole, elapsed_time: elapsedTime });
+  };
+  const handleStop = () => {
+    stopTimer();
+    trackEvent('timer_stopped', { role: selectedRole, elapsed_time: elapsedTime });
+  };
   const handleReset = () => {
+    trackEvent('timer_reset', { role: selectedRole, elapsed_time: elapsedTime });
     resetTimer();
     setSpeakerName('');
   };

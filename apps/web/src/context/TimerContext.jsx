@@ -6,7 +6,7 @@ import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
 import { useToast } from './ToastContext';
 
-const trackEvent = () => {};
+import { trackEvent } from '../utils/posthog';
 
 const TimerContext = createContext(null);
 

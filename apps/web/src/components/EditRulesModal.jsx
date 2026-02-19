@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import ConfirmModal from './ConfirmModal';
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
+import { trackEvent } from '../utils/posthog';
 
 const isBuiltInRole = (role) => role in DEFAULT_ROLE_RULES;
 
@@ -65,13 +66,17 @@ export default function EditRulesModal({ isOpen, onClose }) {
       const rules = editedRules[role];
       if (role.startsWith('__new_')) {
         const name = (newRoleNames[role] || '').trim();
-        if (name) addRoleRules(name, rules);
+        if (name) {
+          addRoleRules(name, rules);
+          trackEvent('role_added', { role: name, rules });
+        }
       } else {
         const oldRules = roleRules[role];
         const graceOld = oldRules?.graceAfterRed ?? getDefaultGraceAfterRed(role);
         const graceNew = rules.graceAfterRed ?? getDefaultGraceAfterRed(role);
         if (oldRules && (oldRules.green !== rules.green || oldRules.yellow !== rules.yellow || oldRules.red !== rules.red || graceOld !== graceNew)) {
           updateRoleRules(role, rules);
+          trackEvent('rules_edited', { role, rules });
         }
       }
     }

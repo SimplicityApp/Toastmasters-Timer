@@ -8,7 +8,6 @@ export function initPostHog() {
   const posthogKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY;
   const posthogHost = import.meta.env.VITE_PUBLIC_POSTHOG_HOST;
 
-  // Only initialize if both key and host are provided
   if (!posthogKey || !posthogHost) {
     return null;
   }
@@ -17,38 +16,25 @@ export function initPostHog() {
     posthog.init(posthogKey, {
       api_host: posthogHost,
       person_profiles: 'always',
-      // Enable autocapture for pageviews and clicks
       autocapture: true,
-      // Capture pageviews automatically
       capture_pageview: true,
-      // Capture pageleaves automatically
       capture_pageleave: true,
-      // Disable session recording by default (can be enabled later if needed)
       disable_session_recording: true,
       // Keep surveys enabled but we'll control display manually
-      // Automatic display is prevented by survey configuration (Feedback Button mode)
       disable_surveys: false,
-      // IMPORTANT: Do not disable feature flags - surveys use them internally
-      // advanced_disable_feature_flags: false, // Don't set this to true!
-      // Load surveys
       loaded: (posthog) => {
         // Prevent automatic survey display by intercepting it
-        // Store original displaySurvey method
         const originalDisplaySurvey = posthog.displaySurvey;
         let isManualDisplay = false;
-        
-        // Override displaySurvey to track manual calls
+
         posthog.displaySurvey = function(surveyId) {
-          // Only allow display if it's a manual call (marked by our code)
           if (isManualDisplay) {
-            isManualDisplay = false; // Reset flag
+            isManualDisplay = false;
             return originalDisplaySurvey.call(this, surveyId);
           }
-          // Block automatic display
           return false;
         };
-        
-        // Expose method to mark manual display
+
         posthog._allowManualSurveyDisplay = function() {
           isManualDisplay = true;
         };
@@ -65,7 +51,7 @@ export function initPostHog() {
 /**
  * Track a custom event with PostHog
  * Safely handles cases where PostHog is not initialized
- * 
+ *
  * @param {string} eventName - Event name in snake_case (e.g., 'timer_started')
  * @param {Object} properties - Event properties
  */
@@ -75,7 +61,6 @@ export function trackEvent(eventName, properties = {}) {
       posthog.capture(eventName, properties);
     }
   } catch (error) {
-    // Silently fail - don't break the app if tracking fails
     if (import.meta.env.DEV) {
       console.warn('PostHog tracking failed:', error);
     }
@@ -83,8 +68,8 @@ export function trackEvent(eventName, properties = {}) {
 }
 
 /**
- * Identify a user (if user accounts are added in the future)
- * 
+ * Identify a user
+ *
  * @param {string} userId - Unique user identifier
  * @param {Object} userProperties - User properties
  */
@@ -122,7 +107,6 @@ export function resetUser() {
 export async function getActiveSurveys() {
   try {
     if (posthog && posthog.__loaded) {
-      // Wait for surveys to be loaded
       await new Promise((resolve) => {
         if (posthog.__surveysLoaded) {
           resolve();
@@ -131,16 +115,14 @@ export async function getActiveSurveys() {
         }
       });
 
-      // Get surveys - PostHog web SDK uses getActiveMatchingSurveys() (synchronous)
       if (typeof posthog.getActiveMatchingSurveys === 'function') {
         const surveys = posthog.getActiveMatchingSurveys();
         return Array.isArray(surveys) ? surveys : [];
       }
-      
-      // Fallback: try getSurveys if available (may be async in some versions)
+
       if (typeof posthog.getSurveys === 'function') {
-        const surveys = typeof posthog.getSurveys.then === 'function' 
-          ? await posthog.getSurveys() 
+        const surveys = typeof posthog.getSurveys.then === 'function'
+          ? await posthog.getSurveys()
           : posthog.getSurveys();
         return Array.isArray(surveys) ? surveys : [];
       }
@@ -183,7 +165,6 @@ export async function displaySurveyById(surveyId = null) {
       return false;
     }
 
-    // Wait for surveys to be loaded
     await new Promise((resolve) => {
       if (posthog.__surveysLoaded) {
         resolve();
@@ -193,16 +174,20 @@ export async function displaySurveyById(surveyId = null) {
     });
 
     if (surveyId) {
-      // Display specific survey by ID
+      if (typeof posthog._allowManualSurveyDisplay === 'function') {
+        posthog._allowManualSurveyDisplay();
+      }
       posthog.displaySurvey(surveyId);
       return true;
     } else {
-      // Get first available survey
       const surveys = await getActiveSurveys();
       if (surveys.length > 0) {
         const firstSurvey = surveys[0];
         const id = firstSurvey.id || firstSurvey.surveyId;
         if (id) {
+          if (typeof posthog._allowManualSurveyDisplay === 'function') {
+            posthog._allowManualSurveyDisplay();
+          }
           posthog.displaySurvey(id);
           return true;
         }

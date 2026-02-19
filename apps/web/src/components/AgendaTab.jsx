@@ -22,7 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 
-const trackEvent = () => {};
+import { trackEvent } from '../utils/posthog';
 
 function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
@@ -72,6 +72,7 @@ export default function AgendaTab({ onSwitchToLive }) {
     const newIndex = agenda.findIndex((item) => item.id === over.id);
     const newOrder = arrayMove(agenda, oldIndex, newIndex);
     reorderAgenda(newOrder);
+    trackEvent('agenda_reordered', { items_count: newOrder.length });
   };
 
   const handleSimpleImport = () => {
