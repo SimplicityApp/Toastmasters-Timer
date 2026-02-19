@@ -58,7 +58,7 @@ export default function LiveTab({ onTimerStart }) {
   }, [currentSpeaker]);
 
   useEffect(() => {
-    if (selectedRole === 'Custom' && roleRules['Custom'] && !currentSpeaker) {
+    if (selectedRole === 'Custom' && roleRules['Custom']) {
       setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...roleRules['Custom'] });
     }
   }, [selectedRole, roleRules]);
