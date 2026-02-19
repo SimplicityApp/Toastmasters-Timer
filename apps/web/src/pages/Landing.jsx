@@ -24,7 +24,7 @@ export default function Landing() {
             alt="Toastmaster Timer"
             className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-white/20"
           />
-          <h1 className="text-xl font-semibold text-white">Toastmaster Timer</h1>
+          <h1 className="text-xl font-semibold text-white">Toastmasters Timer</h1>
         </div>
       </header>
 
@@ -45,7 +45,7 @@ export default function Landing() {
               aria-hidden
             />
             <h2 className="mt-6 text-3xl font-bold text-white">
-              Run the timer role easily
+              Free Toastmasters Timer – Run the Timer Role Easily
             </h2>
             <p className="mt-3 text-lg text-gray-300 max-w-2xl mx-auto">
               Toastmaster Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for virtual backgrounds.
