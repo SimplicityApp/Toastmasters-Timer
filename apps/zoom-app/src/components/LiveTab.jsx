@@ -109,7 +109,7 @@ export default function LiveTab() {
 
   // When switching to Custom role for the first time, use the default from roleRules (merge for graceAfterRed)
   useEffect(() => {
-    if (selectedRole === 'Custom' && roleRules['Custom'] && !currentSpeaker) {
+    if (selectedRole === 'Custom' && roleRules['Custom']) {
       setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...roleRules['Custom'] });
     }
   }, [selectedRole, roleRules]);
