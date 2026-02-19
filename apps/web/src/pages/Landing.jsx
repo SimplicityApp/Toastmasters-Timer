@@ -24,7 +24,7 @@ export default function Landing() {
             alt="Toastmaster Timer"
             className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-white/20"
           />
-          <h1 className="text-xl font-semibold text-white">Toastmasters Timer</h1>
+          <span className="text-xl font-semibold text-white">Toastmasters Timer</span>
         </div>
       </header>
 
@@ -44,11 +44,11 @@ export default function Landing() {
               className="mx-auto h-24 w-24 rounded-2xl object-cover shadow-lg ring-2 ring-white/30"
               aria-hidden
             />
-            <h2 className="mt-6 text-3xl font-bold text-white">
+            <h1 className="mt-6 text-3xl font-bold text-white">
               Free Toastmasters Timer – Run the Timer Role Easily
-            </h2>
+            </h1>
             <p className="mt-3 text-lg text-gray-300 max-w-2xl mx-auto">
-              Toastmaster Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for virtual backgrounds.
+              Toastmasters Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for automatic virtual backgrounds.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
               <a
@@ -97,6 +97,39 @@ export default function Landing() {
               In Zoom: virtual backgrounds change automatically
             </li>
           </ul>
+        </section>
+
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h2 className="text-lg font-semibold text-white mb-3">What is the Timer Role in Toastmasters?</h2>
+          <p className="text-gray-300 mb-4">
+            The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice.
+          </p>
+
+          <h2 className="text-lg font-semibold text-white mb-3 mt-6">Standard Toastmasters Timing Rules</h2>
+          <p className="text-gray-300 mb-3">
+            Each speech type has its own time range. The timer shows green when the minimum time is reached, yellow at the midpoint, and red at the maximum. Speakers who finish before green or after red may be disqualified from awards.
+          </p>
+          <ul className="space-y-2 text-gray-300 text-sm">
+            <li className="flex justify-between border-b border-white/10 pb-2">
+              <span className="font-medium text-white">Standard Speech (5–7 min)</span>
+              <span>🟢 5:00 &nbsp; 🟡 6:00 &nbsp; 🔴 7:00</span>
+            </li>
+            <li className="flex justify-between border-b border-white/10 pb-2">
+              <span className="font-medium text-white">Table Topics (1–2 min)</span>
+              <span>🟢 1:00 &nbsp; 🟡 1:30 &nbsp; 🔴 2:00</span>
+            </li>
+            <li className="flex justify-between border-b border-white/10 pb-2">
+              <span className="font-medium text-white">Evaluation (2–3 min)</span>
+              <span>🟢 2:00 &nbsp; 🟡 2:30 &nbsp; 🔴 3:00</span>
+            </li>
+            <li className="flex justify-between pb-2">
+              <span className="font-medium text-white">Longer Speech (7–9 min)</span>
+              <span>🟢 7:00 &nbsp; 🟡 8:00 &nbsp; 🔴 9:00</span>
+            </li>
+          </ul>
+          <p className="text-gray-400 text-sm mt-4">
+            Toastmasters Timer is pre-loaded with these rules so you can start timing immediately — no manual setup required.
+          </p>
         </section>
       </main>
     </div>
