@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   ROLE_ORDER: 'toastmaster_role_order',
   HIDDEN_BUILTIN_ROLES: 'toastmaster_hidden_builtin_roles',
   OVERLAY_MODE: 'toastmaster_overlay_mode',
+  TIME_INPUT_MODE: 'toastmaster_time_input_mode',
 };
 
 /**
@@ -181,6 +182,31 @@ export function loadOverlayMode() {
   } catch (error) {
     console.error('Failed to load overlay mode:', error);
     return null;
+  }
+}
+
+/**
+ * Save time input mode to localStorage
+ * @param {string} mode - 'minsec' or 'seconds'
+ */
+export function saveTimeInputMode(mode) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TIME_INPUT_MODE, mode);
+  } catch (error) {
+    console.error('Failed to save time input mode:', error);
+  }
+}
+
+/**
+ * Load time input mode from localStorage
+ * @returns {string} 'minsec' or 'seconds' (defaults to 'minsec')
+ */
+export function loadTimeInputMode() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.TIME_INPUT_MODE) || 'minsec';
+  } catch (error) {
+    console.error('Failed to load time input mode:', error);
+    return 'minsec';
   }
 }
 

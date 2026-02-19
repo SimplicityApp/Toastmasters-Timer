@@ -2,15 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import ConfirmModal from './ConfirmModal';
+import TimeInput, { TimeInputModeToggle } from './TimeInput';
+import { trackEvent } from '../utils/posthog';
 
 const isBuiltInRole = (role) => role in DEFAULT_ROLE_RULES;
-const formatTimeForInput = (seconds) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${String(secs).padStart(2, '0')}`;
-};
 
 export default function EditRulesModal({ isOpen, onClose }) {
   const { roleRules, roleOptions, updateRoleRules, addRoleRules, removeRoleRules, resetAllRoleRulesToDefaults } = useTimer();
@@ -18,6 +15,7 @@ export default function EditRulesModal({ isOpen, onClose }) {
   const [editedRules, setEditedRules] = useState({});
   const [newRoleNames, setNewRoleNames] = useState({});
   const [showResetAllConfirm, setShowResetAllConfirm] = useState(false);
+  const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const prevOpenRef = useRef(false);
 
   useEffect(() => {
@@ -29,8 +27,7 @@ export default function EditRulesModal({ isOpen, onClose }) {
   }, [isOpen, roleRules]);
 
   const handleRuleChange = (role, field, value) => {
-    const numValue = field === 'graceAfterRed' ? (value === '' ? 30 : Math.max(0, parseInt(value, 10) || 0)) : (parseInt(value, 10) || 0);
-    setEditedRules(prev => ({ ...prev, [role]: { ...prev[role], [field]: numValue } }));
+    setEditedRules(prev => ({ ...prev, [role]: { ...prev[role], [field]: value } }));
   };
   const handleAddRole = () => {
     const tempId = `__new_${Date.now()}`;
@@ -69,13 +66,17 @@ export default function EditRulesModal({ isOpen, onClose }) {
       const rules = editedRules[role];
       if (role.startsWith('__new_')) {
         const name = (newRoleNames[role] || '').trim();
-        if (name) addRoleRules(name, rules);
+        if (name) {
+          addRoleRules(name, rules);
+          trackEvent('role_added', { role: name, rules });
+        }
       } else {
         const oldRules = roleRules[role];
         const graceOld = oldRules?.graceAfterRed ?? getDefaultGraceAfterRed(role);
         const graceNew = rules.graceAfterRed ?? getDefaultGraceAfterRed(role);
         if (oldRules && (oldRules.green !== rules.green || oldRules.yellow !== rules.yellow || oldRules.red !== rules.red || graceOld !== graceNew)) {
           updateRoleRules(role, rules);
+          trackEvent('rules_edited', { role, rules });
         }
       }
     }
@@ -103,7 +104,13 @@ export default function EditRulesModal({ isOpen, onClose }) {
           <h3 className="text-lg font-semibold">Edit Timing Rules</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
-        <p className="text-sm text-gray-600 mb-4">Adjust the default timing rules for each speech type.</p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-gray-600">Adjust the default timing rules for each speech type.</p>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 shrink-0 ml-4">
+            <span>Input:</span>
+            <TimeInputModeToggle mode={timeInputMode} onModeChange={(m) => { saveTimeInputMode(m); setTimeInputMode(m); }} />
+          </div>
+        </div>
         <div className="space-y-4">
           {rolesToShow.map((role) => {
             const isNew = role.startsWith('__new_');
@@ -125,11 +132,11 @@ export default function EditRulesModal({ isOpen, onClose }) {
                     <button onClick={() => isNew ? handleRemoveNewRole(role) : handleRemoveRole(role)} className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1" aria-label="Remove role"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-3">
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">Green (seconds)</label><input type="number" min="1" value={rules.green} onChange={(e) => handleRuleChange(role, 'green', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /><div className="text-xs text-gray-500 mt-1">{formatTimeForInput(rules.green)}</div></div>
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">Yellow (seconds)</label><input type="number" min={rules.green + 1} value={rules.yellow} onChange={(e) => handleRuleChange(role, 'yellow', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /><div className="text-xs text-gray-500 mt-1">{formatTimeForInput(rules.yellow)}</div></div>
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">Red (seconds)</label><input type="number" min={rules.yellow + 1} value={rules.red} onChange={(e) => handleRuleChange(role, 'red', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /><div className="text-xs text-gray-500 mt-1">{formatTimeForInput(rules.red)}</div></div>
-                  <div><label className="block text-xs font-medium text-gray-600 mb-1">Grace (sec)</label><input type="number" min="0" value={graceValue} onChange={(e) => handleRuleChange(role, 'graceAfterRed', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" /><div className="text-xs text-gray-500 mt-1">After red before DQ</div></div>
+                <div className="grid grid-cols-4 gap-4">
+                  <TimeInput label="Green" value={rules.green} onChange={(v) => handleRuleChange(role, 'green', v)} />
+                  <TimeInput label="Yellow" value={rules.yellow} onChange={(v) => handleRuleChange(role, 'yellow', v)} />
+                  <TimeInput label="Red" value={rules.red} onChange={(v) => handleRuleChange(role, 'red', v)} />
+                  <TimeInput label="Grace" value={graceValue} onChange={(v) => handleRuleChange(role, 'graceAfterRed', v)} />
                 </div>
                 {hasError && <div className="text-xs text-red-600 mt-2">Invalid: Yellow must be &gt; Green, Red must be &gt; Yellow</div>}
               </div>
