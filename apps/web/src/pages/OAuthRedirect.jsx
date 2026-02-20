@@ -52,6 +52,21 @@ export default function OAuthRedirect() {
             You can also close this tab and open Zoom yourself.
           </p>
         </div>
+
+        <div className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl px-8 py-8 mt-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Watch the Demo</h3>
+          <div className="rounded-xl overflow-hidden">
+            <iframe
+              width="100%"
+              style={{ aspectRatio: '16/9' }}
+              src="https://www.youtube.com/embed/1VkED9sXE6Q"
+              title="Toastmasters Timer – Product Demo"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </div>
       </main>
     </div>
   )

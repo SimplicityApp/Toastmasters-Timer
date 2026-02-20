@@ -100,6 +100,21 @@ export default function Landing() {
         </section>
 
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Watch the Demo</h3>
+          <div className="rounded-xl overflow-hidden">
+            <iframe
+              width="100%"
+              style={{ aspectRatio: '16/9' }}
+              src="https://www.youtube.com/embed/1VkED9sXE6Q"
+              title="Toastmasters Timer – Product Demo"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h2 className="text-lg font-semibold text-white mb-3">What is the Timer Role in Toastmasters?</h2>
           <p className="text-gray-300 mb-4">
             The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice.
