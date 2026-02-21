@@ -22,6 +22,7 @@ export default function LiveTab() {
     stopTimer,
     resetTimer,
     setCurrentSpeaker,
+    updateSpeakerName,
     finishCurrentSpeech,
     roleRules,
     roleOptions,
@@ -57,6 +58,7 @@ export default function LiveTab() {
   const [lastError, setLastError] = useState(null);
   const [debugLogs, setDebugLogs] = useState([]);
   const initializedRef = useRef(false);
+  const isLocalNameEdit = useRef(false);
   
   // Save expanded state to localStorage
   const toggleDebugPanel = () => {
@@ -93,7 +95,10 @@ export default function LiveTab() {
   // Update local state when currentSpeaker changes (but preserve custom rules if Custom role)
   useEffect(() => {
     if (currentSpeaker) {
-      setSpeakerName(currentSpeaker.name || '');
+      if (!isLocalNameEdit.current) {
+        setSpeakerName(currentSpeaker.name || '');
+      }
+      isLocalNameEdit.current = false;
       setSelectedRole(currentSpeaker.role);
       // If custom role and has custom rules, update local state (merge so missing graceAfterRed is filled)
       if (currentSpeaker.role === 'Custom' && currentSpeaker.rules) {
@@ -238,13 +243,8 @@ export default function LiveTab() {
 
   const handleSpeakerChange = (name) => {
     setSpeakerName(name || '');
-    // Always update current speaker, even if name is empty (optional)
-    const rules = selectedRole === 'Custom' ? customRules : undefined;
-    setCurrentSpeaker({
-      name: name || '',
-      role: selectedRole,
-      ...(rules && { rules }),
-    });
+    isLocalNameEdit.current = true;
+    updateSpeakerName(name || '');
   };
 
   const handleSelectSuggestion = (item) => {

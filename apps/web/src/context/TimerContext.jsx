@@ -122,6 +122,11 @@ export function TimerProvider({ children }) {
     setPageBackgroundFromStatus('blue');
   }, []);
 
+  // Lightweight name-only update (no timer reset)
+  const updateSpeakerName = useCallback((name) => {
+    setCurrentSpeaker(prev => prev ? { ...prev, name } : null);
+  }, []);
+
   const setCurrentSpeakerAction = useCallback((speaker) => {
     if (!speaker) {
       setCurrentSpeaker(null);
@@ -324,7 +329,7 @@ export function TimerProvider({ children }) {
   const value = {
     isRunning, elapsedTime, currentStatus, currentSpeaker,
     agenda, activeSpeakerId, reports, roleRules, roleOptions,
-    startTimer, stopTimer, resetTimer, setCurrentSpeaker: setCurrentSpeakerAction,
+    startTimer, stopTimer, resetTimer, setCurrentSpeaker: setCurrentSpeakerAction, updateSpeakerName,
     addToAgenda, removeFromAgenda, reorderAgenda, markCompleted, loadSpeakerFromAgenda,
     importBulkSpeakers, importEasySpeakSpeakers, clearAllAgenda,
     addReport, finishCurrentSpeech, clearAllReports,
