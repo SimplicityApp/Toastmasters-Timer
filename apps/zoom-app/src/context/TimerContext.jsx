@@ -156,6 +156,11 @@ export function TimerProvider({ children }) {
     applyOverlay(getBackgroundUrl('blue'));
   }, []);
 
+  // Lightweight name-only update (no timer reset, no overlay call)
+  const updateSpeakerName = useCallback((name) => {
+    setCurrentSpeaker(prev => prev ? { ...prev, name } : null);
+  }, []);
+
   // Speaker management
   const setCurrentSpeakerAction = useCallback((speaker) => {
     if (!speaker) {
@@ -507,6 +512,7 @@ export function TimerProvider({ children }) {
     
     // Speaker actions
     setCurrentSpeaker: setCurrentSpeakerAction,
+    updateSpeakerName,
     
     // Agenda actions
     addToAgenda,

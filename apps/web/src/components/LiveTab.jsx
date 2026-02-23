@@ -20,6 +20,7 @@ export default function LiveTab({ onTimerStart }) {
     stopTimer,
     resetTimer,
     setCurrentSpeaker,
+    updateSpeakerName,
     finishCurrentSpeech,
     roleRules,
     roleOptions,
@@ -36,6 +37,7 @@ export default function LiveTab({ onTimerStart }) {
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
   const initializedRef = useRef(false);
+  const isLocalNameEdit = useRef(false);
 
   useEffect(() => {
     if (!initializedRef.current && !currentSpeaker && selectedRole && roleRules && Object.keys(roleRules).length > 0) {
@@ -46,7 +48,10 @@ export default function LiveTab({ onTimerStart }) {
 
   useEffect(() => {
     if (currentSpeaker) {
-      setSpeakerName(currentSpeaker.name || '');
+      if (!isLocalNameEdit.current) {
+        setSpeakerName(currentSpeaker.name || '');
+      }
+      isLocalNameEdit.current = false;
       setSelectedRole(currentSpeaker.role);
       if (currentSpeaker.role === 'Custom' && currentSpeaker.rules) {
         setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...currentSpeaker.rules });
@@ -69,8 +74,8 @@ export default function LiveTab({ onTimerStart }) {
 
   const handleSpeakerChange = (name) => {
     setSpeakerName(name || '');
-    const rules = selectedRole === 'Custom' ? customRules : undefined;
-    setCurrentSpeaker({ name: name || '', role: selectedRole, ...(rules && { rules }) });
+    isLocalNameEdit.current = true;
+    updateSpeakerName(name || '');
   };
 
   const handleSelectSuggestion = (item) => {

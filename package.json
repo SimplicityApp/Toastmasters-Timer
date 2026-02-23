@@ -17,6 +17,18 @@
     "combine:dist": "rm -rf dist && mkdir -p dist/zoom && cp -r apps/web/dist/. dist/ && cp -r apps/zoom-app/dist/. dist/zoom/",
     "preview": "npm run preview --prefix apps/zoom-app",
     "dev:web": "npm run dev --prefix apps/web",
-    "dev:zoom": "npm run dev --prefix apps/zoom-app"
+    "dev:zoom": "npm run dev --prefix apps/zoom-app",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "jsdom": "^28.1.0",
+    "vitest": "^4.0.18"
   }
 }
