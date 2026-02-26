@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { trackEvent } from '../utils/posthog'
+import YouTubePlayer from '../components/YouTubePlayer'
 
 const ZOOM_MARKETPLACE_URL = 'https://marketplace.zoom.us/apps/sWHvcm4YShyr6SXQQI8DFw'
 const ZOOM_APP_URL = 'https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg/context/meeting/target/launch/deeplink'
@@ -109,6 +111,7 @@ export default function Landing() {
               controls
               playsInline
               className="w-full rounded-xl"
+              onPlay={() => trackEvent('quick_demo_played', { page: 'landing' })}
             />
           </div>
         </section>
@@ -116,14 +119,10 @@ export default function Landing() {
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h3 className="text-lg font-semibold text-white mb-4">Watch the Full Product Demo</h3>
           <div className="rounded-xl overflow-hidden">
-            <iframe
-              width="100%"
-              style={{ aspectRatio: '16/9' }}
-              src="https://www.youtube.com/embed/1VkED9sXE6Q"
+            <YouTubePlayer
+              videoId="1VkED9sXE6Q"
               title="Toastmasters Timer – Product Demo"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
+              page="landing"
             />
           </div>
         </section>
