@@ -41,6 +41,9 @@ export function verifyZoomSignature(headers, rawBody) {
  */
 export function generateCrcResponse(plainToken) {
   const secret = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
+  if (!secret) {
+    throw new Error('ZOOM_WEBHOOK_SECRET_TOKEN is not configured');
+  }
   const encryptedToken = crypto
     .createHmac('sha256', secret)
     .update(plainToken)

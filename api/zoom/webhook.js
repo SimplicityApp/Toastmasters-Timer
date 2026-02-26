@@ -96,8 +96,13 @@ export default async function handler(req, res) {
     if (!plainToken) {
       return res.status(400).json({ error: 'Missing plainToken' });
     }
-    const crcResponse = generateCrcResponse(plainToken);
-    return res.status(200).json(crcResponse);
+    try {
+      const crcResponse = generateCrcResponse(plainToken);
+      return res.status(200).json(crcResponse);
+    } catch (err) {
+      console.error('CRC validation failed:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   // All other events require signature verification

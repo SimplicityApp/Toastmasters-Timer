@@ -21,6 +21,14 @@ describe('generateCrcResponse', () => {
     expect(result.plainToken).toBe(plainToken);
     expect(result.encryptedToken).toBe(expected);
   });
+
+  it('throws when ZOOM_WEBHOOK_SECRET_TOKEN is not set', () => {
+    vi.stubEnv('ZOOM_WEBHOOK_SECRET_TOKEN', '');
+
+    expect(() => generateCrcResponse('token')).toThrow(
+      'ZOOM_WEBHOOK_SECRET_TOKEN is not configured'
+    );
+  });
 });
 
 describe('verifyZoomSignature', () => {
