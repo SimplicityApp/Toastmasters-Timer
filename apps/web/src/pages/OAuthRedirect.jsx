@@ -1,6 +1,19 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { trackEvent } from '../utils/posthog'
 
 export default function OAuthRedirect() {
+  const [searchParams] = useSearchParams()
+  const hasFired = useRef(false)
+
+  useEffect(() => {
+    if (hasFired.current) return
+    hasFired.current = true
+
+    const queryParams = Object.fromEntries(searchParams.entries())
+    trackEvent('zoom_app_installed', { source: 'oauth_redirect', ...queryParams })
+  }, [searchParams])
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <header className="bg-black/25 backdrop-blur-md border-b border-white/10">
@@ -54,7 +67,21 @@ export default function OAuthRedirect() {
         </div>
 
         <div className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl px-8 py-8 mt-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Watch the Demo</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">Quick Demo: Using in Zoom</h3>
+          <div className="rounded-xl overflow-hidden">
+            <video
+              src="/zoom/use-app-demo.mp4"
+              preload="none"
+              poster="/use-app-demo-poster.jpg"
+              controls
+              playsInline
+              className="w-full rounded-xl"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl px-8 py-8 mt-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Watch the Full Product Demo</h3>
           <div className="rounded-xl overflow-hidden">
             <iframe
               width="100%"

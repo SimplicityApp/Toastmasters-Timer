@@ -100,7 +100,21 @@ export default function Landing() {
         </section>
 
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Watch the Demo</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">Quick Demo: Using in Zoom</h3>
+          <div className="rounded-xl overflow-hidden">
+            <video
+              src="/zoom/use-app-demo.mp4"
+              preload="none"
+              poster="/use-app-demo-poster.jpg"
+              controls
+              playsInline
+              className="w-full rounded-xl"
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Watch the Full Product Demo</h3>
           <div className="rounded-xl overflow-hidden">
             <iframe
               width="100%"
