@@ -8,6 +8,10 @@
   ],
   "rewrites": [
     { "source": "/zoom/assets/:path*", "destination": "/zoom/assets/:path*" },
+    { "source": "/privacy", "destination": "/zoom/privacy.html" },
+    { "source": "/support", "destination": "/zoom/support.html" },
+    { "source": "/terms-of-use", "destination": "/zoom/terms-of-use.html" },
+    { "source": "/documentation", "destination": "/zoom/documentation.html" },
     { "source": "/zoom/privacy", "destination": "/zoom/privacy.html" },
     { "source": "/zoom/support", "destination": "/zoom/support.html" },
     { "source": "/zoom/terms-of-use", "destination": "/zoom/terms-of-use.html" },
