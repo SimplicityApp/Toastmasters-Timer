@@ -1,6 +1,19 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { trackEvent } from '../utils/posthog'
 
 export default function OAuthRedirect() {
+  const [searchParams] = useSearchParams()
+  const hasFired = useRef(false)
+
+  useEffect(() => {
+    if (hasFired.current) return
+    hasFired.current = true
+
+    const queryParams = Object.fromEntries(searchParams.entries())
+    trackEvent('zoom_app_installed', { source: 'oauth_redirect', ...queryParams })
+  }, [searchParams])
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <header className="bg-black/25 backdrop-blur-md border-b border-white/10">
