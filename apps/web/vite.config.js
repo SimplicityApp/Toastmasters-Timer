@@ -41,6 +41,7 @@ export default defineConfig(async () => {
   return {
     base,
     plugins,
+    envDir: path.resolve(__dirname, '../..'),
     server: {
       port: 3001,
       open: true
