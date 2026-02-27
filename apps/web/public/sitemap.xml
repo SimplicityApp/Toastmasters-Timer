@@ -2,8 +2,32 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://www.timer.simple-tech.app/</loc>
-    <lastmod>2026-02-19</lastmod>
+    <lastmod>2026-02-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.timer.simple-tech.app/documentation</loc>
+    <lastmod>2026-02-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.timer.simple-tech.app/privacy</loc>
+    <lastmod>2026-02-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://www.timer.simple-tech.app/support</loc>
+    <lastmod>2026-02-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://www.timer.simple-tech.app/terms-of-use</loc>
+    <lastmod>2026-02-26</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>

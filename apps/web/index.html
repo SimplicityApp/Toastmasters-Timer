@@ -32,9 +32,268 @@
       }
     }
     </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the Timer Role in Toastmasters?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What are the standard Toastmasters timing rules?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Each speech type has its own time range. Standard Speech (5–7 min): green at 5:00, yellow at 6:00, red at 7:00. Table Topics (1–2 min): green at 1:00, yellow at 1:30, red at 2:00. Evaluation (2–3 min): green at 2:00, yellow at 2:30, red at 3:00. Longer Speech (7–9 min): green at 7:00, yellow at 8:00, red at 9:00."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does the Toastmasters Timer app work in Zoom?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Toastmasters Timer integrates with Zoom as a Zoom app. When timing speeches in a Zoom meeting, the app automatically changes your virtual background color to green, yellow, or red to signal the speaker — no physical cards or screen sharing needed."
+          }
+        }
+      ]
+    }
+    </script>
+    <!-- Static landing styles (replaced by React on mount) -->
+    <style>
+      .static-landing {
+        min-height: 100vh;
+        position: relative;
+        background-color: #111827;
+        background-image: url(/Toastmasters-Timer-cover-page.png);
+        background-size: cover;
+        background-position: 80% center;
+        background-repeat: no-repeat;
+        font-family: system-ui, -apple-system, sans-serif;
+        color: #d1d5db;
+        margin: 0;
+      }
+      .static-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.35);
+      }
+      .static-header {
+        position: relative;
+        z-index: 10;
+        background: rgba(0,0,0,0.25);
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+      }
+      .static-header-inner {
+        max-width: 56rem;
+        margin: 0 auto;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .static-header-logo {
+        height: 2.5rem;
+        width: 2.5rem;
+        border-radius: 0.75rem;
+        object-fit: cover;
+      }
+      .static-header-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #fff;
+      }
+      .static-main {
+        position: relative;
+        z-index: 10;
+        max-width: 56rem;
+        margin: 0 auto;
+        padding: 0 1rem;
+      }
+      .static-card {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .static-hero {
+        margin-top: 1.5rem;
+        margin-bottom: 3rem;
+        text-align: center;
+        overflow: hidden;
+        padding: 0;
+      }
+      .static-gradient-bar {
+        height: 6px;
+        width: 100%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #22c55e 0%, #eab308 50%, #dc2626 100%);
+      }
+      .static-hero-content {
+        padding: 2.5rem 1.5rem;
+      }
+      .static-hero-logo {
+        display: block;
+        margin: 0 auto;
+        height: 6rem;
+        width: 6rem;
+        border-radius: 1rem;
+        object-fit: cover;
+      }
+      .static-hero h1 {
+        margin-top: 1.5rem;
+        font-size: 1.875rem;
+        font-weight: 700;
+        color: #fff;
+        line-height: 1.2;
+      }
+      .static-hero p {
+        margin-top: 0.75rem;
+        font-size: 1.125rem;
+        color: #d1d5db;
+        max-width: 42rem;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .static-cta-row {
+        margin-top: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        justify-content: center;
+        align-items: center;
+      }
+      @media (min-width: 640px) {
+        .static-cta-row { flex-direction: row; }
+      }
+      .static-cta-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        background: #2563eb;
+        color: #fff;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .static-cta-secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .static-card h2, .static-card h3 {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 1rem;
+      }
+      .static-features li {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .static-dot {
+        display: inline-block;
+        height: 0.5rem;
+        width: 0.5rem;
+        border-radius: 9999px;
+        margin-top: 0.375rem;
+        flex-shrink: 0;
+      }
+      .static-rules-table {
+        width: 100%;
+        font-size: 0.875rem;
+      }
+      .static-rules-table li {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .static-rules-table li:last-child {
+        border-bottom: none;
+      }
+      .static-rules-table .static-rule-name {
+        font-weight: 500;
+        color: #fff;
+      }
+      .static-note {
+        font-size: 0.875rem;
+        color: #9ca3af;
+        margin-top: 1rem;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="static-landing">
+        <div class="static-overlay" aria-hidden="true"></div>
+
+        <header class="static-header">
+          <div class="static-header-inner">
+            <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmaster Timer" class="static-header-logo" />
+            <span class="static-header-title">Toastmasters Timer</span>
+          </div>
+        </header>
+
+        <main class="static-main">
+          <section class="static-card static-hero">
+            <div class="static-gradient-bar"></div>
+            <div class="static-hero-content">
+              <img src="/Toastmasters-Timer-logo.jpg" alt="" class="static-hero-logo" aria-hidden="true" />
+              <h1>Free Toastmasters Timer – Run the Timer Role Easily</h1>
+              <p>Toastmasters Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for automatic virtual backgrounds.</p>
+              <div class="static-cta-row">
+                <a href="https://marketplace.zoom.us/apps/sWHvcm4YShyr6SXQQI8DFw" target="_blank" rel="noopener noreferrer" class="static-cta-primary">Add to Zoom</a>
+                <a href="/app" class="static-cta-secondary">Use in Browser</a>
+              </div>
+            </div>
+          </section>
+
+          <section class="static-card">
+            <h3>Features</h3>
+            <ul class="static-features">
+              <li><span class="static-dot" style="background:#60a5fa"></span>Timing rules for speeches (Standard Speech, Short Roles, Table Topics, evaluations, etc.)</li>
+              <li><span class="static-dot" style="background:#22c55e"></span>Agenda and reports to track speakers</li>
+              <li><span class="static-dot" style="background:#eab308"></span>Quick import: paste meeting roles and load the agenda</li>
+              <li><span class="static-dot" style="background:#ef4444"></span>In browser: the page background changes color (green, yellow, red) as time runs</li>
+              <li><span class="static-dot" style="background:#60a5fa"></span>In Zoom: virtual backgrounds change automatically</li>
+            </ul>
+          </section>
+
+          <section class="static-card">
+            <h2>What is the Timer Role in Toastmasters?</h2>
+            <p>The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice.</p>
+
+            <h2 style="margin-top:1.5rem">Standard Toastmasters Timing Rules</h2>
+            <p style="margin-bottom:0.75rem">Each speech type has its own time range. The timer shows green when the minimum time is reached, yellow at the midpoint, and red at the maximum. Speakers who finish before green or after red may be disqualified from awards.</p>
+            <ul class="static-rules-table">
+              <li><span class="static-rule-name">Standard Speech (5–7 min)</span><span>🟢 5:00 &nbsp; 🟡 6:00 &nbsp; 🔴 7:00</span></li>
+              <li><span class="static-rule-name">Table Topics (1–2 min)</span><span>🟢 1:00 &nbsp; 🟡 1:30 &nbsp; 🔴 2:00</span></li>
+              <li><span class="static-rule-name">Evaluation (2–3 min)</span><span>🟢 2:00 &nbsp; 🟡 2:30 &nbsp; 🔴 3:00</span></li>
+              <li><span class="static-rule-name">Longer Speech (7–9 min)</span><span>🟢 7:00 &nbsp; 🟡 8:00 &nbsp; 🔴 9:00</span></li>
+            </ul>
+            <p class="static-note">Toastmasters Timer is pre-loaded with these rules so you can start timing immediately — no manual setup required.</p>
+          </section>
+        </main>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
