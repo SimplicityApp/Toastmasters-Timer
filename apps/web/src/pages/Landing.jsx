@@ -12,7 +12,7 @@ export default function Landing() {
       style={{
         backgroundImage: 'url(/Toastmasters-Timer-cover-page.png)',
         backgroundSize: 'cover',
-        backgroundPosition: '100% center',
+        backgroundPosition: '80% center',
         backgroundRepeat: 'no-repeat',
       }}
     >
