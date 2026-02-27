@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { compression } from 'vite-plugin-compression2'
 import path from 'path'
 import fs from 'fs'
 
@@ -24,11 +25,26 @@ function serveZoomPublic() {
   }
 }
 
-export default defineConfig({
-  base,
-  plugins: [react(), serveZoomPublic()],
-  server: {
-    port: 3001,
-    open: true
+export default defineConfig(async () => {
+  const plugins = [
+    react(),
+    serveZoomPublic(),
+    compression({ algorithm: 'gzip' }),
+    compression({ algorithm: 'brotliCompress' }),
+  ]
+
+  if (process.env.ANALYZE) {
+    const { visualizer } = await import('rollup-plugin-visualizer')
+    plugins.push(visualizer({ open: true, filename: 'stats.html', gzipSize: true }))
+  }
+
+  return {
+    base,
+    plugins,
+    envDir: path.resolve(__dirname, '../..'),
+    server: {
+      port: 3001,
+      open: true
+    }
   }
 })
