@@ -16,21 +16,7 @@ async function initApp() {
     console.log('Continuing without Zoom SDK (local development mode)');
   }
 
-  // Pre-load background images (works better in Zoom client than fetching on-demand)
-  try {
-    await preloadBackgroundImages();
-  } catch (error) {
-    console.warn('Failed to pre-load background images:', error);
-  }
-
-  // Initialize PostHog (gracefully handles failures)
-  try {
-    initPostHog();
-  } catch (error) {
-    console.warn('Failed to initialize PostHog:', error);
-  }
-
-  // Render app regardless of initialization status
+  // Render immediately after SDK init
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <PostHogProvider client={posthog}>
@@ -38,6 +24,19 @@ async function initApp() {
       </PostHogProvider>
     </React.StrictMode>,
   )
+
+  // Defer non-critical work
+  try {
+    await preloadBackgroundImages();
+  } catch (error) {
+    console.warn('Failed to pre-load background images:', error);
+  }
+
+  try {
+    initPostHog();
+  } catch (error) {
+    console.warn('Failed to initialize PostHog:', error);
+  }
 }
 
 // Start the app

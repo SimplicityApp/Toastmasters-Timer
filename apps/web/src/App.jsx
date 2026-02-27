@@ -1,16 +1,20 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import Landing from './pages/Landing'
-import TimerApp from './pages/TimerApp'
-import OAuthRedirect from './pages/OAuthRedirect'
 import './App.css'
+
+const Landing = lazy(() => import('./pages/Landing'))
+const TimerApp = lazy(() => import('./pages/TimerApp'))
+const OAuthRedirect = lazy(() => import('./pages/OAuthRedirect'))
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/app" element={<TimerApp />} />
-      <Route path="/oauth/redirect" element={<OAuthRedirect />} />
-    </Routes>
+    <Suspense fallback={null}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/app" element={<TimerApp />} />
+        <Route path="/oauth/redirect" element={<OAuthRedirect />} />
+      </Routes>
+    </Suspense>
   )
 }
 
