@@ -3,9 +3,8 @@ import { ExternalLink, MessageSquare } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 import FeedbackModal, { SURVEY_ID } from './FeedbackModal';
 
-const ADD_TO_ZOOM_URL = 'https://zoom.us/oauth/authorize?response_type=code&client_id=DsFHK5sNQs2_VFyeQky2sg&redirect_uri=https://www.timer.simple-tech.app/oauth/redirect';
-
 export default function Footer() {
+  const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT;
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const handleFeedbackClick = () => {

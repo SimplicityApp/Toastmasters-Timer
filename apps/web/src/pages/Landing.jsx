@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom'
 import { trackEvent } from '../utils/posthog'
 import YouTubePlayer from '../components/YouTubePlayer'
 
-const ADD_TO_ZOOM_URL = 'https://zoom.us/oauth/authorize?response_type=code&client_id=DsFHK5sNQs2_VFyeQky2sg&redirect_uri=https://www.timer.simple-tech.app/oauth/redirect'
 const ZOOM_APP_URL = 'https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg/context/meeting/target/launch/deeplink'
 
 export default function Landing() {
+  const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT
   return (
     <div
       className="min-h-screen relative bg-gray-900"
