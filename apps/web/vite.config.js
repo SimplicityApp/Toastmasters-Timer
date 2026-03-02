@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { compression } from 'vite-plugin-compression2'
 import path from 'path'
 import fs from 'fs'
 
@@ -29,8 +28,6 @@ export default defineConfig(async () => {
   const plugins = [
     react(),
     serveZoomPublic(),
-    compression({ algorithm: 'gzip' }),
-    compression({ algorithm: 'brotliCompress' }),
   ]
 
   if (process.env.ANALYZE) {
