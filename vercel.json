@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": null,
+  "trailingSlash": false,
   "redirects": [
     { "source": "/web", "destination": "/app", "permanent": false }
   ],
