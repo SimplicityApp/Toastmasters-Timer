@@ -23,7 +23,7 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <img
             src="/Toastmasters-Timer-logo.jpg"
-            alt="Toastmaster Timer"
+            alt="Toastmasters Timer app logo"
             className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-white/20"
           />
           <span className="text-xl font-semibold text-white">Toastmasters Timer</span>
@@ -47,7 +47,7 @@ export default function Landing() {
               aria-hidden
             />
             <h1 className="mt-6 text-3xl font-bold text-white">
-              Free Toastmasters Timer – Run the Timer Role Easily
+              Free Online Toastmasters Speech Timer – Run the Timer Role Easily
             </h1>
             <p className="mt-3 text-lg text-gray-300 max-w-2xl mx-auto">
               Toastmasters Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for automatic virtual backgrounds.
@@ -111,6 +111,7 @@ export default function Landing() {
               controls
               playsInline
               className="w-full rounded-xl"
+              aria-label="Demo video showing Toastmasters Timer with Zoom virtual background color changes"
               onPlay={() => trackEvent('quick_demo_played', { page: 'landing' })}
             />
           </div>
@@ -160,6 +161,36 @@ export default function Landing() {
           </p>
         </section>
       </main>
+
+      <footer className="relative z-10 bg-black/30 backdrop-blur-md border-t border-white/10 mt-12 py-8 px-4">
+        <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-8">
+          <div>
+            <h4 className="text-sm font-semibold text-white mb-3">Resources</h4>
+            <ul className="space-y-2">
+              <li><a href="/toastmasters-timer-role-guide" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timer Role Guide</a></li>
+              <li><a href="/toastmasters-speech-types-and-timing" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Speech Types &amp; Timing</a></li>
+              <li><a href="/toastmasters-timing-chart" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timing Chart</a></li>
+              <li><a href="/how-to-use-zoom-for-toastmasters" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Zoom for Toastmasters</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-white mb-3">Legal</h4>
+            <ul className="space-y-2">
+              <li><a href="/privacy" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Privacy Policy</a></li>
+              <li><a href="/terms-of-use" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Terms of Use</a></li>
+              <li><a href="/support" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Support</a></li>
+              <li><a href="/documentation" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Documentation</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-white mb-3">Get Started</h4>
+            <ul className="space-y-2">
+              <li><Link to="/app" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Start Timer</Link></li>
+            </ul>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-8 text-center">&copy; 2026 Toastmasters Timer. Not affiliated with Toastmasters International.</p>
+      </footer>
     </div>
   )
 }

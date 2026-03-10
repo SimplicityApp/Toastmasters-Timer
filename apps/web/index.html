@@ -9,13 +9,13 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#111827" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Toastmasters Timer – Free Timer for Toastmasters Meetings</title>
+    <title>Toastmasters Timer – Free Online Speech Timer for Toastmasters Meetings</title>
     <meta name="description" content="Free Toastmasters timer for the Timer role. Green/yellow/red timing for every speech type. Works in your browser or as a Zoom app with automatic virtual backgrounds." />
     <link rel="canonical" href="https://www.timer.simple-tech.app/" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://www.timer.simple-tech.app/" />
-    <meta property="og:title" content="Toastmasters Timer – Free Timer for Toastmasters Meetings" />
+    <meta property="og:title" content="Toastmasters Timer – Free Online Speech Timer for Toastmasters Meetings" />
     <meta property="og:description" content="Free timer for the Timer role in Toastmasters meetings. Green/yellow/red signals for speeches. Works in browser or as a Zoom app." />
     <meta property="og:image" content="https://www.timer.simple-tech.app/Toastmasters-Timer-cover-page.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -65,6 +65,46 @@
             "@type": "Answer",
             "text": "Toastmasters Timer integrates with Zoom as a Zoom app. When timing speeches in a Zoom meeting, the app automatically changes your virtual background color to green, yellow, or red to signal the speaker — no physical cards or screen sharing needed."
           }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the Toastmasters timer free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, Toastmasters Timer is completely free to use. No account or sign-up is needed — just open it in any modern browser and start timing speeches immediately. The Zoom app integration is also free."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use a timer for online Toastmasters meetings?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Toastmasters Timer has a dedicated Zoom app that automatically changes your virtual background color to green, yellow, or red as the speaker reaches each time threshold. This replaces the need for physical colored cards in virtual meetings."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What colors does the Toastmasters timer use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Toastmasters uses a traffic-light system: green means the speaker has reached the minimum time, yellow signals the midpoint of the time range, and red indicates the speaker has reached the maximum allowed time. Speakers should wrap up before or at the red signal."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How long is a Table Topics speech in Toastmasters?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A Table Topics speech in Toastmasters is 1 to 2 minutes long. The green signal shows at 1:00 (minimum time reached), yellow at 1:30 (midpoint), and red at 2:00 (maximum time). Speakers who go over 2 minutes and 30 seconds may be disqualified from awards."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What happens if a Toastmasters speaker goes over time?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "After the red signal, speakers have a 30-second grace period. If they exceed the maximum time plus 30 seconds, they may be disqualified from winning the Best Speaker, Best Table Topics, or Best Evaluator award for that meeting. Toastmasters Timer tracks the exact overage so the Timer can report precise times."
+          }
         }
       ]
     }
@@ -72,189 +112,16 @@
     <link rel="preload" href="/Toastmasters-Timer-cover-page.png" as="image" />
     <link rel="dns-prefetch" href="https://us.i.posthog.com" />
     <!-- Static landing styles (replaced by React on mount) -->
-    <style>
-      .static-landing {
-        min-height: 100vh;
-        position: relative;
-        background-color: #111827;
-        background-image: url(/Toastmasters-Timer-cover-page.png);
-        background-size: cover;
-        background-position: 80% center;
-        background-repeat: no-repeat;
-        font-family: system-ui, -apple-system, sans-serif;
-        color: #d1d5db;
-        margin: 0;
-      }
-      .static-overlay {
-        position: absolute;
-        inset: 0;
-        background: rgba(0,0,0,0.35);
-      }
-      .static-header {
-        position: relative;
-        z-index: 10;
-        background: rgba(0,0,0,0.25);
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-      }
-      .static-header-inner {
-        max-width: 56rem;
-        margin: 0 auto;
-        padding: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-      .static-header-logo {
-        height: 2.5rem;
-        width: 2.5rem;
-        border-radius: 0.75rem;
-        object-fit: cover;
-      }
-      .static-header-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #fff;
-      }
-      .static-main {
-        position: relative;
-        z-index: 10;
-        max-width: 56rem;
-        margin: 0 auto;
-        padding: 0 1rem;
-      }
-      .static-card {
-        background: rgba(0,0,0,0.3);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        margin-top: 1.5rem;
-      }
-      .static-hero {
-        margin-top: 1.5rem;
-        margin-bottom: 3rem;
-        text-align: center;
-        overflow: hidden;
-        padding: 0;
-      }
-      .static-gradient-bar {
-        height: 6px;
-        width: 100%;
-        border-radius: 9999px;
-        background: linear-gradient(90deg, #22c55e 0%, #eab308 50%, #dc2626 100%);
-      }
-      .static-hero-content {
-        padding: 2.5rem 1.5rem;
-      }
-      .static-hero-logo {
-        display: block;
-        margin: 0 auto;
-        height: 6rem;
-        width: 6rem;
-        border-radius: 1rem;
-        object-fit: cover;
-      }
-      .static-hero h1 {
-        margin-top: 1.5rem;
-        font-size: 1.875rem;
-        font-weight: 700;
-        color: #fff;
-        line-height: 1.2;
-      }
-      .static-hero p {
-        margin-top: 0.75rem;
-        font-size: 1.125rem;
-        color: #d1d5db;
-        max-width: 42rem;
-        margin-left: auto;
-        margin-right: auto;
-      }
-      .static-cta-row {
-        margin-top: 2rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        justify-content: center;
-        align-items: center;
-      }
-      @media (min-width: 640px) {
-        .static-cta-row { flex-direction: row; }
-      }
-      .static-cta-primary {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.75rem;
-        background: #2563eb;
-        color: #fff;
-        font-weight: 500;
-        text-decoration: none;
-      }
-      .static-cta-secondary {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.75rem;
-        border: 1px solid rgba(255,255,255,0.3);
-        background: rgba(255,255,255,0.1);
-        color: #fff;
-        font-weight: 500;
-        text-decoration: none;
-      }
-      .static-card h2, .static-card h3 {
-        font-size: 1.125rem;
-        font-weight: 600;
-        color: #fff;
-        margin-bottom: 1rem;
-      }
-      .static-features li {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.5rem;
-        margin-bottom: 0.75rem;
-      }
-      .static-dot {
-        display: inline-block;
-        height: 0.5rem;
-        width: 0.5rem;
-        border-radius: 9999px;
-        margin-top: 0.375rem;
-        flex-shrink: 0;
-      }
-      .static-rules-table {
-        width: 100%;
-        font-size: 0.875rem;
-      }
-      .static-rules-table li {
-        display: flex;
-        justify-content: space-between;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.5rem;
-      }
-      .static-rules-table li:last-child {
-        border-bottom: none;
-      }
-      .static-rules-table .static-rule-name {
-        font-weight: 500;
-        color: #fff;
-      }
-      .static-note {
-        font-size: 0.875rem;
-        color: #9ca3af;
-        margin-top: 1rem;
-      }
-    </style>
+    <link rel="stylesheet" href="/content-pages.css" />
   </head>
   <body>
     <div id="root">
-      <div class="static-landing">
+      <div class="static-landing" aria-label="Toastmasters meeting timer application">
         <div class="static-overlay" aria-hidden="true"></div>
 
         <header class="static-header">
           <div class="static-header-inner">
-            <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmaster Timer" class="static-header-logo" />
+            <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmasters Timer app logo" class="static-header-logo" />
             <span class="static-header-title">Toastmasters Timer</span>
           </div>
         </header>
@@ -264,7 +131,7 @@
             <div class="static-gradient-bar"></div>
             <div class="static-hero-content">
               <img src="/Toastmasters-Timer-logo.jpg" alt="" class="static-hero-logo" aria-hidden="true" />
-              <h1>Free Toastmasters Timer – Run the Timer Role Easily</h1>
+              <h1>Free Online Toastmasters Speech Timer – Run the Timer Role Easily</h1>
               <p>Toastmasters Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for automatic virtual backgrounds.</p>
               <div class="static-cta-row">
                 <a href="https://zoom.us/oauth/authorize?response_type=code&client_id=DsFHK5sNQs2_VFyeQky2sg&redirect_uri=https://www.timer.simple-tech.app/oauth/redirect" target="_blank" rel="noopener noreferrer" class="static-cta-primary">Add to Zoom</a>
@@ -299,6 +166,36 @@
             <p class="static-note">Toastmasters Timer is pre-loaded with these rules so you can start timing immediately — no manual setup required.</p>
           </section>
         </main>
+
+        <footer class="static-footer">
+          <div class="static-footer-inner">
+            <div>
+              <h4>Resources</h4>
+              <ul class="static-footer-links">
+                <li><a href="/toastmasters-timer-role-guide">Timer Role Guide</a></li>
+                <li><a href="/toastmasters-speech-types-and-timing">Speech Types &amp; Timing</a></li>
+                <li><a href="/toastmasters-timing-chart">Timing Chart</a></li>
+                <li><a href="/how-to-use-zoom-for-toastmasters">Zoom for Toastmasters</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4>Legal</h4>
+              <ul class="static-footer-links">
+                <li><a href="/privacy">Privacy Policy</a></li>
+                <li><a href="/terms-of-use">Terms of Use</a></li>
+                <li><a href="/support">Support</a></li>
+                <li><a href="/documentation">Documentation</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4>Get Started</h4>
+              <ul class="static-footer-links">
+                <li><a href="/app">Start Timer</a></li>
+              </ul>
+            </div>
+          </div>
+          <p class="static-footer-copy">&copy; 2026 Toastmasters Timer. Not affiliated with Toastmasters International.</p>
+        </footer>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>
