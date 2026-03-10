@@ -21,6 +21,10 @@
     { "source": "/backgrounds/:path*", "destination": "/zoom/backgrounds/:path*" },
     { "source": "/zoom", "destination": "/zoom/index.html" },
     { "source": "/zoom/:path*", "destination": "/zoom/index.html" },
+    { "source": "/toastmasters-timer-role-guide", "destination": "/toastmasters-timer-role-guide.html" },
+    { "source": "/toastmasters-speech-types-and-timing", "destination": "/toastmasters-speech-types-and-timing.html" },
+    { "source": "/how-to-use-zoom-for-toastmasters", "destination": "/how-to-use-zoom-for-toastmasters.html" },
+    { "source": "/toastmasters-timing-chart", "destination": "/toastmasters-timing-chart.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
