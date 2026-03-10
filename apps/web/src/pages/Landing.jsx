@@ -115,6 +115,7 @@ export default function Landing() {
               onPlay={() => trackEvent('quick_demo_played', { page: 'landing' })}
             />
           </div>
+          <a href="/toastmasters-timer-zoom-demo" className="inline-block mt-3 text-sm text-blue-300 hover:text-blue-200 transition-colors">Watch on dedicated page &rarr;</a>
         </section>
 
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
@@ -126,6 +127,7 @@ export default function Landing() {
               page="landing"
             />
           </div>
+          <a href="/toastmasters-timer-demo" className="inline-block mt-3 text-sm text-blue-300 hover:text-blue-200 transition-colors">Watch on dedicated page &rarr;</a>
         </section>
 
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
@@ -171,6 +173,8 @@ export default function Landing() {
               <li><a href="/toastmasters-speech-types-and-timing" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Speech Types &amp; Timing</a></li>
               <li><a href="/toastmasters-timing-chart" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timing Chart</a></li>
               <li><a href="/how-to-use-zoom-for-toastmasters" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Zoom for Toastmasters</a></li>
+              <li><a href="/toastmasters-timer-demo" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Product Demo</a></li>
+              <li><a href="/toastmasters-timer-zoom-demo" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Zoom Demo</a></li>
             </ul>
           </div>
           <div>

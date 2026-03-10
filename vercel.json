@@ -25,6 +25,8 @@
     { "source": "/toastmasters-speech-types-and-timing", "destination": "/toastmasters-speech-types-and-timing.html" },
     { "source": "/how-to-use-zoom-for-toastmasters", "destination": "/how-to-use-zoom-for-toastmasters.html" },
     { "source": "/toastmasters-timing-chart", "destination": "/toastmasters-timing-chart.html" },
+    { "source": "/toastmasters-timer-demo", "destination": "/toastmasters-timer-demo.html" },
+    { "source": "/toastmasters-timer-zoom-demo", "destination": "/toastmasters-timer-zoom-demo.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
