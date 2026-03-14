@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 
-export default function TimerDisplay({ elapsedTime, status, rules }) {
+export default memo(function TimerDisplay({ elapsedTime, status, rules }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
 
@@ -29,14 +30,14 @@ export default function TimerDisplay({ elapsedTime, status, rules }) {
 
   return (
     <div className={`w-full aspect-square rounded-lg ${bgColor} flex flex-col items-center justify-center shadow-lg transition-colors duration-300`}>
-      <div 
+      <div
         className={`${textColor} text-5xl sm:text-6xl font-mono font-bold mb-4`}
         style={timerTextStyle}
       >
         {formatTime(elapsedTime)}
       </div>
       {phaseText && (
-        <div 
+        <div
           className={`${textColor} text-base sm:text-lg font-medium px-2 text-center`}
           style={phaseTextStyle}
         >
@@ -45,4 +46,4 @@ export default function TimerDisplay({ elapsedTime, status, rules }) {
       )}
     </div>
   );
-}
+});

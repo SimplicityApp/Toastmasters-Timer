@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { useTimer } from '../context/TimerContext';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
-import EditRulesModal from './EditRulesModal';
+const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA } from '../utils/zoomSdk';
@@ -13,10 +13,8 @@ import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
 export default function LiveTab() {
+  const { isRunning, elapsedTime, currentStatus } = useTimerTick();
   const {
-    isRunning,
-    elapsedTime,
-    currentStatus,
     currentSpeaker,
     startTimer,
     stopTimer,
@@ -37,7 +35,7 @@ export default function LiveTab() {
   const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
   const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
-  
+
   // State for "Reveal Face" toggle and video control
   const [isHidden, setIsHidden] = useState(true);
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
@@ -59,14 +57,14 @@ export default function LiveTab() {
   const [debugLogs, setDebugLogs] = useState([]);
   const initializedRef = useRef(false);
   const isLocalNameEdit = useRef(false);
-  
+
   // Save expanded state to localStorage
   const toggleDebugPanel = () => {
     const newState = !debugPanelExpanded;
     setDebugPanelExpanded(newState);
     localStorage.setItem('debugPanelExpanded', String(newState));
   };
-  
+
   // Add log entry
   const addDebugLog = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
@@ -77,7 +75,7 @@ export default function LiveTab() {
       return newLogs.slice(-100);
     });
   };
-  
+
 
   // Initialize currentSpeaker on mount if it's null
   useEffect(() => {
@@ -140,7 +138,7 @@ export default function LiveTab() {
       try {
         const status = getSdkStatus();
         setSdkStatus(status);
-        
+
         // Set error if SDK is not available or key functions are missing
         if (status.lastError) {
           setLastError(status.lastError);
@@ -219,14 +217,14 @@ export default function LiveTab() {
       removeOverlay();
     }
   }, [currentStatus, isHidden, overlayMode]);
-  
+
   // Log when status changes
   useEffect(() => {
     if (currentStatus) {
       addDebugLog(`Timer status changed to: ${currentStatus}`, 'info');
     }
   }, [currentStatus]);
-  
+
   // Clear preview when the timer starts running
   useEffect(() => {
     if (isRunning) setPreviewColor(null);
@@ -266,11 +264,11 @@ export default function LiveTab() {
     });
     // Track role change
     if (previousRole !== role) {
-      trackEvent('speaker_role_changed', {
+      (window.requestIdleCallback || setTimeout)(() => trackEvent('speaker_role_changed', {
         previous_role: previousRole,
         new_role: role,
         speaker_name: speakerName || 'Unnamed'
-      });
+      }));
     }
   };
 
@@ -332,22 +330,18 @@ export default function LiveTab() {
       showToast('Please set timing rules first', 'warning');
       return;
     }
-    
+
     // Always set current speaker before starting timer
-    // setCurrentSpeaker will automatically add rules from roleRules if not provided for non-Custom roles
     setCurrentSpeaker({
       name: speakerName || '',
       role: selectedRole,
       ...(selectedRole === 'Custom' && { rules }),
     });
-    
-    // Note: setCurrentSpeaker is async, but it will add rules automatically via setCurrentSpeakerAction
-    // So we call startTimer, and if currentSpeaker still doesn't have rules, 
-    // the initialization useEffect should have set it up by now
+
     startTimer();
-    
+
     // Track timer started event
-    trackEvent('timer_started', {
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_started', {
       speaker_name: speakerName || 'Unnamed',
       role: selectedRole,
       timing_rules: {
@@ -355,27 +349,27 @@ export default function LiveTab() {
         yellow: rules.yellow,
         red: rules.red
       }
-    });
+    }));
   };
 
   const handleContinue = () => {
     // Continue is the same as start - it resumes the timer
     startTimer();
     // Track timer continued (resumed)
-    trackEvent('timer_continued', {
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_continued', {
       elapsed_time: elapsedTime
-    });
+    }));
   };
 
   const handleStop = () => {
     stopTimer();
     // Track timer stopped
-    trackEvent('timer_stopped', {
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_stopped', {
       elapsed_time: elapsedTime,
       final_status: currentStatus,
       speaker_name: currentSpeaker?.name || 'Unnamed',
       role: currentSpeaker?.role || 'Unknown'
-    });
+    }));
   };
 
   const handleReset = () => {
@@ -384,10 +378,10 @@ export default function LiveTab() {
     resetTimer();
     setSpeakerName('');
     // Track timer reset
-    trackEvent('timer_reset', {
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
       previous_status: previousStatus
-    });
+    }));
   };
 
   const handleFinish = () => {
@@ -413,10 +407,10 @@ export default function LiveTab() {
     const newIsHidden = !isHidden;
     setIsHidden(newIsHidden);
     // Track background toggle
-    trackEvent('background_toggled', {
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('background_toggled', {
       status: newIsHidden ? 'hidden' : 'revealed',
       current_timer_status: currentStatus
-    });
+    }));
   };
 
   const handleModeSwitch = async (newMode) => {
@@ -426,7 +420,7 @@ export default function LiveTab() {
     const imageUrl = getBackgroundUrl(previewColor || currentStatus);
     await setOverlayMode(newMode, isHidden ? imageUrl : null);
     if (newMode === OVERLAY_MODE_CAMERA) setIsHidden(true);
-    trackEvent('overlay_mode_switched', { new_mode: newMode });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('overlay_mode_switched', { new_mode: newMode }));
   };
 
   const handleTurnVideoOn = async () => {
@@ -546,7 +540,7 @@ export default function LiveTab() {
               <ChevronDown className="h-4 w-4 text-gray-600" />
             )}
           </button>
-          
+
           {debugPanelExpanded && (
           <div className="p-3 space-y-2 text-xs">
             {lastError && (
@@ -555,7 +549,7 @@ export default function LiveTab() {
                 <div className="text-red-700">{lastError}</div>
               </div>
             )}
-            
+
             {sdkStatus && (
               <div className="space-y-1">
                 <div className="font-semibold text-gray-700 mb-2">SDK Status:</div>
@@ -591,7 +585,7 @@ export default function LiveTab() {
                     removeVirtualBg: {sdkStatus.hasRemoveVirtualBackground ? 'Yes' : 'No'}
                   </div>
                 </div>
-                
+
                 {sdkStatus.availableMethods && sdkStatus.availableMethods.length > 0 && (
                   <div className="mt-2">
                     <div className="font-semibold text-gray-700 mb-1">Available Methods:</div>
@@ -602,7 +596,7 @@ export default function LiveTab() {
                 )}
               </div>
             )}
-            
+
             <div className="pt-2 border-t border-gray-200">
               <div className="text-gray-600 mb-2">
                 <div>Video State: {videoState === null ? 'Unknown' : videoState ? 'ON' : 'OFF'}</div>
@@ -610,7 +604,7 @@ export default function LiveTab() {
                 <div>Is Hidden: {isHidden ? 'Yes' : 'No'}</div>
                 <div>Overlay Mode: {overlayMode === OVERLAY_MODE_CARD ? 'Timer Card' : 'Timer + Camera'}</div>
               </div>
-              
+
               {/* Debug Logs */}
               <div className="mt-3">
                 <div className="font-semibold text-gray-700 mb-2">Debug Logs ({debugLogs.length}):</div>
@@ -816,10 +810,14 @@ export default function LiveTab() {
         )}
       </div>
 
-      <EditRulesModal
-        isOpen={showEditRulesModal}
-        onClose={() => setShowEditRulesModal(false)}
-      />
+      {showEditRulesModal && (
+        <Suspense fallback={null}>
+          <EditRulesModal
+            isOpen={showEditRulesModal}
+            onClose={() => setShowEditRulesModal(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense, memo } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
-import FeedbackModal, { SURVEY_ID } from './FeedbackModal';
+const FeedbackModal = lazy(() => import('./FeedbackModal'));
+const SURVEY_ID = '019be741-9e6c-0000-ac0f-7d4e14f331f2';
 
-export default function Footer() {
+export default memo(function Footer() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const handleFeedbackClick = () => {
-    trackEvent('feedback_button_clicked');
-    trackEvent('survey shown', { $survey_id: SURVEY_ID });
+    (window.requestIdleCallback || setTimeout)(() => {
+      trackEvent('feedback_button_clicked');
+      trackEvent('survey shown', { $survey_id: SURVEY_ID });
+    });
     setShowFeedbackModal(true);
   };
 
@@ -25,10 +28,14 @@ export default function Footer() {
           <span>Send Us Feedback / Request New Features</span>
         </button>
       </footer>
-      <FeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-      />
+      {showFeedbackModal && (
+        <Suspense fallback={null}>
+          <FeedbackModal
+            isOpen={showFeedbackModal}
+            onClose={() => setShowFeedbackModal(false)}
+          />
+        </Suspense>
+      )}
     </>
   );
-}
+});
