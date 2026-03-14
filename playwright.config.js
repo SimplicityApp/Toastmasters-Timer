@@ -8,18 +8,30 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',
   },
   projects: [
     {
-      name: 'Desktop Chrome',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'web',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3001' },
+      testMatch: /web\..*\.spec\.js/,
+    },
+    {
+      name: 'zoom',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3000' },
+      testMatch: /zoom\..*\.spec\.js/,
     },
   ],
-  webServer: {
-    command: 'npm run dev:web',
-    url: 'http://localhost:3001',
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command: 'npm run dev:web',
+      url: 'http://localhost:3001',
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'npm run dev:zoom',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

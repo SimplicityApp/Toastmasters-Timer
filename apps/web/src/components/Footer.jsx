@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense, memo } from 'react';
 import { ExternalLink, MessageSquare } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
-import FeedbackModal, { SURVEY_ID } from './FeedbackModal';
+const FeedbackModal = lazy(() => import('./FeedbackModal'));
+const SURVEY_ID = '019be741-9e6c-0000-ac0f-7d4e14f331f2';
 
-export default function Footer() {
+export default memo(function Footer() {
   const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT;
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
@@ -32,7 +33,11 @@ export default function Footer() {
           Send Us Feedback
         </button>
       </footer>
-      <FeedbackModal isOpen={showFeedbackModal} onClose={() => setShowFeedbackModal(false)} />
+      {showFeedbackModal && (
+        <Suspense fallback={null}>
+          <FeedbackModal isOpen={showFeedbackModal} onClose={() => setShowFeedbackModal(false)} />
+        </Suspense>
+      )}
     </>
   );
-}
+});

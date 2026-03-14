@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:perf": "playwright test --grep @performance",
     "analyze:web": "ANALYZE=true npm run build --prefix apps/web",
     "analyze:zoom": "ANALYZE=true npm run build --prefix apps/zoom-app"
   },

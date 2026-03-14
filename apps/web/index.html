@@ -134,10 +134,10 @@
       }
     ]
     </script>
-    <link rel="preload" href="/Toastmasters-Timer-cover-page.png" as="image" />
+    <link rel="preload" as="image" href="/Toastmasters-Timer-cover-page.png" />
     <link rel="dns-prefetch" href="https://us.i.posthog.com" />
-    <!-- Static landing styles (replaced by React on mount) -->
-    <link rel="stylesheet" href="/content-pages.css" />
+    <!-- Static landing styles (replaced by React on mount) — non-render-blocking -->
+    <link rel="stylesheet" href="/content-pages.css" media="print" onload="this.media='all'" />
   </head>
   <body>
     <div id="root">
@@ -225,6 +225,11 @@
         </footer>
       </div>
     </div>
+    <script>
+if(location.pathname!=='/'){
+  var r=document.getElementById('root');if(r)r.innerHTML='';
+}
+</script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

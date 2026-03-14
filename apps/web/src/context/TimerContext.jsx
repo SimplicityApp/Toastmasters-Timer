@@ -1,13 +1,28 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
 import { useToast } from './ToastContext';
-
 import { trackEvent } from '../utils/posthog';
 
+// ---------------------------------------------------------------------------
+// TimerTickContext — high-frequency: elapsedTime, currentStatus, isRunning
+// ---------------------------------------------------------------------------
+const TimerTickContext = createContext(null);
+
+export function useTimerTick() {
+  const context = useContext(TimerTickContext);
+  if (!context) {
+    throw new Error('useTimerTick must be used within TimerProvider');
+  }
+  return context;
+}
+
+// ---------------------------------------------------------------------------
+// TimerContext — stable: agenda, reports, roleRules, actions, etc.
+// ---------------------------------------------------------------------------
 const TimerContext = createContext(null);
 
 export function useTimer() {
@@ -18,104 +33,146 @@ export function useTimer() {
   return context;
 }
 
+// ---------------------------------------------------------------------------
+// TimerProvider — wraps both contexts
+// ---------------------------------------------------------------------------
 export function TimerProvider({ children }) {
   const { showToast } = useToast();
 
+  // --- tick state (high-frequency) ---
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentStatus, setCurrentStatus] = useState('blue');
-  const [currentSpeaker, setCurrentSpeaker] = useState(null);
 
-  const [agenda, setAgenda] = useState([]);
+  // --- stable state ---
+  const [currentSpeaker, setCurrentSpeaker] = useState(null);
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
-  const [reports, setReports] = useState([]);
+  // --- lazy localStorage initializers (1f) ---
+  const [agenda, setAgenda] = useState(() => {
+    const saved = loadAgenda();
+    return saved && saved.length > 0 ? saved : [];
+  });
 
-  const [roleRules, setRoleRules] = useState(DEFAULT_ROLE_RULES);
-  const [customRoleOrder, setCustomRoleOrder] = useState([]);
-  const [hiddenBuiltinRoles, setHiddenBuiltinRoles] = useState([]);
+  const [reports, setReports] = useState(() => {
+    const saved = loadReports();
+    return saved && saved.length > 0 ? saved : [];
+  });
 
-  const intervalRef = useRef(null);
-  const previousStatusRef = useRef('blue');
+  const [hiddenBuiltinRoles, setHiddenBuiltinRoles] = useState(() => {
+    const saved = loadHiddenBuiltinRoles();
+    return saved && saved.length > 0 ? saved : [];
+  });
 
-  const BUILT_IN_ORDER = Object.keys(DEFAULT_ROLE_RULES);
-  const visibleBuiltins = BUILT_IN_ORDER.filter((r) => !hiddenBuiltinRoles.includes(r));
-  const customOrder = customRoleOrder.filter((r) => roleRules[r]);
-  const otherCustom = Object.keys(roleRules).filter(
-    (r) => !(r in DEFAULT_ROLE_RULES) && !customOrder.includes(r)
-  );
-  const roleOptions = [...visibleBuiltins, ...customOrder, ...otherCustom];
-
-  useEffect(() => {
-    const savedAgenda = loadAgenda();
-    const savedReports = loadReports();
+  const [roleRules, setRoleRules] = useState(() => {
     const savedRules = loadRoleRules();
-    const savedOrder = loadRoleOrder();
     const savedHidden = loadHiddenBuiltinRoles();
-
-    if (savedAgenda.length > 0) setAgenda(savedAgenda);
-    if (savedReports.length > 0) setReports(savedReports);
-    const merged = savedRules
-      ? { ...DEFAULT_ROLE_RULES, ...savedRules }
-      : { ...DEFAULT_ROLE_RULES };
+    const merged = savedRules ? { ...DEFAULT_ROLE_RULES, ...savedRules } : { ...DEFAULT_ROLE_RULES };
     (savedHidden || []).forEach((r) => delete merged[r]);
-    setRoleRules(merged);
-    if (savedHidden && savedHidden.length > 0) setHiddenBuiltinRoles(savedHidden);
-    if (savedOrder && savedOrder.length > 0) setCustomRoleOrder(savedOrder);
-  }, []);
+    return merged;
+  });
 
-  useEffect(() => {
-    if (agenda.length > 0) saveAgenda(agenda);
-  }, [agenda]);
+  const [customRoleOrder, setCustomRoleOrder] = useState(() => {
+    const saved = loadRoleOrder();
+    return saved && saved.length > 0 ? saved : [];
+  });
 
-  useEffect(() => {
-    if (reports.length > 0) saveReports(reports);
-  }, [reports]);
+  // --- refs ---
+  const rafRef = useRef(null);
+  const previousStatusRef = useRef('blue');
+  const startTimestampRef = useRef(0);
+  const baseElapsedRef = useRef(0);
+  // Keep a ref to currentSpeaker so the rAF callback always sees the latest value
+  // without being re-registered on every speaker change.
+  const currentSpeakerRef = useRef(currentSpeaker);
+  useEffect(() => { currentSpeakerRef.current = currentSpeaker; }, [currentSpeaker]);
 
+  // --- memoized roleOptions (1e) ---
+  const roleOptions = useMemo(() => {
+    const BUILT_IN_ORDER = Object.keys(DEFAULT_ROLE_RULES);
+    const visibleBuiltins = BUILT_IN_ORDER.filter((r) => !hiddenBuiltinRoles.includes(r));
+    const customOrder = customRoleOrder.filter((r) => roleRules[r]);
+    const otherCustom = Object.keys(roleRules).filter(
+      (r) => !(r in DEFAULT_ROLE_RULES) && !customOrder.includes(r)
+    );
+    return [...visibleBuiltins, ...customOrder, ...otherCustom];
+  }, [hiddenBuiltinRoles, customRoleOrder, roleRules]);
+
+  // --- save effects ---
+  useEffect(() => { if (agenda.length > 0) saveAgenda(agenda); }, [agenda]);
+  useEffect(() => { if (reports.length > 0) saveReports(reports); }, [reports]);
+
+  // --- rAF-based timer (1d) ---
   useEffect(() => {
-    if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        setElapsedTime(prev => {
-          const newTime = prev + 0.1;
-          if (currentSpeaker && currentSpeaker.rules) {
-            const newStatus = calculateStatus(newTime, currentSpeaker.rules);
-            setCurrentStatus(newStatus);
-            if (newStatus !== previousStatusRef.current) {
-              setPageBackgroundFromStatus(newStatus);
-              previousStatusRef.current = newStatus;
-            }
-          }
-          return newTime;
-        });
-      }, 100);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+    if (!isRunning) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+        // Persist current elapsed so a future start continues from here
+        baseElapsedRef.current = elapsedTime;
       }
+      return;
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isRunning, currentSpeaker]);
 
+    startTimestampRef.current = Date.now();
+
+    let lastRoundedElapsed = Math.round(elapsedTime * 10) / 10;
+
+    function tick() {
+      const newElapsed = baseElapsedRef.current + (Date.now() - startTimestampRef.current) / 1000;
+      const rounded = Math.round(newElapsed * 10) / 10;
+
+      if (rounded !== lastRoundedElapsed) {
+        lastRoundedElapsed = rounded;
+        setElapsedTime(rounded);
+
+        // --- batch status update (1c) ---
+        const speaker = currentSpeakerRef.current;
+        if (speaker && speaker.rules) {
+          const newStatus = calculateStatus(rounded, speaker.rules);
+          if (newStatus !== previousStatusRef.current) {
+            setCurrentStatus(newStatus);
+            setPageBackgroundFromStatus(newStatus);
+            previousStatusRef.current = newStatus;
+          }
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning]);
+
+  // --- actions ---
   const startTimer = useCallback(() => {
-    if (!currentSpeaker || !currentSpeaker.rules) {
+    if (!currentSpeakerRef.current || !currentSpeakerRef.current.rules) {
       showToast('Please set timing rules first', 'warning');
       return;
     }
-    setIsRunning(true);
-    const initialStatus = calculateStatus(0, currentSpeaker.rules);
+    // baseElapsedRef is already set to current elapsed (from stopTimer or initial 0)
+    const initialStatus = calculateStatus(baseElapsedRef.current, currentSpeakerRef.current.rules);
     setPageBackgroundFromStatus(initialStatus);
     previousStatusRef.current = initialStatus;
-  }, [currentSpeaker, showToast]);
+    setIsRunning(true);
+  }, [showToast]);
 
   const stopTimer = useCallback(() => {
     setIsRunning(false);
+    // baseElapsedRef is updated inside the useEffect cleanup when isRunning flips to false
   }, []);
 
   const resetTimer = useCallback(() => {
     setIsRunning(false);
+    baseElapsedRef.current = 0;
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
@@ -326,19 +383,74 @@ export function TimerProvider({ children }) {
     });
   }, []);
 
-  const value = {
-    isRunning, elapsedTime, currentStatus, currentSpeaker,
-    agenda, activeSpeakerId, reports, roleRules, roleOptions,
-    startTimer, stopTimer, resetTimer, setCurrentSpeaker: setCurrentSpeakerAction, updateSpeakerName,
-    addToAgenda, removeFromAgenda, reorderAgenda, markCompleted, loadSpeakerFromAgenda,
-    importBulkSpeakers, importEasySpeakSpeakers, clearAllAgenda,
-    addReport, finishCurrentSpeech, clearAllReports,
-    updateRoleRules, addRoleRules, removeRoleRules, resetAllRoleRulesToDefaults,
-  };
+  // --- memoized context values (1b) ---
+  const tickValue = useMemo(() => ({
+    elapsedTime,
+    currentStatus,
+    isRunning,
+  }), [elapsedTime, currentStatus, isRunning]);
+
+  const stableValue = useMemo(() => ({
+    currentSpeaker,
+    agenda,
+    activeSpeakerId,
+    reports,
+    roleRules,
+    roleOptions,
+    startTimer,
+    stopTimer,
+    resetTimer,
+    setCurrentSpeaker: setCurrentSpeakerAction,
+    updateSpeakerName,
+    addToAgenda,
+    removeFromAgenda,
+    reorderAgenda,
+    markCompleted,
+    loadSpeakerFromAgenda,
+    importBulkSpeakers,
+    importEasySpeakSpeakers,
+    clearAllAgenda,
+    addReport,
+    finishCurrentSpeech,
+    clearAllReports,
+    updateRoleRules,
+    addRoleRules,
+    removeRoleRules,
+    resetAllRoleRulesToDefaults,
+  }), [
+    currentSpeaker,
+    agenda,
+    activeSpeakerId,
+    reports,
+    roleRules,
+    roleOptions,
+    startTimer,
+    stopTimer,
+    resetTimer,
+    setCurrentSpeakerAction,
+    updateSpeakerName,
+    addToAgenda,
+    removeFromAgenda,
+    reorderAgenda,
+    markCompleted,
+    loadSpeakerFromAgenda,
+    importBulkSpeakers,
+    importEasySpeakSpeakers,
+    clearAllAgenda,
+    addReport,
+    finishCurrentSpeech,
+    clearAllReports,
+    updateRoleRules,
+    addRoleRules,
+    removeRoleRules,
+    resetAllRoleRulesToDefaults,
+  ]);
 
   return (
-    <TimerContext.Provider value={value}>
-      {children}
-    </TimerContext.Provider>
+    <TimerTickContext.Provider value={tickValue}>
+      <TimerContext.Provider value={stableValue}>
+        {children}
+      </TimerContext.Provider>
+    </TimerTickContext.Provider>
   );
 }

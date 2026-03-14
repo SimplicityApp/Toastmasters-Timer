@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { trackEvent } from '../utils/posthog';
 
-export default function NavTabs({ activeTab, onTabChange }) {
+export default memo(function NavTabs({ activeTab, onTabChange }) {
   const tabs = [
     { id: 'live', label: 'LIVE' },
     { id: 'agenda', label: 'AGENDA' },
@@ -29,4 +30,4 @@ export default function NavTabs({ activeTab, onTabChange }) {
       </nav>
     </div>
   );
-}
+});

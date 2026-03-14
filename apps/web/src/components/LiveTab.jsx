@@ -1,20 +1,25 @@
-import { useState, useEffect, useRef } from 'react';
-import { useTimer } from '../context/TimerContext';
+import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
+import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Play, Square, RotateCcw } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
-import EditRulesModal from './EditRulesModal';
+const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
 import { trackEvent } from '../utils/posthog';
 
-export default function LiveTab({ onTimerStart }) {
+const PREVIEW_COLORS = [
+  { color: 'blue', hex: '#1e3a5f' },
+  { color: 'green', hex: '#22c55e' },
+  { color: 'yellow', hex: '#eab308' },
+  { color: 'red', hex: '#dc2626' },
+];
+
+export default memo(function LiveTab({ onTimerStart }) {
+  const { isRunning, elapsedTime, currentStatus } = useTimerTick();
   const {
-    isRunning,
-    elapsedTime,
-    currentStatus,
     currentSpeaker,
     startTimer,
     stopTimer,
@@ -89,7 +94,7 @@ export default function LiveTab({ onTimerStart }) {
     setSelectedRole(role);
     const rules = role === 'Custom' ? customRules : undefined;
     setCurrentSpeaker({ name: speakerName || '', role, ...(rules && { rules }) });
-    trackEvent('speaker_role_changed', { role });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('speaker_role_changed', { role }));
   };
 
   const handleCustomRuleChange = (field, value) => {
@@ -106,10 +111,10 @@ export default function LiveTab({ onTimerStart }) {
     if (secs === 0) return `${mins} minute${mins !== 1 ? 's' : ''}`;
     return `${mins} min ${secs} sec`;
   };
-  const getRoleExplanation = (role) => {
-    const rules = roleRules[role] || DEFAULT_ROLE_RULES[role] || DEFAULT_ROLE_RULES['Standard Speech'];
+  const roleExplanation = useMemo(() => {
+    const rules = roleRules[selectedRole] || DEFAULT_ROLE_RULES[selectedRole] || DEFAULT_ROLE_RULES['Standard Speech'];
     return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
-  };
+  }, [selectedRole, roleRules]);
 
   const handlePreviewColor = (color) => {
     if (color === previewColor) {
@@ -135,20 +140,20 @@ export default function LiveTab({ onTimerStart }) {
     }
     setCurrentSpeaker({ name: speakerName || '', role: selectedRole, ...(selectedRole === 'Custom' && { rules }) });
     startTimer();
-    trackEvent('timer_started', { role: selectedRole, speaker_name: speakerName || '' });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_started', { role: selectedRole, speaker_name: speakerName || '' }));
     onTimerStart?.();
   };
 
   const handleContinue = () => {
     startTimer();
-    trackEvent('timer_continued', { role: selectedRole, elapsed_time: elapsedTime });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_continued', { role: selectedRole, elapsed_time: elapsedTime }));
   };
   const handleStop = () => {
     stopTimer();
-    trackEvent('timer_stopped', { role: selectedRole, elapsed_time: elapsedTime });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_stopped', { role: selectedRole, elapsed_time: elapsedTime }));
   };
   const handleReset = () => {
-    trackEvent('timer_reset', { role: selectedRole, elapsed_time: elapsedTime });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_reset', { role: selectedRole, elapsed_time: elapsedTime }));
     resetTimer();
     setSpeakerName('');
   };
@@ -181,7 +186,7 @@ export default function LiveTab({ onTimerStart }) {
         onSelectSuggestion={handleSelectSuggestion}
       />
       {selectedRole !== 'Custom' && (
-        <p className="text-xs text-gray-500 mt-1">Timing rules: {getRoleExplanation(selectedRole)}</p>
+        <p className="text-xs text-gray-500 mt-1">Timing rules: {roleExplanation}</p>
       )}
       {selectedRole === 'Custom' && (
         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
@@ -206,12 +211,7 @@ export default function LiveTab({ onTimerStart }) {
       {!isRunning && (
         <div className="flex items-center justify-center gap-3">
           <span className="text-xs text-gray-500">Preview:</span>
-          {[
-            { color: 'blue', hex: '#1e3a5f' },
-            { color: 'green', hex: '#22c55e' },
-            { color: 'yellow', hex: '#eab308' },
-            { color: 'red', hex: '#dc2626' },
-          ].map(({ color, hex }) => (
+          {PREVIEW_COLORS.map(({ color, hex }) => (
             <button
               key={color}
               onClick={() => handlePreviewColor(color)}
@@ -264,7 +264,11 @@ export default function LiveTab({ onTimerStart }) {
         )}
       </div>
 
-      <EditRulesModal isOpen={showEditRulesModal} onClose={() => setShowEditRulesModal(false)} />
+      {showEditRulesModal && (
+        <Suspense fallback={null}>
+          <EditRulesModal isOpen={showEditRulesModal} onClose={() => setShowEditRulesModal(false)} />
+        </Suspense>
+      )}
     </div>
   );
-}
+});

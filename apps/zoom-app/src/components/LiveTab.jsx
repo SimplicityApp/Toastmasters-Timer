@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
 import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera } from 'lucide-react';
@@ -12,7 +12,14 @@ import { saveOverlayMode, loadOverlayMode } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
-export default function LiveTab() {
+const PREVIEW_COLORS = [
+  { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
+  { color: 'green', bg: 'bg-green-500', ring: 'ring-green-300', label: 'Green' },
+  { color: 'yellow', bg: 'bg-yellow-500', ring: 'ring-yellow-300', label: 'Yellow' },
+  { color: 'red', bg: 'bg-red-500', ring: 'ring-red-300', label: 'Red' },
+];
+
+export default memo(function LiveTab() {
   const { isRunning, elapsedTime, currentStatus } = useTimerTick();
   const {
     currentSpeaker,
@@ -299,11 +306,10 @@ export default function LiveTab() {
     return `${mins} min ${secs} sec`;
   };
 
-  // Get explanation text for each role
-  const getRoleExplanation = (role) => {
-    const rules = roleRules[role] || DEFAULT_ROLE_RULES[role] || DEFAULT_ROLE_RULES['Standard Speech'];
+  const roleExplanation = useMemo(() => {
+    const rules = roleRules[selectedRole] || DEFAULT_ROLE_RULES[selectedRole] || DEFAULT_ROLE_RULES['Standard Speech'];
     return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
-  };
+  }, [selectedRole, roleRules]);
 
   const handlePreviewColor = async (color) => {
     if (color === previewColor) {
@@ -657,7 +663,7 @@ export default function LiveTab() {
 
       {selectedRole !== 'Custom' && (
         <p className="text-xs text-gray-500 mt-1">
-          Timing rules: {getRoleExplanation(selectedRole)}
+          Timing rules: {roleExplanation}
         </p>
       )}
 
@@ -695,12 +701,7 @@ export default function LiveTab() {
       {!isRunning && (
         <div className="flex items-center justify-center gap-3">
           <span className="text-xs text-gray-500">Preview:</span>
-          {[
-            { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
-            { color: 'green', bg: 'bg-green-500', ring: 'ring-green-300', label: 'Green' },
-            { color: 'yellow', bg: 'bg-yellow-500', ring: 'ring-yellow-300', label: 'Yellow' },
-            { color: 'red', bg: 'bg-red-500', ring: 'ring-red-300', label: 'Red' },
-          ].map(({ color, bg, ring, label }) => (
+          {PREVIEW_COLORS.map(({ color, bg, ring, label }) => (
             <button
               key={color}
               onClick={() => handlePreviewColor(color)}
@@ -820,4 +821,4 @@ export default function LiveTab() {
       )}
     </div>
   );
-}
+});

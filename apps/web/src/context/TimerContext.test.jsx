@@ -1,7 +1,13 @@
 import { renderHook, act } from '@testing-library/react';
 import { ToastProvider } from './ToastContext';
-import { TimerProvider, useTimer } from './TimerContext';
+import { TimerProvider, useTimer, useTimerTick } from './TimerContext';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
+
+// Convenience hook for tests: merges both contexts into one object so all
+// existing test assertions continue to work without modification.
+function useAllTimer() {
+  return { ...useTimer(), ...useTimerTick() };
+}
 
 function wrapper({ children }) {
   return (
@@ -28,7 +34,7 @@ describe('TimerContext', () => {
   // ---------------------------------------------------------------------------
   describe('initial state', () => {
     it('has correct default values', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       expect(result.current.isRunning).toBe(false);
       expect(result.current.elapsedTime).toBe(0);
@@ -42,7 +48,7 @@ describe('TimerContext', () => {
   // ---------------------------------------------------------------------------
   describe('startTimer', () => {
     it('does NOT start when currentSpeaker is null (no rules)', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.startTimer();
@@ -52,7 +58,7 @@ describe('TimerContext', () => {
     });
 
     it('starts when a speaker with rules is set', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -66,7 +72,7 @@ describe('TimerContext', () => {
     });
 
     it('calls setPageBackgroundFromStatus with initial status on start', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -92,7 +98,7 @@ describe('TimerContext', () => {
 
     it('increments elapsedTime by ~1 after 1000ms', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -121,7 +127,7 @@ describe('TimerContext', () => {
 
     it('stops the timer while preserving elapsedTime', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -156,7 +162,7 @@ describe('TimerContext', () => {
 
     it('resets isRunning, elapsedTime, and currentStatus to defaults', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -190,7 +196,7 @@ describe('TimerContext', () => {
 
     it('transitions blue -> green -> yellow -> red at the correct thresholds', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -225,7 +231,7 @@ describe('TimerContext', () => {
   // ---------------------------------------------------------------------------
   describe('updateSpeakerName', () => {
     it('updates only the name of the current speaker', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -246,7 +252,7 @@ describe('TimerContext', () => {
   // ---------------------------------------------------------------------------
   describe('agenda CRUD', () => {
     it('adds a speaker to the agenda with correct shape', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.addToAgenda({ name: 'Alice', role: 'Standard Speech' });
@@ -261,7 +267,7 @@ describe('TimerContext', () => {
     });
 
     it('removes a speaker from the agenda by id', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       let itemId;
       act(() => {
@@ -276,7 +282,7 @@ describe('TimerContext', () => {
     });
 
     it('marks an item as completed', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       let itemId;
       act(() => {
@@ -291,7 +297,7 @@ describe('TimerContext', () => {
     });
 
     it('clears all agenda items', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.addToAgenda({ name: 'Alice', role: 'Standard Speech' });
@@ -311,7 +317,7 @@ describe('TimerContext', () => {
   // ---------------------------------------------------------------------------
   describe('importBulkSpeakers', () => {
     it('imports speakers from newline-separated text and returns count', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       let count;
       act(() => {
@@ -333,7 +339,7 @@ describe('TimerContext', () => {
 
     it('adds a report with color green when finishing in the green zone (35s)', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -359,7 +365,7 @@ describe('TimerContext', () => {
 
     it('adds a report with "Passed red" comment when finishing past the red threshold', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -385,7 +391,7 @@ describe('TimerContext', () => {
 
     it('adds a report with "before green" comment when finishing before green threshold', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -410,7 +416,7 @@ describe('TimerContext', () => {
 
     it('marks report as disqualified when finishing past red + grace (76s)', () => {
       vi.useFakeTimers();
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
@@ -440,7 +446,7 @@ describe('TimerContext', () => {
   // ---------------------------------------------------------------------------
   describe('role rules', () => {
     it('adds a custom role rule', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.addRoleRules('My Custom', { green: 10, yellow: 20, red: 30, graceAfterRed: 10 });
@@ -455,7 +461,7 @@ describe('TimerContext', () => {
     });
 
     it('updates an existing role rule', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.addRoleRules('My Custom', { green: 10, yellow: 20, red: 30, graceAfterRed: 10 });
@@ -474,7 +480,7 @@ describe('TimerContext', () => {
     });
 
     it('removes a builtin role by hiding it (disappears from roleOptions)', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       // Verify Short Roles is visible initially
       expect(result.current.roleOptions).toContain('Short Roles');
@@ -487,7 +493,7 @@ describe('TimerContext', () => {
     });
 
     it('removes a custom role entirely from roleRules', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       act(() => {
         result.current.addRoleRules('My Custom', { green: 10, yellow: 20, red: 30, graceAfterRed: 10 });
@@ -501,7 +507,7 @@ describe('TimerContext', () => {
     });
 
     it('restores all builtin roles after resetAllRoleRulesToDefaults', () => {
-      const { result } = renderHook(() => useTimer(), { wrapper });
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
 
       // Hide a builtin role first
       act(() => {

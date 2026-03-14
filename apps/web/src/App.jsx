@@ -6,9 +6,17 @@ const Landing = lazy(() => import('./pages/Landing'))
 const TimerApp = lazy(() => import('./pages/TimerApp'))
 const OAuthRedirect = lazy(() => import('./pages/OAuthRedirect'))
 
+const deferPreload = window.requestIdleCallback || ((cb) => setTimeout(cb, 2000));
+deferPreload(() => import('./pages/TimerApp'));
+
 function App() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}>
+        <div style={{width:32,height:32,border:'3px solid #e5e7eb',borderTopColor:'#3b82f6',borderRadius:'50%',animation:'spin 0.6s linear infinite'}} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    }>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/app" element={<TimerApp />} />
