@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Copy, Check, Trash2, X } from 'lucide-react';
@@ -17,7 +18,7 @@ function ColorDot({ color }) {
   );
 }
 
-export default function ReportTab() {
+export default memo(function ReportTab() {
   const { reports, clearAllReports } = useTimer();
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -189,18 +190,18 @@ export default function ReportTab() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <p className="text-sm text-gray-600 mb-4">
               Clipboard access is not available. Please manually copy the text below:
             </p>
-            
+
             <textarea
               value={clipboardText}
               readOnly
               className="w-full h-64 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
               onClick={(e) => e.target.select()}
             />
-            
+
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => {
@@ -217,4 +218,4 @@ export default function ReportTab() {
       )}
     </div>
   );
-}
+});

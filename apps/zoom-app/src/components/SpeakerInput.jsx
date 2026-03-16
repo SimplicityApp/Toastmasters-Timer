@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { getZoomParticipants } from '../utils/zoomSdk';
 import { ChevronDown } from 'lucide-react';
 
-export default function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion }) {
+export default memo(function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [participants, setParticipants] = useState([]);
@@ -14,23 +14,23 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
   }, []);
 
   // Filter agenda items (non-completed, with names, not already in participants)
-  const filteredAgendaItems = (agendaItems || []).filter(item =>
+  const filteredAgendaItems = useMemo(() => (agendaItems || []).filter(item =>
     !item.completed && item.name &&
     item.name.toLowerCase().includes((value || '').toLowerCase()) &&
     !participants.some(p => p.name.toLowerCase() === item.name.toLowerCase())
-  );
+  ), [agendaItems, value, participants]);
 
   // Filter participants based on current value
-  const filteredParticipants = (value || '') === ''
+  const filteredParticipants = useMemo(() => (value || '') === ''
     ? participants
     : participants.filter((person) =>
         person.name.toLowerCase().includes(value.toLowerCase())
-      );
+      ), [participants, value]);
 
-  const suggestions = [
+  const suggestions = useMemo(() => [
     ...filteredAgendaItems.map(item => ({ ...item, _fromAgenda: true })),
     ...filteredParticipants.map(person => ({ ...person, _fromAgenda: false })),
-  ];
+  ], [filteredAgendaItems, filteredParticipants]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -195,4 +195,4 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
       </div>
     </div>
   );
-}
+});

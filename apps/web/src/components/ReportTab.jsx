@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Copy, Check, Trash2, X } from 'lucide-react';
@@ -9,7 +10,7 @@ function ColorDot({ color }) {
   return <div className={`w-4 h-4 rounded-full ${colorClasses[color] || 'bg-gray-300'} inline-block mr-2`} />;
 }
 
-export default function ReportTab() {
+export default memo(function ReportTab() {
   const { reports, clearAllReports } = useTimer();
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -101,4 +102,4 @@ export default function ReportTab() {
       )}
     </div>
   );
-}
+});

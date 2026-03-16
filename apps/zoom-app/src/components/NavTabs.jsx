@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { memo } from 'react';
 import { trackEvent } from '../utils/posthog';
 
-export default function NavTabs({ activeTab, onTabChange }) {
+export default memo(function NavTabs({ activeTab, onTabChange }) {
   const tabs = [
     { id: 'live', label: 'LIVE' },
     { id: 'agenda', label: 'AGENDA' },
@@ -9,11 +9,10 @@ export default function NavTabs({ activeTab, onTabChange }) {
   ];
 
   const handleTabChange = (tabId) => {
-    // Track tab navigation
-    trackEvent('tab_viewed', {
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('tab_viewed', {
       tab_name: tabId,
       previous_tab: activeTab
-    });
+    }));
     onTabChange(tabId);
   };
 
@@ -40,4 +39,4 @@ export default function NavTabs({ activeTab, onTabChange }) {
       </nav>
     </div>
   );
-}
+});

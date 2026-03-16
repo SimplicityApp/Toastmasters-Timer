@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
 import { Plus, Upload, X, Edit2, Trash2, GripVertical, Check } from 'lucide-react';
@@ -97,7 +97,7 @@ function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }
   );
 }
 
-export default function AgendaTab({ onSwitchToLive }) {
+export default memo(function AgendaTab({ onSwitchToLive }) {
   const {
     agenda,
     activeSpeakerId,
@@ -607,4 +607,4 @@ export default function AgendaTab({ onSwitchToLive }) {
       />
     </div>
   );
-}
+});

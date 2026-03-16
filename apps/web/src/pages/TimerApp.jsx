@@ -1,18 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { PanelLeftClose, PanelRightOpen, Square } from 'lucide-react'
-import { TimerProvider, useTimer } from '../context/TimerContext'
+import { TimerProvider, useTimer, useTimerTick } from '../context/TimerContext'
 import { resetPageBackground, setPageBackgroundFromStatus } from '../utils/pageBackground'
 import { ToastProvider } from '../context/ToastContext'
 import NavTabs from '../components/NavTabs'
 import LiveTab from '../components/LiveTab'
-import AgendaTab from '../components/AgendaTab'
+const AgendaTab = lazy(() => import('../components/AgendaTab'))
 import ReportTab from '../components/ReportTab'
 import Footer from '../components/Footer'
 import '../App.css'
 
 function MinimizedFloatingButtons({ onRestore }) {
-  const { stopTimer, isRunning } = useTimer()
+  const { isRunning } = useTimerTick()
+  const { stopTimer } = useTimer()
 
   const handleStop = () => {
     stopTimer()
@@ -64,7 +65,7 @@ function TimerAppContent() {
       <NavTabs activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'live' && <LiveTab onTimerStart={() => setPanelMinimized(true)} />}
-        {activeTab === 'agenda' && <AgendaTab onSwitchToLive={() => setActiveTab('live')} />}
+        {activeTab === 'agenda' && <Suspense fallback={null}><AgendaTab onSwitchToLive={() => setActiveTab('live')} /></Suspense>}
         {activeTab === 'report' && <ReportTab />}
       </div>
       <Footer />

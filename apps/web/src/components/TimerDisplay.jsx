@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 
-export default function TimerDisplay({ elapsedTime, status, rules }) {
+export default memo(function TimerDisplay({ elapsedTime, status, rules }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
   const statusColors = { blue: 'bg-blue-500', green: 'bg-green-500', yellow: 'bg-yellow-500', red: 'bg-red-500' };
@@ -21,4 +22,4 @@ export default function TimerDisplay({ elapsedTime, status, rules }) {
       )}
     </div>
   );
-}
+});

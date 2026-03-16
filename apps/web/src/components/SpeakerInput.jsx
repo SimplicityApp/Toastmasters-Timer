@@ -1,15 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { ChevronDown } from 'lucide-react';
 
-export default function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion }) {
+export default memo(function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
 
-  const suggestions = (agendaItems || []).filter(item =>
+  const suggestions = useMemo(() => (agendaItems || []).filter(item =>
     !item.completed && item.name && item.name.toLowerCase().includes((value || '').toLowerCase())
-  );
+  ), [agendaItems, value]);
 
   const isCustomName = value && value.trim() && !suggestions.some(item =>
     item.name.toLowerCase() === value.trim().toLowerCase()
@@ -126,4 +126,4 @@ export default function SpeakerInput({ value, onChange, onRoleChange, selectedRo
       </div>
     </div>
   )
-}
+});
