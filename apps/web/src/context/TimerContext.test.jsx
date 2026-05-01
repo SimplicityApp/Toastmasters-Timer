@@ -153,6 +153,128 @@ describe('TimerContext', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // stopTimer -> startTimer (continue): regression for resume-from-zero bug
+  // ---------------------------------------------------------------------------
+  describe('stopTimer -> startTimer (continue)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('continues from the paused elapsed time on resume', () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
+
+      act(() => {
+        result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
+      });
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      act(() => {
+        result.current.stopTimer();
+      });
+
+      expect(result.current.elapsedTime).toBeCloseTo(5, 0);
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      expect(result.current.elapsedTime).toBeCloseTo(8, 0);
+    });
+
+    it('preserves elapsed time across multiple stop/continue cycles', () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
+
+      act(() => {
+        result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
+      });
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      act(() => {
+        result.current.stopTimer();
+      });
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      act(() => {
+        result.current.stopTimer();
+      });
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
+
+      expect(result.current.elapsedTime).toBeCloseTo(12, 0);
+    });
+
+    it('starts fresh from 0 when reset is called after stop', () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useAllTimer(), { wrapper });
+
+      act(() => {
+        result.current.setCurrentSpeaker(SHORT_ROLES_SPEAKER);
+      });
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      act(() => {
+        result.current.stopTimer();
+      });
+
+      act(() => {
+        result.current.resetTimer();
+      });
+
+      expect(result.current.elapsedTime).toBe(0);
+
+      act(() => {
+        result.current.startTimer();
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(result.current.elapsedTime).toBeCloseTo(2, 0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // resetTimer
   // ---------------------------------------------------------------------------
   describe('resetTimer', () => {
