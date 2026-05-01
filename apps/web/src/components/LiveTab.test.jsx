@@ -126,6 +126,41 @@ describe('LiveTab', () => {
 
       expect(screen.queryByRole('button', { name: /^stop$/i })).not.toBeInTheDocument();
     });
+
+    it('calls onTimerStart prop when CONTINUE is clicked', async () => {
+      const user = userEvent.setup();
+      const onTimerStart = vi.fn();
+      renderWithProviders(<LiveTab onTimerStart={onTimerStart} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /start/i })).toBeInTheDocument();
+      });
+
+      // Start (1st call)
+      await user.click(screen.getByRole('button', { name: /start/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /stop/i })).toBeInTheDocument();
+      });
+
+      // Let the timer tick so CONTINUE appears (not START) after STOP
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      });
+
+      await user.click(screen.getByRole('button', { name: /stop/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+      });
+
+      // Continue (2nd call) — this is the bug regression
+      await user.click(screen.getByRole('button', { name: /continue/i }));
+
+      await waitFor(() => {
+        expect(onTimerStart).toHaveBeenCalledTimes(2);
+      });
+    });
   });
 
   describe('role selection', () => {

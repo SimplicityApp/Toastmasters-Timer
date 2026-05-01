@@ -147,6 +147,7 @@ export default memo(function LiveTab({ onTimerStart }) {
   const handleContinue = () => {
     startTimer();
     (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_continued', { role: selectedRole, elapsed_time: elapsedTime }));
+    onTimerStart?.();
   };
   const handleStop = () => {
     stopTimer();
