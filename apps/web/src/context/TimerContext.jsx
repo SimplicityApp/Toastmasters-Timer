@@ -82,6 +82,7 @@ export function TimerProvider({ children }) {
   const previousStatusRef = useRef('blue');
   const startTimestampRef = useRef(0);
   const baseElapsedRef = useRef(0);
+  const liveElapsedRef = useRef(0);
   // Keep a ref to currentSpeaker so the rAF callback always sees the latest value
   // without being re-registered on every speaker change.
   const currentSpeakerRef = useRef(currentSpeaker);
@@ -104,15 +105,7 @@ export function TimerProvider({ children }) {
 
   // --- rAF-based timer (1d) ---
   useEffect(() => {
-    if (!isRunning) {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-        // Persist current elapsed so a future start continues from here
-        baseElapsedRef.current = elapsedTime;
-      }
-      return;
-    }
+    if (!isRunning) return;
 
     startTimestampRef.current = Date.now();
 
@@ -125,6 +118,7 @@ export function TimerProvider({ children }) {
       if (rounded !== lastRoundedElapsed) {
         lastRoundedElapsed = rounded;
         setElapsedTime(rounded);
+        liveElapsedRef.current = rounded;
 
         // --- batch status update (1c) ---
         const speaker = currentSpeakerRef.current;
@@ -166,13 +160,14 @@ export function TimerProvider({ children }) {
   }, [showToast]);
 
   const stopTimer = useCallback(() => {
+    baseElapsedRef.current = liveElapsedRef.current;
     setIsRunning(false);
-    // baseElapsedRef is updated inside the useEffect cleanup when isRunning flips to false
   }, []);
 
   const resetTimer = useCallback(() => {
     setIsRunning(false);
     baseElapsedRef.current = 0;
+    liveElapsedRef.current = 0;
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
