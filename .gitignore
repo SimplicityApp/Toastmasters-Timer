@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 stats.html
+
+# Playwright test artifacts
+playwright-report/
+test-results/
