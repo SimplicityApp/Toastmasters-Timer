@@ -143,6 +143,19 @@ export function getSdkStatus() {
 }
 
 /**
+ * Convert a drawable source (HTMLImageElement, HTMLCanvasElement, etc.) to ImageData
+ * by drawing it onto an offscreen canvas. Exported for testing.
+ */
+export function imageToImageData(drawable, width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(drawable, 0, 0);
+  return ctx.getImageData(0, 0, width, height);
+}
+
+/**
  * Load image from URL and convert to ImageData (using direct Image() load, works better in Zoom client)
  * @param {string} imageUrl - URL of the image
  * @returns {Promise<ImageData>} ImageData object
@@ -182,15 +195,8 @@ async function loadImageAsImageData(imageUrl) {
       }
       
       try {
-        // Create a canvas to convert image to ImageData
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.scale(-1, 1);
-        ctx.drawImage(img, -img.naturalWidth, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
+        const imageData = imageToImageData(img, img.naturalWidth, img.naturalHeight);
+
         // Cache the ImageData for future use
         imageDataCache.set(imageUrl, imageData);
         
