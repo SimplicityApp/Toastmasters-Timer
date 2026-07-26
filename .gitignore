@@ -28,3 +28,9 @@ stats.html
 # Playwright test artifacts
 playwright-report/
 test-results/
+
+# Cloudflare Workers
+.dev.vars
+.wrangler/
+.vercel
+.env*

@@ -24,10 +24,13 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:perf": "playwright test --grep @performance",
     "analyze:web": "ANALYZE=true npm run build --prefix apps/web",
-    "analyze:zoom": "ANALYZE=true npm run build --prefix apps/zoom-app"
+    "analyze:zoom": "ANALYZE=true npm run build --prefix apps/zoom-app",
+    "cf:dev": "npm run build && wrangler dev",
+    "cf:deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "wrangler": "^4.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

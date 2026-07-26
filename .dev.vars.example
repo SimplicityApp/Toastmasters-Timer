@@ -1,0 +1,7 @@
+# Local secrets for `wrangler dev` — copy to .dev.vars and fill in.
+# .dev.vars is gitignored. In production these are set via `wrangler secret put`.
+
+ZOOM_WEBHOOK_SECRET_TOKEN=
+ZOOM_CLIENT_ID=
+ZOOM_CLIENT_SECRET=
+POSTHOG_API_KEY=
