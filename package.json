@@ -26,7 +26,8 @@
     "analyze:web": "ANALYZE=true npm run build --prefix apps/web",
     "analyze:zoom": "ANALYZE=true npm run build --prefix apps/zoom-app",
     "cf:dev": "npm run build && wrangler dev",
-    "cf:deploy": "npm run build && wrangler deploy"
+    "cf:deploy:dev": "npm run build && wrangler deploy --env dev",
+    "cf:deploy:prod": "npm run build && wrangler deploy"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
