@@ -29,9 +29,34 @@
     // Run the Worker on every request so it can do host-based routing
     // (zoom.<domain> -> /zoom/*), SPA fallback, and attach security headers.
     "run_worker_first": true
+  },
+
+  // ── Production (default env) ──────────────────────────────────────────────
+  // Deploy with: `wrangler deploy`  (Worker: toastmaster-timer)
+  // ⚠️ These custom_domain routes ATTACH the domains on deploy and REPLACE the
+  // existing Vercel CNAMEs — i.e. a plain `wrangler deploy` performs the
+  // production cutover. Use `--env dev` for the canary until you're ready.
+  "routes": [
+    { "pattern": "timer.simple-tech.app", "custom_domain": true },
+    { "pattern": "www.timer.simple-tech.app", "custom_domain": true },
+    { "pattern": "zoom.timer.simple-tech.app", "custom_domain": true }
+  ],
+
+  "env": {
+    // ── Dev / preview ───────────────────────────────────────────────────────
+    // Deploy with: `wrangler deploy --env dev`  (Worker: toastmaster-timer-dev)
+    // Secrets are per-Worker — set them once with `--env dev` (see below).
+    "dev": {
+      "routes": [
+        { "pattern": "timer-dev.simple-tech.app", "custom_domain": true },
+        { "pattern": "www.timer-dev.simple-tech.app", "custom_domain": true },
+        { "pattern": "zoom.timer-dev.simple-tech.app", "custom_domain": true }
+      ]
+    }
   }
 
-  // Secrets are NOT stored here. Set them with `wrangler secret put`:
+  // Secrets are NOT stored here. Set them per environment with `wrangler secret put`:
   //   ZOOM_WEBHOOK_SECRET_TOKEN, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, POSTHOG_API_KEY
+  //   prod: `wrangler secret put NAME`     dev: `wrangler secret put NAME --env dev`
   // For local dev, put them in .dev.vars (see .dev.vars.example).
 }
