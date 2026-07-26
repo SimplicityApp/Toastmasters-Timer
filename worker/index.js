@@ -10,6 +10,16 @@ const ROOT_CSP =
 const ZOOM_CSP =
   "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://appssdk.zoom.us https://*.posthog.com https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://appssdk.zoom.us https://*.zoom.us https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://*.zoom.us;";
 
+// Clean URLs served at the root that map to files living under /zoom/.
+// html_handling can't cross directories (it only appends ".html" at the same
+// path), so these mirror the explicit rewrites from vercel.json.
+const ROOT_TO_ZOOM_REWRITES = {
+  '/privacy': '/zoom/privacy.html',
+  '/support': '/zoom/support.html',
+  '/terms-of-use': '/zoom/terms-of-use.html',
+  '/documentation': '/zoom/documentation.html',
+};
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -52,6 +62,12 @@ async function routeAssets(request, env, url) {
     }
     // Root and any other path -> the Zoom app SPA shell.
     return fetchAsset(env, url, '/zoom/index.html');
+  }
+
+  // --- Root clean URLs that map to /zoom/*.html (mirrors vercel.json) ---
+  const rewrite = ROOT_TO_ZOOM_REWRITES[pathname.replace(/\/$/, '')];
+  if (rewrite) {
+    return fetchAsset(env, url, rewrite);
   }
 
   // --- Direct asset (also resolves clean URLs like /privacy -> /privacy.html) ---
