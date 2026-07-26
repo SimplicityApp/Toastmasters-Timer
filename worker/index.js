@@ -1,0 +1,105 @@
+import { handleZoomWebhook } from './zoom-webhook.js';
+
+// Content-Security-Policy for the marketing + web app (root). Mirrors the
+// "/(.*)" rule from the old vercel.json.
+const ROOT_CSP =
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.posthog.com https://us-assets.i.posthog.com https://www.youtube.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://www.youtube.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
+
+// CSP for the Zoom app. Mirrors the "/zoom/(.*)" rule from vercel.json
+// (allows the Zoom Apps SDK + zoom.us frames/connections).
+const ZOOM_CSP =
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://appssdk.zoom.us https://*.posthog.com https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://appssdk.zoom.us https://*.zoom.us https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://*.zoom.us;";
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const { pathname } = url;
+
+    // 1. Dynamic API route: Zoom webhook (was api/zoom/webhook.js on Vercel).
+    if (pathname === '/api/zoom/webhook') {
+      return handleZoomWebhook(request, env, ctx);
+    }
+
+    // 2. Redirect (was `redirects` in vercel.json): /web -> /app (302).
+    //    Return early — Response.redirect() responses are immutable.
+    if (pathname === '/web') {
+      return Response.redirect(new URL('/app', url.origin).toString(), 302);
+    }
+
+    // 3. Serve the right asset (host-based routing + SPA fallback), then
+    //    attach security headers.
+    const response = await routeAssets(request, env, url);
+    return withSecurityHeaders(response, request, url);
+  },
+};
+
+/**
+ * Resolve a request to a static asset response.
+ *
+ * Handles:
+ *  - host-based routing: zoom.<domain> serves the Zoom app (was middleware.js)
+ *  - direct asset hits (incl. clean URLs via html_handling)
+ *  - SPA fallback for two independent SPAs (web at /, zoom under /zoom)
+ */
+async function routeAssets(request, env, url) {
+  const { pathname } = url;
+  const host = request.headers.get('host') || '';
+
+  // --- Host-based routing: zoom.<domain> -> /zoom/* (mirrors middleware.js) ---
+  if (host.startsWith('zoom.') && !pathname.startsWith('/zoom/')) {
+    if (pathname.startsWith('/assets/') || pathname.startsWith('/backgrounds/')) {
+      return fetchAsset(env, url, '/zoom' + pathname);
+    }
+    // Root and any other path -> the Zoom app SPA shell.
+    return fetchAsset(env, url, '/zoom/index.html');
+  }
+
+  // --- Direct asset (also resolves clean URLs like /privacy -> /privacy.html) ---
+  const assetResponse = await env.ASSETS.fetch(request);
+  if (assetResponse.status !== 404) {
+    return assetResponse;
+  }
+
+  // --- SPA fallback: two separate apps share this Worker ---
+  if (pathname.startsWith('/zoom')) {
+    return fetchAsset(env, url, '/zoom/index.html');
+  }
+  return fetchAsset(env, url, '/index.html');
+}
+
+/** Fetch a specific asset path from the ASSETS binding. */
+function fetchAsset(env, url, assetPath) {
+  return env.ASSETS.fetch(new Request(new URL(assetPath, url.origin), { method: 'GET' }));
+}
+
+/**
+ * Attach security headers (was the `headers` block in vercel.json).
+ *
+ * CSP is chosen by whether we're serving Zoom content — either the zoom
+ * subdomain or a /zoom path — so the Zoom app always gets the SDK-friendly CSP,
+ * even when served at the subdomain root.
+ */
+function withSecurityHeaders(response, request, url) {
+  const host = request.headers.get('host') || '';
+  const isZoom = host.startsWith('zoom.') || url.pathname.startsWith('/zoom');
+
+  const headers = new Headers(response.headers);
+  headers.set('Content-Security-Policy', isZoom ? ZOOM_CSP : ROOT_CSP);
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubdomains');
+
+  // Immutable caching for background images (was /zoom/backgrounds/(.*)).
+  const isBackground =
+    url.pathname.startsWith('/zoom/backgrounds/') ||
+    (host.startsWith('zoom.') && url.pathname.startsWith('/backgrounds/'));
+  if (isBackground) {
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}

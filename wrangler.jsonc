@@ -1,0 +1,37 @@
+{
+  // Cloudflare Workers config — replaces vercel.json.
+  // Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "toastmaster-timer",
+  "main": "worker/index.js",
+
+  // Bump periodically; enables the modern Workers runtime behaviour.
+  "compatibility_date": "2025-09-01",
+  // nodejs_compat gives us node:crypto (HMAC + timingSafeEqual) and Buffer,
+  // which the Zoom webhook signature verification relies on.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": { "enabled": true },
+
+  // Static Assets: serves the combined monorepo build in ./dist.
+  //  - web app (apps/web)        -> served at /
+  //  - zoom app (apps/zoom-app)  -> served at /zoom/
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Auto-serves "/privacy" -> "/privacy.html", etc. Replaces most of the
+    // clean-URL rewrites that lived in vercel.json.
+    "html_handling": "auto-trailing-slash",
+    // We do our own SPA fallback in worker/index.js (two SPAs: root + /zoom),
+    // so a missing asset must surface as a 404 to the Worker rather than being
+    // silently rewritten to a single index.html.
+    "not_found_handling": "none",
+    // Run the Worker on every request so it can do host-based routing
+    // (zoom.<domain> -> /zoom/*), SPA fallback, and attach security headers.
+    "run_worker_first": true
+  }
+
+  // Secrets are NOT stored here. Set them with `wrangler secret put`:
+  //   ZOOM_WEBHOOK_SECRET_TOKEN, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, POSTHOG_API_KEY
+  // For local dev, put them in .dev.vars (see .dev.vars.example).
+}
