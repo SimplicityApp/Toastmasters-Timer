@@ -49,6 +49,7 @@
     "dev": {
       "routes": [
         { "pattern": "timer-dev.simple-tech.app", "custom_domain": true },
+        { "pattern": "www.timer-dev.simple-tech.app", "custom_domain": true },
         { "pattern": "zoom.timer-dev.simple-tech.app", "custom_domain": true }
       ]
     }
