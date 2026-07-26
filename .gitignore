@@ -32,3 +32,5 @@ test-results/
 # Cloudflare Workers
 .dev.vars
 .wrangler/
+.vercel
+.env*
