@@ -4,6 +4,7 @@ vi.mock('../utils/posthog', () => ({
   initPostHog: vi.fn(),
   trackEvent: vi.fn(),
   identifyUser: vi.fn(),
+  setUserProperties: vi.fn(),
   resetUser: vi.fn(),
   getActiveSurveys: vi.fn().mockResolvedValue([]),
   getSurveyById: vi.fn().mockResolvedValue(null),

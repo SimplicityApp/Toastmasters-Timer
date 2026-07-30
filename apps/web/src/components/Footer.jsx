@@ -1,16 +1,38 @@
 import { useState, lazy, Suspense, memo } from 'react';
-import { ExternalLink, MessageSquare } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star } from 'lucide-react';
+import {
+  FEEDBACK_SURVEY_ID,
+  REVIEW_PROMPT,
+  REVIEW_SURVEY_ID,
+  ZOOM_MARKETPLACE_REVIEW_URL,
+  markPromptAnswered,
+} from '@toastmaster-timer/shared';
 import { trackEvent } from '../utils/posthog';
 const FeedbackModal = lazy(() => import('./FeedbackModal'));
-const SURVEY_ID = '019be741-9e6c-0000-ac0f-7d4e14f331f2';
 
 export default memo(function Footer() {
   const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT;
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const handleFeedbackClick = () => {
-    trackEvent('survey_opened', { $survey_id: SURVEY_ID });
+    trackEvent('survey_opened', { $survey_id: FEEDBACK_SURVEY_ID });
     setShowFeedbackModal(true);
+  };
+
+  // Someone who reviews of their own accord should never see the periodic ask.
+  const handleReviewClick = () => {
+    trackEvent('review_prompt_accepted', {
+      destination: 'zoom_marketplace',
+      source: 'footer',
+    });
+    if (REVIEW_SURVEY_ID) {
+      trackEvent('survey sent', {
+        $survey_id: REVIEW_SURVEY_ID,
+        $survey_response: 'opened_zoom_marketplace_review',
+        $survey_response_0: 'opened_zoom_marketplace_review',
+      });
+    }
+    markPromptAnswered(REVIEW_PROMPT);
   };
 
   return (
@@ -32,6 +54,16 @@ export default memo(function Footer() {
           <MessageSquare className="w-4 h-4" />
           Send Us Feedback
         </button>
+        <a
+          href={ZOOM_MARKETPLACE_REVIEW_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleReviewClick}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+        >
+          <Star className="w-4 h-4" />
+          Leave a Review
+        </a>
       </footer>
       {showFeedbackModal && (
         <Suspense fallback={null}>

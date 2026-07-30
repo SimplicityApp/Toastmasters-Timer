@@ -60,10 +60,12 @@ const OVERLAY_CEILING_HEIGHT = 360;
 
 const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
 
-// Reports the camera resolution the SDK recommends matching. Optional: if a
-// client rejects it, config() is retried without it, because losing config()
-// altogether would disable every overlay rather than just this optimization.
-const OPTIONAL_CAPABILITIES = ['onMyMediaChange'];
+// Capabilities the app works fine without: if a client rejects any of them,
+// config() is retried with the required set only, because losing config()
+// altogether would disable every overlay rather than just one nicety.
+//   onMyMediaChange - reports the camera resolution the SDK recommends matching
+//   openUrl         - opens the Marketplace listing in the user's browser
+const OPTIONAL_CAPABILITIES = ['onMyMediaChange', 'openUrl'];
 
 // Overlay mode constants
 export const OVERLAY_MODE_CARD = 'card';
@@ -169,6 +171,37 @@ export async function initializeZoomSdk() {
     log('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)', 'warn');
     log(`SDK initialization error: ${error.message || error.name} (Code: ${error.code || 'N/A'})`, 'warn');
     log('Note: Virtual backgrounds will only work when running inside Zoom client', 'warn');
+    return false;
+  }
+}
+
+/**
+ * Open a link outside the app. The Zoom client webview ignores a plain
+ * target="_blank" anchor, so links have to go through the SDK; window.open is
+ * the fallback for local development and for clients that refused the openUrl
+ * capability.
+ *
+ * @param {string} url - Absolute URL to open
+ * @returns {Promise<boolean>} True if the URL was handed off successfully
+ */
+export async function openExternalUrl(url) {
+  if (sdkAvailable && typeof zoomSdk.openUrl === 'function') {
+    try {
+      await zoomSdk.openUrl({ url });
+      return true;
+    } catch (error) {
+      log(`openUrl failed, falling back to window.open: ${error.message || error.name}`, 'warn');
+    }
+  }
+
+  try {
+    // The Zoom webview usually refuses window.open and returns null, so the
+    // return value is the only way to know the link actually went somewhere.
+    if (window.open(url, '_blank', 'noopener,noreferrer')) return true;
+    log(`window.open was blocked for ${url}`, 'warn');
+    return false;
+  } catch (error) {
+    log(`Failed to open ${url}: ${error.message || error.name}`, 'error');
     return false;
   }
 }

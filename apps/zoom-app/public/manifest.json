@@ -10,11 +10,23 @@
   "capabilities": {
     "virtualBackground": {
       "enabled": true
+    },
+    "videoFilter": {
+      "enabled": true
+    },
+    "shareApp": {
+      "enabled": true
+    },
+    "onMyMediaChange": {
+      "enabled": true
+    },
+    "openUrl": {
+      "enabled": true
     }
   },
   "developer": {
     "name": "Shuhao Zhang",
-    "email": "shuhao.qgg.zhang@gmail.com"
+    "email": "shuhao@starwatchlabs.com"
   },
   "description": "Automates the Timer role in Toastmasters meetings by controlling virtual backgrounds and tracking speech times.",
   "homepage_url": "https://www.timer.simple-tech.app",

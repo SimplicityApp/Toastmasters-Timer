@@ -3,6 +3,7 @@ import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from 
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
+import { recordSpeechFinished } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
 import { useToast } from './ToastContext';
 import { trackEvent } from '../utils/posthog';
@@ -313,6 +314,8 @@ export function TimerProvider({ children }) {
       }
       addReport({ name: currentSpeaker.name, role: currentSpeaker.role, duration: elapsedTime, color: currentStatus, comments: comment, disqualified });
       trackEvent('speech_finished', { speaker_name: currentSpeaker.name || 'Unnamed', role: currentSpeaker.role, duration: elapsedTime, final_status: currentStatus });
+      // Drives the periodic prompt cadence (see PeriodicPrompts).
+      recordSpeechFinished();
       if (activeSpeakerId) markCompleted(activeSpeakerId);
       resetTimer();
       setActiveSpeakerId(null);

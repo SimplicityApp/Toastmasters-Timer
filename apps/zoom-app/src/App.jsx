@@ -3,6 +3,7 @@ import { TimerProvider } from './context/TimerContext';
 import { ToastProvider } from './context/ToastContext';
 import NavTabs from './components/NavTabs';
 import Footer from './components/Footer';
+import PeriodicPrompts from './components/PeriodicPrompts';
 import './App.css';
 
 const LiveTab = lazy(() => import('./components/LiveTab'));
@@ -32,6 +33,7 @@ function App() {
           </Suspense>
 
           <Footer />
+          <PeriodicPrompts />
         </div>
       </TimerProvider>
     </ToastProvider>

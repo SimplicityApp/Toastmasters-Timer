@@ -9,6 +9,7 @@ import LiveTab from '../components/LiveTab'
 const AgendaTab = lazy(() => import('../components/AgendaTab'))
 import ReportTab from '../components/ReportTab'
 import Footer from '../components/Footer'
+import PeriodicPrompts from '../components/PeriodicPrompts'
 import '../App.css'
 
 function MinimizedFloatingButtons({ onRestore }) {
@@ -69,6 +70,9 @@ function TimerAppContent() {
         {activeTab === 'report' && <ReportTab />}
       </div>
       <Footer />
+      {/* Only while the panel is up: minimized means the window may be shared
+          with the meeting, and a modal would land on everyone's screen. */}
+      <PeriodicPrompts />
     </div>
   )
 }
