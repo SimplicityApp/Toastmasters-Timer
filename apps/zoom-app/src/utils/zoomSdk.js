@@ -3,8 +3,12 @@ import zoomSdk from '@zoom/appssdk';
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
 
-// Bump this version when background images are updated to bust CDN/browser cache
-const BACKGROUND_VERSION = '2';
+// Bump this version when background images are updated to bust CDN/browser cache.
+// The files are served with `max-age=31536000, immutable`, so without a bump
+// existing clients keep the old asset for a year.
+// 3: re-exported at 1280x720 (was 2560x1440, which produced a 14.7MB ImageData
+//    against the Zoom SDK's documented 15MB limit).
+const BACKGROUND_VERSION = '3';
 
 // Zoom overlay image filenames (Toastmasters-branded backgrounds)
 const ZOOM_OVERLAY_FILES = {
@@ -14,18 +18,54 @@ const ZOOM_OVERLAY_FILES = {
   red: 'timer-red-background.png',
 };
 
-// Get the base URL for static assets (works in both dev and production)
+/**
+ * Path the app is served under, with leading and trailing slashes. This app is
+ * built with Vite base '/zoom/', so its static files live under that prefix, not
+ * at the origin root — origin + '/backgrounds/...' hits the SPA catch-all rewrite
+ * and returns index.html, which then fails to decode as an image.
+ * Exported for testing.
+ */
+export function getBasePath() {
+  const base = import.meta.env?.BASE_URL || '/';
+  const withLeading = base.startsWith('/') ? base : `/${base}`;
+  return withLeading.endsWith('/') ? withLeading : `${withLeading}/`;
+}
+
+// Get the URL for a background image (works in both dev and production)
 export function getBackgroundUrl(color) {
   const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.blue;
+  const path = `${getBasePath()}backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
 
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
+    return `${window.location.origin}${path}`;
   }
   // Fallback to production URL if window is not available
-  return `${PRODUCTION_BASE_URL}/backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
+  return `${PRODUCTION_BASE_URL}${path}`;
 }
+
+// Every overlay pixel costs 4 bytes of ImageData across the webview -> native
+// bridge, and that transfer is what makes the color change take seconds on slower
+// clients. setVideoFilter documents a 15MB ceiling, which the old 2560x1440 asset
+// nearly hit at 14.7MB. Sizes for reference:
+//   2560x1440 = 14.7MB   1280x720 = 3.7MB   960x540 = 2.1MB   640x360 = 0.9MB
+//
+// Hard upper bound, never exceeded regardless of what the camera reports.
+const MAX_OVERLAY_WIDTH = 1280;
+const MAX_OVERLAY_HEIGHT = 720;
+
+// Used until the camera resolution is known, and if it is never reported. The
+// overlay is a solid color plus a logo, so the conservative size costs nothing
+// visible while halving the bytes of a 720p push.
+const DEFAULT_OVERLAY_WIDTH = 960;
+const DEFAULT_OVERLAY_HEIGHT = 540;
+
+const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
+
+// Reports the camera resolution the SDK recommends matching. Optional: if a
+// client rejects it, config() is retried without it, because losing config()
+// altogether would disable every overlay rather than just this optimization.
+const OPTIONAL_CAPABILITIES = ['onMyMediaChange'];
 
 // Overlay mode constants
 export const OVERLAY_MODE_CARD = 'card';
@@ -42,8 +82,25 @@ let lastError = null;
 // Log callback function - will be set by LiveTab component
 let logCallback = null;
 
-// Cache for pre-loaded ImageData objects
+// Cache of in-flight and resolved ImageData loads, keyed by image URL. Storing
+// the promise (not just the result) means a preload and a concurrent apply share
+// one download + decode instead of each doing the whole job.
 const imageDataCache = new Map();
+
+// The overlay currently pushed to Zoom, or null if none:
+//   { url, mode, budget }
+// budget is the overlay size the pixels were rendered for, or null for a fileUrl
+// push, which carries no pixels and so never goes stale on a resolution change.
+let activeOverlay = null;
+
+// Camera resolution reported by onMyMediaChange, or null until one arrives.
+let cameraResolution = null;
+
+// Monotonic id used to drop overlay requests that a newer one has superseded.
+let overlayRequestId = 0;
+
+// Serializes SDK overlay calls; see enqueueOverlayOp.
+let overlayQueue = Promise.resolve();
 
 /**
  * Set log callback for debug panel
@@ -85,19 +142,28 @@ export async function initializeZoomSdk() {
     // Check if we're in a Zoom environment
     // The SDK will be available when running in Zoom client
     log('Initializing Zoom SDK...', 'info');
-    const configResult = await zoomSdk.config({
-      popoutSize: { width: 400, height: 600 },
-      capabilities: [
-        'shareApp',
-        'videoFilter',
-        'virtualBackground'
-      ],
-      version: '1.0.0'
-    });
+    const baseOptions = { popoutSize: { width: 400, height: 600 }, version: '1.0.0' };
+    let configResult;
+    try {
+      configResult = await zoomSdk.config({
+        ...baseOptions,
+        capabilities: [...REQUIRED_CAPABILITIES, ...OPTIONAL_CAPABILITIES],
+      });
+    } catch (optionalCapabilityError) {
+      log(
+        `Config failed with optional capabilities (${optionalCapabilityError.message || optionalCapabilityError.name}). Retrying with required only.`,
+        'warn'
+      );
+      configResult = await zoomSdk.config({
+        ...baseOptions,
+        capabilities: [...REQUIRED_CAPABILITIES],
+      });
+    }
 
     sdkAvailable = true;
     log(`Zoom SDK initialized successfully. Config: ${JSON.stringify(configResult)}`, 'info');
     log('Video filter capability is available', 'info');
+    subscribeToCameraResolution();
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
@@ -106,6 +172,63 @@ export async function initializeZoomSdk() {
     log(`SDK initialization error: ${error.message || error.name} (Code: ${error.code || 'N/A'})`, 'warn');
     log('Note: Virtual backgrounds will only work when running inside Zoom client', 'warn');
     return false;
+  }
+}
+
+/**
+ * Camera resolution reported by the client, or null if never reported.
+ * @returns {{width: number, height: number}|null}
+ */
+export function getCameraResolution() {
+  return cameraResolution ? { ...cameraResolution } : null;
+}
+
+/**
+ * Track the camera resolution from an onMyMediaChange event and resize the
+ * visible overlay to match. Exported for testing.
+ * @param {Object} event - OnMyMediaChangeEvent
+ */
+export function handleMyMediaChange(event) {
+  const video = event?.media?.video;
+  // A payload may carry only { state } when the camera is toggled, and audio
+  // events carry no video key at all.
+  const width = Number(video?.width);
+  const height = Number(video?.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return;
+  }
+  if (cameraResolution && cameraResolution.width === width && cameraResolution.height === height) {
+    return;
+  }
+
+  cameraResolution = { width, height };
+  log(`Camera resolution reported: ${width}x${height}`, 'info');
+
+  // Anything decoded for the previous resolution is the wrong size now.
+  imageDataCache.clear();
+
+  // Re-push so what participants see matches the new resolution, but only if an
+  // overlay is actually showing. The redundant-push guard compares the budget the
+  // pixels were rendered for, so this is not treated as a duplicate.
+  if (activeOverlay) {
+    applyOverlay(activeOverlay.url);
+  }
+}
+
+/**
+ * Subscribe to camera resolution updates. Failure is non-fatal: the overlay just
+ * stays at the default size.
+ */
+function subscribeToCameraResolution() {
+  if (!zoomSdk || typeof zoomSdk.onMyMediaChange !== 'function') {
+    log('onMyMediaChange unavailable; overlay stays at the default size', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onMyMediaChange(handleMyMediaChange);
+    log('Subscribed to onMyMediaChange for camera resolution', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onMyMediaChange: ${error.message || error.name}`, 'warn');
   }
 }
 
@@ -132,6 +255,13 @@ export function getSdkStatus() {
     hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
     hasRemoveVirtualBackground: zoomSdk && typeof zoomSdk.removeVirtualBackground === 'function',
     overlayMode: currentOverlayMode,
+    // Overlay sizing, so a slow-color-change report can be diagnosed from the
+    // debug panel without a code change.
+    cameraResolution: cameraResolution ? `${cameraResolution.width}x${cameraResolution.height}` : 'unreported',
+    overlayBudget: (() => {
+      const b = getOverlayBudget();
+      return `${b.width}x${b.height}`;
+    })(),
   };
   
   // Get available methods for debugging
@@ -143,34 +273,168 @@ export function getSdkStatus() {
 }
 
 /**
+ * Size to aim the overlay at, before the source image is considered.
+ * Exported for testing.
+ * @returns {{width: number, height: number}}
+ */
+export function getOverlayBudget() {
+  // The SDK recommends matching the camera resolution reported by onMyMediaChange.
+  if (cameraResolution) {
+    return { ...cameraResolution };
+  }
+  return { width: DEFAULT_OVERLAY_WIDTH, height: DEFAULT_OVERLAY_HEIGHT };
+}
+
+/**
+ * Fit a source image inside the overlay budget, preserving aspect ratio.
+ * Never upscales, and never exceeds the hard cap. Exported for testing.
+ * @param {number} naturalWidth
+ * @param {number} naturalHeight
+ * @param {{width: number, height: number}} [budget] - Defaults to getOverlayBudget()
+ * @returns {{width: number, height: number}}
+ */
+export function getOverlayDimensions(naturalWidth, naturalHeight, budget = getOverlayBudget()) {
+  const maxWidth = Math.min(budget.width, MAX_OVERLAY_WIDTH);
+  const maxHeight = Math.min(budget.height, MAX_OVERLAY_HEIGHT);
+  const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
+  return {
+    width: Math.max(1, Math.round(naturalWidth * scale)),
+    height: Math.max(1, Math.round(naturalHeight * scale)),
+  };
+}
+
+/**
  * Convert a drawable source (HTMLImageElement, HTMLCanvasElement, etc.) to ImageData
- * by drawing it onto an offscreen canvas. Exported for testing.
+ * by drawing it onto an offscreen canvas at the requested size. Exported for testing.
  */
 export function imageToImageData(drawable, width, height) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(drawable, 0, 0);
+  ctx.imageSmoothingQuality = 'high';
+  // Pass the destination size so an oversized source is scaled down rather than
+  // cropped. Note that omitting it would draw at natural size.
+  ctx.drawImage(drawable, 0, 0, width, height);
   return ctx.getImageData(0, 0, width, height);
 }
 
 /**
- * Load image from URL and convert to ImageData (using direct Image() load, works better in Zoom client)
+ * Load image from URL and convert to ImageData, sharing one download + decode
+ * across concurrent callers. Exported for testing.
  * @param {string} imageUrl - URL of the image
  * @returns {Promise<ImageData>} ImageData object
  */
-async function loadImageAsImageData(imageUrl) {
-  // Check cache first
-  if (imageDataCache.has(imageUrl)) {
+export function loadImageAsImageData(imageUrl) {
+  const budget = getOverlayBudget();
+  // Keyed by budget as well as URL: the same image decoded for a 640x360 camera
+  // is not reusable once the camera reports 1280x720.
+  const key = `${imageUrl}@${budget.width}x${budget.height}`;
+
+  const cached = imageDataCache.get(key);
+  if (cached) {
     log(`Using cached ImageData for: ${imageUrl}`, 'info');
-    return imageDataCache.get(imageUrl);
+    return cached;
   }
-  
+
+  const pending = decodeImage(imageUrl, budget);
+  imageDataCache.set(key, pending);
+  // Drop failed loads from the cache so a later attempt can retry.
+  pending.catch(() => imageDataCache.delete(key));
+  return pending;
+}
+
+/**
+ * Read width/height from a PNG's IHDR chunk without decoding the pixels.
+ * Returns null if the bytes are not a PNG. Exported for testing.
+ * @param {ArrayBuffer} buffer
+ * @returns {{width: number, height: number}|null}
+ */
+export function readPngSize(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const signature = [0x89, 0x50, 0x4e, 0x47];
+  if (bytes.length < 24 || !signature.every((byte, i) => bytes[i] === byte)) {
+    return null;
+  }
+  const view = new DataView(buffer);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/** Whether this environment can decode straight to a target size. */
+function canDecodeAtTargetSize() {
+  return typeof createImageBitmap === 'function' && typeof fetch === 'function';
+}
+
+/**
+ * Download an image and decode it to ImageData.
+ * @param {string} imageUrl - URL of the image
+ * @param {{width: number, height: number}} budget - Target size to fit within
+ * @returns {Promise<ImageData>} ImageData object
+ */
+function decodeImage(imageUrl, budget) {
   log(`Loading image: ${imageUrl}`, 'info');
-  
-  // In Zoom client, direct Image() load works better than fetch
-  // Use direct Image() load (similar to how UI images work)
+
+  if (canDecodeAtTargetSize()) {
+    return decodeAtTargetSize(imageUrl, budget).catch((error) => {
+      log(`Target-size decode failed (${error.message || error.name}); falling back to Image()`, 'warn');
+      return decodeViaImageElement(imageUrl, budget);
+    });
+  }
+  return decodeViaImageElement(imageUrl, budget);
+}
+
+/**
+ * Decode directly to the target size, so the browser never materializes the
+ * full-resolution bitmap. The source dimensions come from the PNG header rather
+ * than a decode, which keeps the scale aspect-correct even when the camera
+ * reports a different aspect ratio than the asset.
+ * @param {string} imageUrl - URL of the image
+ * @param {{width: number, height: number}} budget - Target size to fit within
+ * @returns {Promise<ImageData>} ImageData object
+ */
+async function decodeAtTargetSize(imageUrl, budget) {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} for ${imageUrl}`);
+  }
+  const buffer = await response.arrayBuffer();
+
+  const natural = readPngSize(buffer);
+  if (!natural) {
+    // Without the header we cannot compute a target size without decoding first,
+    // which is the very thing this path exists to avoid.
+    throw new Error('response is not a PNG');
+  }
+
+  const { width, height } = getOverlayDimensions(natural.width, natural.height, budget);
+  const bitmap = await createImageBitmap(new Blob([buffer]), {
+    resizeWidth: width,
+    resizeHeight: height,
+    resizeQuality: 'high',
+  });
+
+  try {
+    const imageData = imageToImageData(bitmap, width, height);
+    log(
+      `Decoded ${natural.width}x${natural.height} straight to ${width}x${height}, ImageData size: ${imageData.data.length} bytes (cached)`,
+      'info'
+    );
+    return imageData;
+  } finally {
+    // Release the native bitmap rather than waiting for GC.
+    bitmap.close?.();
+  }
+}
+
+/**
+ * Decode via an Image element, then downscale on the canvas. Kept as the fallback
+ * because a direct Image() load has historically behaved better than fetch inside
+ * the Zoom client.
+ * @param {string} imageUrl - URL of the image
+ * @param {{width: number, height: number}} budget - Target size to fit within
+ * @returns {Promise<ImageData>} ImageData object
+ */
+function decodeViaImageElement(imageUrl, budget) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -195,12 +459,10 @@ async function loadImageAsImageData(imageUrl) {
       }
       
       try {
-        const imageData = imageToImageData(img, img.naturalWidth, img.naturalHeight);
+        const { width, height } = getOverlayDimensions(img.naturalWidth, img.naturalHeight, budget);
+        const imageData = imageToImageData(img, width, height);
 
-        // Cache the ImageData for future use
-        imageDataCache.set(imageUrl, imageData);
-        
-        log(`Loaded image: ${img.naturalWidth}x${img.naturalHeight}, ImageData size: ${imageData.data.length} bytes (cached)`, 'info');
+        log(`Loaded image: ${img.naturalWidth}x${img.naturalHeight} -> ${width}x${height}, ImageData size: ${imageData.data.length} bytes (cached)`, 'info');
         resolved = true;
         resolve(imageData);
       } catch (error) {
@@ -232,20 +494,21 @@ async function loadImageAsImageData(imageUrl) {
  */
 export async function preloadBackgroundImages() {
   // Map status colors to Zoom overlay image URLs (timer-*-background.*)
+  // Blue is what the card shows first, so decode it before the others. Loading
+  // all four at once puts three decodes the user is not waiting on ahead of the
+  // one they are.
   const colors = ['blue', 'green', 'yellow', 'red'];
   log('Pre-loading background images...', 'info');
-  
-  const loadPromises = colors.map(async (color) => {
-    const url = getBackgroundUrl(color);
+
+  for (const color of colors) {
     try {
-      await loadImageAsImageData(url);
+      await loadImageAsImageData(getBackgroundUrl(color));
       log(`Pre-loaded ${color} status`, 'info');
     } catch (error) {
       log(`Failed to pre-load ${color} status: ${error.message}`, 'warn');
     }
-  });
-  
-  await Promise.allSettled(loadPromises);
+  }
+
   log(`Pre-loading complete. Cached ${imageDataCache.size} images.`, 'info');
 }
 
@@ -258,14 +521,48 @@ export function getOverlayMode() {
 }
 
 /**
+ * Whether an overlay is currently pushed to Zoom.
+ * @returns {boolean}
+ */
+export function isOverlayActive() {
+  return activeOverlay !== null;
+}
+
+/**
+ * Run an overlay SDK operation, one at a time, dropping any request that a newer
+ * one has already superseded.
+ *
+ * Each push is multiple MB across the webview -> native bridge and takes as long
+ * as it takes. Without this, several pushes run concurrently and can land out of
+ * order, leaving a stale color on screen after a newer one was requested.
+ * @param {Function} op - Async operation to run
+ * @returns {Promise<void>}
+ */
+function enqueueOverlayOp(op) {
+  const requestId = ++overlayRequestId;
+  const run = () => {
+    if (requestId !== overlayRequestId) {
+      log('Skipping overlay request superseded by a newer one', 'info');
+      return undefined;
+    }
+    return op();
+  };
+  // Same handler for both outcomes: one failed op must not stall the queue.
+  overlayQueue = overlayQueue.then(run, run);
+  return overlayQueue;
+}
+
+/**
  * Set overlay mode and reapply overlay if needed
  * @param {string} mode - New overlay mode ('card' or 'camera')
  * @param {string|null} currentImageUrl - Current image URL to reapply, or null to skip reapply
  */
 export async function setOverlayMode(mode, currentImageUrl) {
   if (mode === currentOverlayMode) return;
-  // Remove overlay using the old mode
-  await removeOverlayInternal(currentOverlayMode);
+  // Remove overlay using the old mode, captured now because currentOverlayMode
+  // changes before the queued operation runs.
+  const previousMode = currentOverlayMode;
+  await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
   currentOverlayMode = mode;
   // Reapply with new mode if an image URL is provided
   if (currentImageUrl) {
@@ -282,6 +579,10 @@ async function removeOverlayInternal(mode) {
     log('SDK not initialized yet, initializing now...', 'warn');
     await initializeZoomSdk();
   }
+
+  // Clear this up front: once removal is requested, nothing is considered
+  // applied, even if the removal itself fails because there was no overlay.
+  activeOverlay = null;
 
   try {
     if (sdkAvailable && zoomSdk) {
@@ -321,10 +622,33 @@ async function removeOverlayInternal(mode) {
 }
 
 /**
- * Apply video filter overlay using Zoom SDK
+ * Apply video filter overlay using Zoom SDK. Queued behind any overlay call
+ * already in flight, and dropped if a newer overlay call supersedes it.
+ * @param {string} imageUrl - URL of the image to use as overlay
+ * @returns {Promise<void>}
+ */
+export function applyOverlay(imageUrl) {
+  return enqueueOverlayOp(() => applyOverlayInternal(imageUrl));
+}
+
+/**
+ * Whether what is already on screen matches what we are about to push.
+ * @param {string} imageUrl
+ * @returns {boolean}
+ */
+function isAlreadyShowing(imageUrl) {
+  if (!activeOverlay) return false;
+  if (activeOverlay.url !== imageUrl || activeOverlay.mode !== currentOverlayMode) return false;
+  // A fileUrl push is size-independent, so it is never stale.
+  if (!activeOverlay.budget) return true;
+  const budget = getOverlayBudget();
+  return activeOverlay.budget.width === budget.width && activeOverlay.budget.height === budget.height;
+}
+
+/**
  * @param {string} imageUrl - URL of the image to use as overlay
  */
-export async function applyOverlay(imageUrl) {
+async function applyOverlayInternal(imageUrl) {
   // Ensure SDK is initialized before attempting to set filter
   if (!sdkInitialized) {
     log('SDK not initialized yet, initializing now...', 'warn');
@@ -336,26 +660,54 @@ export async function applyOverlay(imageUrl) {
     return;
   }
 
+  if (isAlreadyShowing(imageUrl)) {
+    log(`Overlay already showing ${imageUrl}, skipping redundant push`, 'info');
+    return;
+  }
+
   try {
     if (sdkAvailable && zoomSdk) {
-      // Load image and convert to ImageData (shared for both modes)
-      log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
-      const imageData = await loadImageAsImageData(imageUrl);
-      log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
-
       if (currentOverlayMode === OVERLAY_MODE_CAMERA) {
         // Camera mode: use setVirtualBackground so user's face shows on top
         if (typeof zoomSdk.setVirtualBackground === 'function') {
+          // setVirtualBackground accepts a fileUrl, which lets the Zoom client
+          // fetch the image itself. That skips both the decode and the multi-MB
+          // ImageData transfer across the bridge. setVideoFilter has no such
+          // option, so this shortcut is camera mode only.
+          try {
+            log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
+            const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
+            log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
+            // No pixels pushed, so no budget to go stale.
+            activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null };
+            lastError = null;
+            return;
+          } catch (fileUrlError) {
+            // The native client may not be able to reach the URL (restricted
+            // network, proxy, TLS inspection). Fall back to shipping the pixels.
+            log(`fileUrl virtual background failed: ${fileUrlError.message || fileUrlError.name}. Falling back to imageData.`, 'warn');
+          }
+
+          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+          const budget = getOverlayBudget();
+          const imageData = await loadImageAsImageData(imageUrl);
+          log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
           const result = await zoomSdk.setVirtualBackground({ imageData });
           log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
+          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
           lastError = null;
           return;
         }
       } else {
         // Card mode: use setVideoFilter (covers entire video)
         if (typeof zoomSdk.setVideoFilter === 'function') {
+          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+          const budget = getOverlayBudget();
+          const imageData = await loadImageAsImageData(imageUrl);
+          log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
           const result = await zoomSdk.setVideoFilter({ imageData });
           log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
+          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
           lastError = null;
           if (result && result.status) {
             log(`Filter set status: ${result.status}`, 'info');
@@ -406,9 +758,11 @@ export async function applyOverlay(imageUrl) {
 
 /**
  * Remove current overlay (dispatches to correct removal based on current mode)
+ * @returns {Promise<void>}
  */
-export async function removeOverlay() {
-  await removeOverlayInternal(currentOverlayMode);
+export function removeOverlay() {
+  const mode = currentOverlayMode;
+  return enqueueOverlayOp(() => removeOverlayInternal(mode));
 }
 
 /**

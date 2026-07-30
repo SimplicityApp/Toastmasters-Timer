@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
-import { applyOverlay, getBackgroundUrl } from '../utils/zoomSdk';
+import { applyOverlay, getBackgroundUrl, isOverlayActive } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
 import { trackEvent } from '../utils/posthog';
@@ -171,7 +171,12 @@ export function TimerProvider({ children }) {
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
-    applyOverlay(getBackgroundUrl('blue'));
+    // Only push blue back if a background is actually showing. resetTimer also
+    // runs on every speaker/role change, and pushing an overlay that nothing is
+    // displaying costs a multi-MB bridge transfer for no visible effect.
+    if (isOverlayActive()) {
+      applyOverlay(getBackgroundUrl('blue'));
+    }
   }, []);
 
   // Lightweight name-only update (no timer reset, no overlay call)
