@@ -50,15 +50,13 @@ export function getBackgroundUrl(color) {
 // nearly hit at 14.7MB. Sizes for reference:
 //   2560x1440 = 14.7MB   1280x720 = 3.7MB   960x540 = 2.1MB   640x360 = 0.9MB
 //
-// Hard upper bound, never exceeded regardless of what the camera reports.
-const MAX_OVERLAY_WIDTH = 1280;
-const MAX_OVERLAY_HEIGHT = 720;
-
-// Used until the camera resolution is known, and if it is never reported. The
-// overlay is a solid color plus a logo, so the conservative size costs nothing
-// visible while halving the bytes of a 720p push.
-const DEFAULT_OVERLAY_WIDTH = 960;
-const DEFAULT_OVERLAY_HEIGHT = 540;
+// The overlay is a flat color plus a logo, so it needs far fewer pixels than a
+// camera feed: the color carries the timing signal and stays exact at any size.
+// 640x360 was picked by rendering the shipped asset through a downscale-then-
+// upscale round trip; it is where the "TOASTMASTERS" wordmark stops being crisp,
+// and below it the logo breaks down. Raising this costs bytes on every push.
+const OVERLAY_CEILING_WIDTH = 640;
+const OVERLAY_CEILING_HEIGHT = 360;
 
 const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
 
@@ -278,24 +276,31 @@ export function getSdkStatus() {
  * @returns {{width: number, height: number}}
  */
 export function getOverlayBudget() {
-  // The SDK recommends matching the camera resolution reported by onMyMediaChange.
+  // The SDK suggests matching the camera resolution, but that advice assumes
+  // camera-like content. For a flat color plus a logo the camera resolution is
+  // only useful as an *upper* bound — never send more pixels than the stream can
+  // display, and never more than the content needs. Treating it as a target
+  // instead would make a 720p camera cost more than sending nothing at all.
   if (cameraResolution) {
-    return { ...cameraResolution };
+    return {
+      width: Math.min(cameraResolution.width, OVERLAY_CEILING_WIDTH),
+      height: Math.min(cameraResolution.height, OVERLAY_CEILING_HEIGHT),
+    };
   }
-  return { width: DEFAULT_OVERLAY_WIDTH, height: DEFAULT_OVERLAY_HEIGHT };
+  return { width: OVERLAY_CEILING_WIDTH, height: OVERLAY_CEILING_HEIGHT };
 }
 
 /**
  * Fit a source image inside the overlay budget, preserving aspect ratio.
- * Never upscales, and never exceeds the hard cap. Exported for testing.
+ * Never upscales, and never exceeds the ceiling. Exported for testing.
  * @param {number} naturalWidth
  * @param {number} naturalHeight
  * @param {{width: number, height: number}} [budget] - Defaults to getOverlayBudget()
  * @returns {{width: number, height: number}}
  */
 export function getOverlayDimensions(naturalWidth, naturalHeight, budget = getOverlayBudget()) {
-  const maxWidth = Math.min(budget.width, MAX_OVERLAY_WIDTH);
-  const maxHeight = Math.min(budget.height, MAX_OVERLAY_HEIGHT);
+  const maxWidth = Math.min(budget.width, OVERLAY_CEILING_WIDTH);
+  const maxHeight = Math.min(budget.height, OVERLAY_CEILING_HEIGHT);
   const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
   return {
     width: Math.max(1, Math.round(naturalWidth * scale)),

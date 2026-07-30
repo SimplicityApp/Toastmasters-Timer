@@ -145,8 +145,8 @@ describe('getOverlayDimensions', () => {
   it('scales an oversized background down to the default budget', async () => {
     const { getOverlayDimensions } = await loadModule();
     // 2560x1440 is 14.7 MB of ImageData across the Zoom bridge, against a
-    // documented 15 MB limit; 960x540 is 2.1 MB for the same visible result.
-    expect(getOverlayDimensions(2560, 1440)).toEqual({ width: 960, height: 540 });
+    // documented 15 MB limit; 640x360 is 0.9 MB for the same visible result.
+    expect(getOverlayDimensions(2560, 1440)).toEqual({ width: 640, height: 360 });
   });
 
   it('never upscales a source that already fits', async () => {
@@ -157,29 +157,29 @@ describe('getOverlayDimensions', () => {
   it('preserves aspect ratio for non-16:9 sources', async () => {
     const { getOverlayDimensions } = await loadModule();
     // Height is the binding constraint here, so width scales by the same factor.
-    expect(getOverlayDimensions(2000, 2000)).toEqual({ width: 540, height: 540 });
+    expect(getOverlayDimensions(2000, 2000)).toEqual({ width: 360, height: 360 });
   });
 
   it('honours a caller-supplied budget', async () => {
     const { getOverlayDimensions } = await loadModule();
-    expect(getOverlayDimensions(1280, 720, { width: 640, height: 360 })).toEqual({
+    expect(getOverlayDimensions(1280, 720, { width: 480, height: 270 })).toEqual({
+      width: 480,
+      height: 270,
+    });
+  });
+
+  it('clamps a budget larger than the ceiling', async () => {
+    const { getOverlayDimensions } = await loadModule();
+    // A camera reporting 4K must not produce a 33 MB push that Zoom would reject.
+    expect(getOverlayDimensions(3840, 2160, { width: 3840, height: 2160 })).toEqual({
       width: 640,
       height: 360,
     });
   });
 
-  it('clamps a budget larger than the hard cap', async () => {
-    const { getOverlayDimensions } = await loadModule();
-    // A camera reporting 4K must not produce a 33 MB push that Zoom would reject.
-    expect(getOverlayDimensions(3840, 2160, { width: 3840, height: 2160 })).toEqual({
-      width: 1280,
-      height: 720,
-    });
-  });
-
-  it('defaults to 960x540, below the hard cap', async () => {
+  it('defaults to the 640x360 ceiling when no camera has reported', async () => {
     const { getOverlayBudget } = await loadModule();
-    expect(getOverlayBudget()).toEqual({ width: 960, height: 540 });
+    expect(getOverlayBudget()).toEqual({ width: 640, height: 360 });
   });
 });
 
@@ -372,10 +372,10 @@ describe('decoding at target size', () => {
 
     const imageData = await loadImageAsImageData('/backgrounds/blue.png');
 
-    // 1280x720 source fitted into the 960x540 default budget, decoded once at
+    // 1280x720 source fitted into the 640x360 default budget, decoded once at
     // that size rather than decoded large and resampled.
-    expect(calls).toEqual([{ resizeWidth: 960, resizeHeight: 540, resizeQuality: 'high' }]);
-    expect(imageData).toMatchObject({ width: 960, height: 540 });
+    expect(calls).toEqual([{ resizeWidth: 640, resizeHeight: 360, resizeQuality: 'high' }]);
+    expect(imageData).toMatchObject({ width: 640, height: 360 });
     expect(loads).toEqual([]); // the Image() path was not used
   });
 
@@ -383,12 +383,12 @@ describe('decoding at target size', () => {
     const { loadImageAsImageData, handleMyMediaChange } = await loadModule();
     const { calls } = stubTargetSizeDecode(fakePngBuffer(1280, 720));
 
-    // 4:3 camera against a 16:9 asset. Naively resizing to 640x480 would stretch
+    // 4:3 camera against a 16:9 asset. Naively resizing to 480x360 would stretch
     // the logo; the fit must stay 16:9.
-    handleMyMediaChange({ media: { video: { width: 640, height: 480 } }, timestamp: 1 });
+    handleMyMediaChange({ media: { video: { width: 480, height: 360 } }, timestamp: 1 });
     await loadImageAsImageData('/backgrounds/blue.png');
 
-    expect(calls[0]).toMatchObject({ resizeWidth: 640, resizeHeight: 360 });
+    expect(calls[0]).toMatchObject({ resizeWidth: 480, resizeHeight: 270 });
   });
 
   it('releases the native bitmap after reading the pixels', async () => {
@@ -425,7 +425,7 @@ describe('decoding at target size', () => {
     // A direct Image() load has historically behaved better inside the Zoom
     // client, so it must remain a working escape hatch.
     expect(loads).toEqual(['/backgrounds/blue.png']);
-    expect(imageData).toMatchObject({ width: 960, height: 540 });
+    expect(imageData).toMatchObject({ width: 640, height: 360 });
   });
 
   it('uses the Image() path when the environment lacks createImageBitmap', async () => {
@@ -436,7 +436,7 @@ describe('decoding at target size', () => {
     const imageData = await loadImageAsImageData('/backgrounds/blue.png');
 
     expect(loads).toEqual(['/backgrounds/blue.png']);
-    expect(imageData).toMatchObject({ width: 960, height: 540 });
+    expect(imageData).toMatchObject({ width: 640, height: 360 });
   });
 });
 
@@ -475,19 +475,26 @@ describe('camera resolution tracking', () => {
   it('sizes the overlay to the reported camera resolution', async () => {
     const { handleMyMediaChange, getOverlayBudget, getOverlayDimensions } = await loadModule();
 
-    handleMyMediaChange({ media: { video: { width: 640, height: 360 } }, timestamp: 1 });
+    handleMyMediaChange({ media: { video: { width: 480, height: 270 } }, timestamp: 1 });
 
-    expect(getOverlayBudget()).toEqual({ width: 640, height: 360 });
-    // 0.9 MB instead of the 2.1 MB default.
-    expect(getOverlayDimensions(1280, 720)).toEqual({ width: 640, height: 360 });
+    expect(getOverlayBudget()).toEqual({ width: 480, height: 270 });
+    // Below the ceiling, so the camera resolution binds: 0.5 MB instead of 0.9 MB.
+    expect(getOverlayDimensions(1280, 720)).toEqual({ width: 480, height: 270 });
   });
 
-  it('caps a camera resolution above the hard limit', async () => {
-    const { handleMyMediaChange, getOverlayDimensions } = await loadModule();
+  it.each([
+    ['720p', 1280, 720],
+    ['1080p', 1920, 1080],
+    ['4K', 3840, 2160],
+  ])('treats a %s camera as an upper bound, not a target', async (_label, width, height) => {
+    const { handleMyMediaChange, getOverlayBudget, getOverlayDimensions } = await loadModule();
 
-    handleMyMediaChange({ media: { video: { width: 3840, height: 2160 } }, timestamp: 1 });
+    handleMyMediaChange({ media: { video: { width, height } }, timestamp: 1 });
 
-    expect(getOverlayDimensions(1280, 720)).toEqual({ width: 1280, height: 720 });
+    // Matching the camera would make a 720p webcam cost 3.7 MB per push, worse
+    // than sending nothing camera-shaped at all. The content sets the ceiling.
+    expect(getOverlayBudget()).toEqual({ width: 640, height: 360 });
+    expect(getOverlayDimensions(1280, 720)).toEqual({ width: 640, height: 360 });
   });
 
   it.each([
@@ -502,7 +509,7 @@ describe('camera resolution tracking', () => {
     expect(() => handleMyMediaChange(event)).not.toThrow();
 
     expect(getCameraResolution()).toBeNull();
-    expect(getOverlayBudget()).toEqual({ width: 960, height: 540 });
+    expect(getOverlayBudget()).toEqual({ width: 640, height: 360 });
   });
 
   it('re-pushes the visible overlay when the resolution changes', async () => {
@@ -513,14 +520,15 @@ describe('camera resolution tracking', () => {
     await applyOverlay('/backgrounds/blue.png');
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
 
-    handleMyMediaChange({ media: { video: { width: 640, height: 360 } }, timestamp: 2 });
+    // Below the ceiling, so this genuinely changes the effective budget.
+    handleMyMediaChange({ media: { video: { width: 480, height: 270 } }, timestamp: 2 });
     await applyOverlay('/backgrounds/blue.png'); // drains the queue
 
-    // Same URL, so this only happens because the re-push bypasses the
-    // redundant-push guard. The new push must carry the new size.
+    // Same URL, so this only happens because the guard compares the budget the
+    // pixels were rendered for. The new push must carry the new size.
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
     const [options] = sdkMock.setVideoFilter.mock.calls[1];
-    expect(options.imageData).toMatchObject({ width: 640, height: 360 });
+    expect(options.imageData).toMatchObject({ width: 480, height: 270 });
   });
 
   it('does not push anything when no overlay is showing', async () => {
@@ -528,7 +536,7 @@ describe('camera resolution tracking', () => {
     await initializeZoomSdk();
     stubImage();
 
-    handleMyMediaChange({ media: { video: { width: 640, height: 360 } }, timestamp: 2 });
+    handleMyMediaChange({ media: { video: { width: 480, height: 270 } }, timestamp: 2 });
     await Promise.resolve();
 
     expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
@@ -540,7 +548,7 @@ describe('camera resolution tracking', () => {
     stubImage();
     await applyOverlay('/backgrounds/blue.png');
 
-    const event = { media: { video: { width: 640, height: 360 } }, timestamp: 2 };
+    const event = { media: { video: { width: 480, height: 270 } }, timestamp: 2 };
     handleMyMediaChange(event);
     handleMyMediaChange(event);
     await applyOverlay('/backgrounds/blue.png');
@@ -600,7 +608,7 @@ describe('applyOverlay in camera mode', () => {
     await applyOverlay('https://zoom.example/backgrounds/blue.png');
     expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
 
-    handleMyMediaChange({ media: { video: { width: 640, height: 360 } }, timestamp: 2 });
+    handleMyMediaChange({ media: { video: { width: 480, height: 270 } }, timestamp: 2 });
     await applyOverlay('https://zoom.example/backgrounds/blue.png');
 
     // Zoom scales the file itself, so resolution has no bearing on this push.

@@ -16,9 +16,10 @@ const OVERLAY_FILES = [
   'timer-red-background.png',
 ];
 
-// Must stay in sync with MAX_OVERLAY_WIDTH / MAX_OVERLAY_HEIGHT in zoomSdk.js.
-// A source larger than this is not a rendering bug, just wasted download and
-// decode: the canvas scales it down before it ever reaches Zoom.
+// The source budget, deliberately larger than OVERLAY_CEILING_* in zoomSdk.js
+// (640x360): the asset is downscaled to the ceiling before it reaches Zoom, and
+// keeping 2x headroom means the ceiling can be raised without re-exporting. A
+// source larger than this is not a rendering bug, just wasted download and decode.
 const MAX_WIDTH = 1280;
 const MAX_HEIGHT = 720;
 
