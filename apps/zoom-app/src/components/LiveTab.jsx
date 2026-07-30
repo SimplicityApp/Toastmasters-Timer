@@ -12,6 +12,17 @@ import { saveOverlayMode, loadOverlayMode } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
+// Always on when running the dev server; in a build it takes an explicit
+// VITE_ENABLE_DEBUG_PANEL=true. Fail-closed on purpose: the old `!== 'false'`
+// test meant an unset variable shipped the panel to production. Resolved at
+// module scope so a production build drops the debug chunk entirely.
+const DEBUG_PANEL_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_PANEL === 'true';
+
+const PromptDebugControls = DEBUG_PANEL_ENABLED
+  ? lazy(() => import('./PromptDebugControls'))
+  : null;
+
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
   { color: 'green', bg: 'bg-green-500', ring: 'ring-green-300', label: 'Green' },
@@ -49,10 +60,6 @@ export default memo(function LiveTab() {
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
   const [overlayMode, setOverlayModeLocal] = useState(() => loadOverlayMode() || OVERLAY_MODE_CARD);
-
-  // Debug panel feature flag - can be disabled via environment variable for production
-  // Set VITE_ENABLE_DEBUG_PANEL=false in production to hide the panel completely
-  const DEBUG_PANEL_ENABLED = import.meta.env.VITE_ENABLE_DEBUG_PANEL !== 'false';
 
   // Debug panel state - collapsed by default, remember user preference in localStorage
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
@@ -610,6 +617,12 @@ export default memo(function LiveTab() {
                 <div>Is Hidden: {isHidden ? 'Yes' : 'No'}</div>
                 <div>Overlay Mode: {overlayMode === OVERLAY_MODE_CARD ? 'Timer Card' : 'Timer + Camera'}</div>
               </div>
+
+              {/* Lazy so the prompt scheduler UI never ships inside the main
+                  chunk of a production build with the panel disabled. */}
+              <Suspense fallback={null}>
+                <PromptDebugControls />
+              </Suspense>
 
               {/* Debug Logs */}
               <div className="mt-3">

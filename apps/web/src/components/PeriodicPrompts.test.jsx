@@ -5,6 +5,7 @@ import PeriodicPrompts from './PeriodicPrompts';
 import {
   CLUB_PROMPT,
   PROMPT_RULES,
+  forcePrompt,
   loadPromptState,
   markPromptAnswered,
   markPromptDeclined,
@@ -68,6 +69,15 @@ describe('PeriodicPrompts', () => {
     act(() => vi.advanceTimersByTime(PAST_DELAY_MS));
 
     expect(screen.queryByLabelText(/club name/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a forced prompt with no usage, no delay and no recorded ask', async () => {
+    renderWithProviders(<PeriodicPrompts />);
+
+    act(() => forcePrompt(CLUB_PROMPT));
+
+    await waitFor(() => expect(screen.getByLabelText(/club name/i)).toBeInTheDocument());
+    expect(loadPromptState().prompts[CLUB_PROMPT].asks).toBe(0);
   });
 
   it('records the answer when the club prompt is submitted', async () => {

@@ -7,6 +7,7 @@ import {
   markPromptDeclined,
   markPromptShown,
   selectDuePrompt,
+  subscribeToForcedPrompt,
   subscribeToPromptState,
 } from '@toastmaster-timer/shared';
 import { useTimerTick } from '../context/TimerContext';
@@ -40,6 +41,16 @@ export default function PeriodicPrompts() {
     () =>
       subscribeToPromptState((state) => {
         setQueued((current) => current ?? selectDuePrompt(state, Date.now(), ENABLED_PROMPTS));
+      }),
+    []
+  );
+
+  // Debug panel only: straight to the screen, no cadence and no delay.
+  useEffect(
+    () =>
+      subscribeToForcedPrompt((prompt) => {
+        setQueued(null);
+        setVisible(prompt);
       }),
     []
   );

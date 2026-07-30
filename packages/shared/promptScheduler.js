@@ -50,12 +50,15 @@ export const RESOLUTION_ANSWERED = 'answered';
 export const RESOLUTION_DECLINED = 'declined';
 
 /**
- * True in dev builds, which are flagged by VITE_ENABLE_DEBUG_PANEL=true (the same
- * switch that shows the Zoom debug panel).
+ * True only where VITE_ENABLE_DEBUG_PANEL is explicitly "true", so the calendar
+ * gates are skipped: waiting 14 or 30 real days for a re-ask makes the cadence
+ * impossible to test by hand. Usage thresholds, the per-prompt ask cap and
+ * answered/declined all still apply.
  *
- * Waiting 14 or 30 real days to see a re-ask makes these prompts untestable, so
- * dev builds skip the time-based gates. Usage thresholds, the per-prompt ask cap
- * and answered/declined all still apply — only the calendar is ignored.
+ * Deliberately not tied to `import.meta.env.DEV` — relaxing the cadence must be
+ * opt-in, never a side effect of an env file going missing. For everyday testing
+ * reach for the debug panel's prompt controls (forcePrompt / resetPromptState)
+ * instead of this flag.
  *
  * @returns {boolean}
  */
@@ -175,13 +178,44 @@ function notify(state) {
 }
 
 /**
- * Subscribe to prompt state changes driven by usage (i.e. speeches finishing).
+ * Subscribe to prompt state changes — a speech finishing, a prompt being shown
+ * or resolved, or the history being cleared.
  * @param {Function} listener - Called with the new state
  * @returns {Function} Unsubscribe function
  */
 export function subscribeToPromptState(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+const forceListeners = new Set();
+
+/**
+ * Subscribe to manual "show this prompt now" requests from the debug panel.
+ * @param {Function} listener - Called with the prompt key to show
+ * @returns {Function} Unsubscribe function
+ */
+export function subscribeToForcedPrompt(listener) {
+  forceListeners.add(listener);
+  return () => forceListeners.delete(listener);
+}
+
+/**
+ * Put a prompt on screen right now, skipping every cadence gate and the polite
+ * delay after a speech. For the debug panel only: it deliberately records no
+ * ask, so forcing a prompt cannot skew the cadence being tested. Answering or
+ * declining a forced prompt still writes the real resolution.
+ *
+ * @param {string} key - CLUB_PROMPT or REVIEW_PROMPT
+ */
+export function forcePrompt(key) {
+  forceListeners.forEach((listener) => {
+    try {
+      listener(key);
+    } catch (error) {
+      console.error('Forced prompt listener failed:', error);
+    }
+  });
 }
 
 /**
@@ -270,6 +304,7 @@ export function markPromptShown(key, now = Date.now()) {
   record.lastAskAtSpeeches = state.speechesFinished;
   state.lastPromptAt = now;
   savePromptState(state);
+  notify(state);
   return state;
 }
 
@@ -278,6 +313,7 @@ function resolve(key, resolution) {
   if (!state.prompts[key]) return state;
   state.prompts[key].resolution = resolution;
   savePromptState(state);
+  notify(state);
   return state;
 }
 

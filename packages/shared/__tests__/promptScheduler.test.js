@@ -5,6 +5,7 @@ import {
   GLOBAL_COOLDOWN_DAYS,
   PROMPT_ORDER,
   PROMPT_RULES,
+  forcePrompt,
   isPromptDebugMode,
   isPromptDue,
   loadPromptState,
@@ -15,6 +16,7 @@ import {
   resetPromptState,
   savePromptState,
   selectDuePrompt,
+  subscribeToForcedPrompt,
   subscribeToPromptState,
 } from '../promptScheduler.js';
 
@@ -247,5 +249,53 @@ describe('stored state', () => {
     expect(loadPromptState().speechesFinished).toBe(0);
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({ speechesFinished: 0 }));
     unsubscribe();
+  });
+
+  it.each([
+    ['markPromptShown', () => markPromptShown(CLUB_PROMPT, NOW)],
+    ['markPromptAnswered', () => markPromptAnswered(CLUB_PROMPT)],
+  ])('%s notifies subscribers, so a debug readout stays live', (_label, mutate) => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToPromptState(listener);
+
+    mutate();
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ prompts: expect.any(Object) })
+    );
+    unsubscribe();
+  });
+});
+
+describe('forcePrompt (debug panel)', () => {
+  it('hands the prompt key to subscribers', () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToForcedPrompt(listener);
+
+    forcePrompt(REVIEW_PROMPT);
+
+    expect(listener).toHaveBeenCalledWith(REVIEW_PROMPT);
+    unsubscribe();
+  });
+
+  // Forcing a prompt is a preview, not an ask — otherwise testing the copy would
+  // burn one of the three asks the cadence allows.
+  it('records nothing, so the cadence is untouched', () => {
+    finishSpeeches(3);
+    forcePrompt(CLUB_PROMPT);
+
+    const state = loadPromptState();
+    expect(state.prompts[CLUB_PROMPT].asks).toBe(0);
+    expect(state.lastPromptAt).toBe(0);
+    expect(isPromptDue(CLUB_PROMPT, state, NOW, STRICT)).toBe(true);
+  });
+
+  it('stops calling a listener once unsubscribed', () => {
+    const listener = vi.fn();
+    subscribeToForcedPrompt(listener)();
+
+    forcePrompt(CLUB_PROMPT);
+
+    expect(listener).not.toHaveBeenCalled();
   });
 });
