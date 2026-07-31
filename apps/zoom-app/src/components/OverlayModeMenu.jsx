@@ -12,10 +12,14 @@ import {
 // which these need: the difference between them is not something an icon conveys.
 //
 // Sharing and popping out used to be modes of their own, which put two nearly
-// identical entries next to each other and forced a choice up front. They are one
-// stage now, with both offered as buttons once you are in it — so they compose,
-// and a screen share is always something the organizer pressed rather than a
-// consequence of picking a mode.
+// identical entries next to each other and forced the choice up front, before the
+// organizer could see what either did. They are one stage now, with both offered
+// as buttons once you are in it: the choice is made where its effect is visible,
+// it can be changed without leaving, and a screen share is always something the
+// organizer pressed rather than a consequence of picking a mode.
+//
+// They are not simultaneous — Zoom refuses to undock an app that is being shared
+// — so the stage hides the window button while a share is running.
 //
 // The stage leads because it leaves the organizer's video alone; the video modes
 // follow for anyone who prefers the color on their own tile.

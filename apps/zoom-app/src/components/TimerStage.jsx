@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 import { getBackgroundUrl } from '../utils/zoomSdk';
+import SpeakerInput from './SpeakerInput';
 
 // Shown underneath the branded PNG, so the color signal is already correct while
 // the image loads and stays correct if it fails to load at all.
@@ -69,6 +70,9 @@ export default memo(function TimerStage({
   isPoppedOut,
   onTogglePopout,
   canPopout,
+  onSpeakerNameChange,
+  agendaItems,
+  onSelectSuggestion,
 }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
@@ -111,64 +115,84 @@ export default memo(function TimerStage({
       <div aria-hidden className="absolute inset-0 pointer-events-none" style={backdropLayer} />
       <div aria-hidden className="absolute inset-0 pointer-events-none" style={artworkLayer} />
 
-      <div className="relative flex items-start justify-between p-4">
-        <div className="min-w-0">
-          {speakerName && (
-            <div className="text-white text-lg font-semibold truncate" style={textShadow}>
-              {speakerName}
-            </div>
-          )}
-          {role && (
-            <div className="text-white/80 text-sm truncate" style={textShadow}>
-              {role}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Sharing reads as on rather than merely available: this is the one
-              control here with an audience, and the organizer should be able to
-              tell at a glance whether the meeting is watching. */}
-          <button
-            onClick={onToggleShare}
-            className={`p-2 rounded-lg transition-colors ${
-              isSharing ? 'bg-white text-blue-700 hover:bg-white/90' : 'bg-black/20 text-white hover:bg-black/30'
-            }`}
-            data-tooltip={isSharing ? 'Stop sharing' : 'Share to meeting'}
-            data-tooltip-direction="down-left"
-            aria-label={isSharing ? 'Stop sharing' : 'Share to meeting'}
-            aria-pressed={isSharing}
-          >
-            {isSharing ? <ScreenShareOff className="h-5 w-5" /> : <ScreenShare className="h-5 w-5" />}
-          </button>
-
-          {/* Desktop only. Hidden rather than disabled where appPopout was not
-              granted: a permanently dead button invites the same click forever. */}
-          {canPopout && (
-            <button
-              onClick={onTogglePopout}
-              className="p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors"
-              data-tooltip={isPoppedOut ? 'Merge back to the main window' : 'Open in its own window'}
-              data-tooltip-direction="down-left"
-              aria-label={isPoppedOut ? 'Merge back to the main window' : 'Open in its own window'}
-              aria-pressed={isPoppedOut}
-            >
-              {isPoppedOut ? (
-                <Minimize2 className="h-5 w-5 text-white" />
-              ) : (
-                <PictureInPicture2 className="h-5 w-5 text-white" />
-              )}
-            </button>
-          )}
-
+      <div className="relative p-4 space-y-2">
+        <div className="flex items-start gap-2">
+          {/* Typeable here, not just on the panel: once the stage is up it covers
+              the panel entirely, and the organizer still has to name each speaker
+              as the meeting moves on. Same field as the panel's, so it offers the
+              same agenda and participant suggestions. */}
+          <div className="min-w-0 flex-1">
+            <SpeakerInput
+              variant="stage"
+              value={speakerName}
+              onChange={onSpeakerNameChange}
+              agendaItems={agendaItems}
+              onSelectSuggestion={onSelectSuggestion}
+            />
+          </div>
           <button
             onClick={onExit}
-            className="p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors"
+            className="p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors flex-shrink-0"
             data-tooltip="Close the timer stage"
             data-tooltip-direction="down-left"
             aria-label="Close the timer stage"
           >
             <X className="h-5 w-5 text-white" />
           </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          {role ? (
+            <span className="text-white/80 text-sm truncate min-w-0" style={textShadow}>
+              {role}
+            </span>
+          ) : (
+            <span />
+          )}
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Labelled, not just an icon with a tooltip: this is the one control
+                here with an audience, and whether the meeting can see the timer is
+                the first thing an organizer needs to know without hovering. It
+                reads as on rather than merely available for the same reason. */}
+            <button
+              onClick={onToggleShare}
+              className={`flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                isSharing ? 'bg-white text-blue-700 hover:bg-white/90' : 'bg-black/25 text-white hover:bg-black/35'
+              }`}
+              aria-label={isSharing ? 'Stop sharing the timer' : 'Screenshare the timer'}
+              aria-pressed={isSharing}
+            >
+              {isSharing ? (
+                <ScreenShareOff className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ScreenShare className="h-4 w-4 flex-shrink-0" />
+              )}
+              {isSharing ? 'Stop sharing' : 'Screenshare'}
+            </button>
+
+            {/* Desktop only, and never while sharing: Zoom refuses to undock an
+                app that is being shared, so offering it would only ever produce
+                an error. Hidden rather than disabled — where appPopout was not
+                granted at all, a permanently dead button invites the same click
+                forever. */}
+            {canPopout && !isSharing && (
+              <button
+                onClick={onTogglePopout}
+                className="p-2 rounded-lg bg-black/25 hover:bg-black/35 transition-colors"
+                data-tooltip={isPoppedOut ? 'Merge back to the main window' : 'Open in its own window'}
+                data-tooltip-direction="down-left"
+                aria-label={isPoppedOut ? 'Merge back to the main window' : 'Open in its own window'}
+                aria-pressed={isPoppedOut}
+              >
+                {isPoppedOut ? (
+                  <Minimize2 className="h-5 w-5 text-white" />
+                ) : (
+                  <PictureInPicture2 className="h-5 w-5 text-white" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

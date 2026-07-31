@@ -337,6 +337,14 @@ export default memo(function LiveTab() {
   const handleSelectSuggestion = (item) => {
     setSpeakerName(item.name);
     setSelectedRole(item.role);
+    // Picking someone off the agenda has to make them the *active* agenda
+    // speaker, not just copy their name across. Without that link the timer has
+    // no idea where in the running order it is: finishing cannot advance to the
+    // next speaker, and the item is never ticked off as done.
+    if (item.id && agenda.some((entry) => entry.id === item.id)) {
+      loadSpeakerFromAgenda(item.id);
+      return;
+    }
     const rules = item.role === 'Custom' ? customRules : undefined;
     setCurrentSpeaker({ name: item.name, role: item.role, ...(rules && { rules }) });
   };
@@ -484,9 +492,12 @@ export default memo(function LiveTab() {
         setSelectedRole(nextSpeaker.role);
         return;
       }
-    } else {
-      setSpeakerName('');
     }
+    // Nobody queued up next — off the agenda entirely, or that was the last one
+    // on it. Clear the field rather than leaving the speaker who just finished
+    // sitting there, which reads as though nothing happened. On the stage this is
+    // all the organizer sees, so a stale name is the whole display being wrong.
+    setSpeakerName('');
   };
 
   /**
@@ -647,6 +658,9 @@ export default memo(function LiveTab() {
           isPoppedOut={isPoppedOut}
           onTogglePopout={handleTogglePopout}
           canPopout={canPopout}
+          onSpeakerNameChange={handleSpeakerChange}
+          agendaItems={agenda}
+          onSelectSuggestion={handleSelectSuggestion}
         />
       )}
 

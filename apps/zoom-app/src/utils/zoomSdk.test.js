@@ -697,18 +697,20 @@ describe('stage modes (share and popout)', () => {
     expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
   });
 
-  it('shares and pops out independently, so the two compose', async () => {
+  it('keeps the share when a popout is refused mid-share', async () => {
     const { initializeZoomSdk, setOverlayMode, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, OVERLAY_MODE_STAGE } =
       await loadModule();
     await initializeZoomSdk();
     await setOverlayMode(OVERLAY_MODE_STAGE, null);
-
-    await setAppPopout(true);
     await setAppShare(true);
+    // Zoom will not undock an app that is being shared. The stage hides the
+    // button while sharing for that reason; this covers the request arriving
+    // anyway, and the share surviving it.
+    sdkMock.appPopout.mockRejectedValueOnce(Object.assign(new Error('cannot popout'), { code: 10247 }));
 
-    // Neither cancels the other: a timer on a second monitor can still be the
-    // thing the meeting is watching.
-    expect(isAppPoppedOut()).toBe(true);
+    expect(await setAppPopout(true)).toBe(false);
+
+    expect(isAppPoppedOut()).toBe(false);
     expect(isAppShareActive()).toBe(true);
   });
 
