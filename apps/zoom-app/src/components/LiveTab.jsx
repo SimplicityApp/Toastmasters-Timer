@@ -115,6 +115,13 @@ export default memo(function LiveTab() {
   const initializedRef = useRef(false);
   const isLocalNameEdit = useRef(false);
 
+  // Nothing to report: connected, and this client offers every API we call.
+  const sdkHealthy =
+    sdkStatus?.initialized &&
+    sdkStatus?.available &&
+    sdkStatus?.sdkExists &&
+    sdkStatus?.missingApis?.length === 0;
+
   // Save expanded state to localStorage
   const toggleDebugPanel = () => {
     const newState = !debugPanelExpanded;
@@ -706,38 +713,45 @@ export default memo(function LiveTab() {
             {sdkStatus && (
               <div className="space-y-1">
                 <div className="font-semibold text-gray-700 mb-2">SDK Status:</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className={`px-2 py-1 rounded ${sdkStatus.initialized ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    Initialized: {sdkStatus.initialized ? 'Yes' : 'No'}
+                {/* Only what is wrong. A wall of green "Yes" rows takes the eye
+                    the same effort to scan as one problem hiding among them. */}
+                {sdkHealthy ? (
+                  <div className="px-2 py-1 rounded bg-green-100 text-green-800">
+                    SDK ready — all {sdkStatus.apiCount} APIs available
                   </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    Available: {sdkStatus.available ? 'Yes' : 'No'}
+                ) : (
+                  <div className="space-y-1">
+                    {!sdkStatus.sdkExists && (
+                      <div className="px-2 py-1 rounded bg-red-100 text-red-800">
+                        SDK Exists: No — not running inside a Zoom client
+                      </div>
+                    )}
+                    {sdkStatus.sdkExists && !sdkStatus.initialized && (
+                      <div className="px-2 py-1 rounded bg-red-100 text-red-800">Initialized: No</div>
+                    )}
+                    {sdkStatus.sdkExists && !sdkStatus.available && (
+                      <div className="px-2 py-1 rounded bg-red-100 text-red-800">
+                        Available: No — config() was refused
+                      </div>
+                    )}
+                    {sdkStatus.missingApis?.length > 0 && (
+                      <>
+                        <div className="text-gray-600">
+                          {sdkStatus.apiCount - sdkStatus.missingApis.length}/{sdkStatus.apiCount} APIs
+                          available. Missing:
+                        </div>
+                        {sdkStatus.missingApis.map((api) => (
+                          <div
+                            key={api.name}
+                            className={`px-2 py-1 rounded ${api.required ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}
+                          >
+                            {api.name} — {api.purpose}
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.sdkExists ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    SDK Exists: {sdkStatus.sdkExists ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    setVideoFilter: {sdkStatus.hasSetVideoFilter ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasDeleteVideoFilter ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    deleteVideoFilter: {sdkStatus.hasDeleteVideoFilter ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasGetUserContext ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    getUserContext: {sdkStatus.hasGetUserContext ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasGetVideoState ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    getVideoState: {sdkStatus.hasGetVideoState ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVideoState ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    setVideoState: {sdkStatus.hasSetVideoState ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasSetVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    setVirtualBg: {sdkStatus.hasSetVirtualBackground ? 'Yes' : 'No'}
-                  </div>
-                  <div className={`px-2 py-1 rounded ${sdkStatus.hasRemoveVirtualBackground ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    removeVirtualBg: {sdkStatus.hasRemoveVirtualBackground ? 'Yes' : 'No'}
-                  </div>
-                </div>
+                )}
 
                 {sdkStatus.availableMethods && sdkStatus.availableMethods.length > 0 && (
                   <div className="mt-2">

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// The module's own source, so the API list can be checked against the calls it
+// actually makes rather than against a second hand-kept list.
+import zoomSdkSource from './zoomSdk.js?raw';
 
 // The Zoom Apps SDK touches browser globals at import time and deadlocks under
 // vitest + jsdom, so stub it out. hoisted() keeps the fake reachable from the
@@ -922,6 +925,43 @@ describe('entering a stage mode leaves the camera untouched', () => {
 
     expect(accepted).toBe(true);
     expect(isAppShareActive()).toBe(true);
+  });
+});
+
+describe('the debug panel reports on every API the app uses', () => {
+  it('covers every zoomSdk call in the module', async () => {
+    const called = new Set(
+      [...zoomSdkSource.matchAll(/zoomSdk\.([a-zA-Z]+)\s*(?:\(|\?\.\()/g)].map(([, name]) => name)
+    );
+    const { USED_SDK_APIS } = await loadModule();
+    const declared = new Set(USED_SDK_APIS.map((api) => api.name));
+
+    // A method called but not declared is one the panel stays silent about, so a
+    // client missing it reads as all-green. Add it to USED_SDK_APIS.
+    expect([...called].filter((name) => !declared.has(name))).toEqual([]);
+    // And the reverse, so the list does not accumulate APIs we stopped calling.
+    expect([...declared].filter((name) => !called.has(name))).toEqual([]);
+  });
+
+  it('reports what a bare-bones client is missing, with a reason', async () => {
+    const { getMissingSdkApis, USED_SDK_APIS } = await loadModule();
+    // Nothing configured yet: every API reads as missing, each with its purpose.
+    const missing = getMissingSdkApis();
+    expect(missing.length).toBeGreaterThan(0);
+    missing.forEach((api) => {
+      expect(api.purpose).toBeTruthy();
+      expect(typeof api.required).toBe('boolean');
+    });
+    expect(missing.length).toBeLessThanOrEqual(USED_SDK_APIS.length);
+  });
+
+  it('lists nothing once the client offers everything', async () => {
+    const { getMissingSdkApis, USED_SDK_APIS } = await loadModule();
+    USED_SDK_APIS.forEach((api) => {
+      if (typeof sdkMock[api.name] !== 'function') sdkMock[api.name] = vi.fn();
+    });
+
+    expect(getMissingSdkApis()).toEqual([]);
   });
 });
 

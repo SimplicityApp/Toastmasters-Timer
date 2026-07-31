@@ -539,22 +539,55 @@ export function isSdkAvailable() {
 }
 
 /**
+ * Every SDK method the app calls, and what stops working without it.
+ *
+ * One list, so the debug panel reports on what the code actually uses instead of
+ * a hand-kept subset. The panel used to show eight of these and stay silent about
+ * the rest, which meant a client missing appPopout or openUrl — the two most
+ * likely to be missing, since both are desktop-only — read as all-green.
+ *
+ * `required` marks the ones the timer cannot do its job without; the rest degrade
+ * a single feature. Keep this in step with the zoomSdk.* calls below.
+ */
+export const USED_SDK_APIS = [
+  { name: 'config', required: true, purpose: 'Grants every capability below' },
+  { name: 'setVideoFilter', required: true, purpose: 'Timer Card' },
+  { name: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Card' },
+  { name: 'setVirtualBackground', required: true, purpose: 'Timer + Camera' },
+  { name: 'removeVirtualBackground', required: true, purpose: 'Clearing Timer + Camera' },
+  { name: 'getVideoState', required: false, purpose: 'Video-off warning' },
+  { name: 'setVideoState', required: false, purpose: 'Turn my video on' },
+  { name: 'getParticipants', required: false, purpose: 'Speaker suggestions' },
+  { name: 'shareApp', required: false, purpose: 'Share Timer mode' },
+  { name: 'appPopout', required: false, purpose: 'Timer Window mode' },
+  { name: 'onAppPopout', required: false, purpose: 'Following Zoom\'s own popout menu' },
+  { name: 'onAppVisibilityChange', required: false, purpose: 'Noticing background changes' },
+  { name: 'onMyMediaChange', required: false, purpose: 'Overlay sizing' },
+  { name: 'openUrl', required: false, purpose: 'Marketplace review link' },
+];
+
+/**
+ * Which of the APIs the app uses this client does not offer.
+ * @returns {Array<{name: string, required: boolean, purpose: string}>}
+ */
+export function getMissingSdkApis() {
+  if (!zoomSdk) return USED_SDK_APIS;
+  return USED_SDK_APIS.filter((api) => typeof zoomSdk[api.name] !== 'function');
+}
+
+/**
  * Get SDK status for debugging
  */
 export function getSdkStatus() {
+  const missingApis = getMissingSdkApis();
   const status = {
     initialized: sdkInitialized,
     available: sdkAvailable,
     sdkExists: typeof zoomSdk !== 'undefined',
+    apiCount: USED_SDK_APIS.length,
+    missingApis,
+    // Kept because the video-off banner branches on it by name.
     hasSetVideoFilter: zoomSdk && typeof zoomSdk.setVideoFilter === 'function',
-    hasDeleteVideoFilter: zoomSdk && typeof zoomSdk.deleteVideoFilter === 'function',
-    hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
-    hasGetVideoState: zoomSdk && typeof zoomSdk.getVideoState === 'function',
-    hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
-    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
-    hasRemoveVirtualBackground: zoomSdk && typeof zoomSdk.removeVirtualBackground === 'function',
-    hasShareApp: zoomSdk && typeof zoomSdk.shareApp === 'function',
-    hasAppPopout: zoomSdk && typeof zoomSdk.appPopout === 'function',
     overlayMode: currentOverlayMode,
     appShareActive,
     appPoppedOut,
