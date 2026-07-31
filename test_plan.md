@@ -129,17 +129,20 @@ This app uses the **Zoom Apps SDK** with the following capabilities:
 3. Click START
 4. **Expected Result:** Overlay colors change at 5s (green), 10s (yellow), and 15s (red)
 
-### Step 7: Test Reveal Face Toggle
+### Step 7: Test Clear My Video
 
-1. While the timer is running, click the "Eye" icon in the top-right corner
+1. While the timer is running, click the eraser icon in the top-right corner
 2. **Expected Result:**
-   - The video filter overlay is removed
-   - Your face is revealed in the video
-   - The icon changes to "Eye with slash"
-3. Click the icon again
-4. **Expected Result:**
-   - The video filter overlay is reapplied
-   - The correct color overlay (based on current time) is shown
+   - The video filter and any virtual background the app applied are removed
+   - Your camera is left as Zoom had it, with your own background
+   - A "Cleared the timer from your video" confirmation appears
+3. Wait for the next color change (or click a preview swatch)
+4. **Expected Result:** The timer resumes driving the overlay normally — clearing
+   is a one-off cleanup, not a mode
+
+**Note:** Between speeches the app now hands the video back on its own. Turn off
+"Show my face between speeches" in the display-mode menu to keep the color up for
+the whole meeting instead.
 
 ### Step 8: Test Timer Controls
 
@@ -243,7 +246,7 @@ This app uses the **Zoom Apps SDK** with the following capabilities:
 |---------|-------------|---------------|
 | Timer Display | Real-time countdown/countup timer | None (client-side) |
 | Video Overlay | Colored overlays (grey/green/yellow/red) based on timing | `setVideoFilter`, `deleteVideoFilter` |
-| Reveal Face | Temporarily remove overlay to show face | `deleteVideoFilter` |
+| Clear My Video | Remove every filter and background the app applied | `deleteVideoFilter`, `removeVirtualBackground` |
 | Video State Check | Detect if video is on/off | `getVideoState` |
 | Turn Video On | Turn on user's video | `setVideoState` |
 | Speaker Management | Add, edit, delete, reorder speakers | None (local storage) |

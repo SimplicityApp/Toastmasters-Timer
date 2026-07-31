@@ -81,14 +81,12 @@ export const OVERLAY_MODE_CARD = 'card';
 export const OVERLAY_MODE_CAMERA = 'camera';
 export const OVERLAY_MODE_SHARE = 'share';
 export const OVERLAY_MODE_POPOUT = 'popout';
-// What the Live tab starts in when nothing is saved. Timer Window is the pick
-// because it is the only mode that puts a full-size timer on its own screen
-// while leaving the organizer's camera and background completely alone.
-//
-// Note this is the *UI's* default, not this module's starting state, which stays
-// on card: setOverlayMode compares against currentOverlayMode, so the module has
-// to begin somewhere inert for the transition into popout to actually happen.
-export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_POPOUT;
+// What the Live tab starts in when nothing is saved. Timer Card is the pick
+// because it is the only mode that changes nothing about the meeting on its own:
+// opening the app neither undocks a window nor starts a share, and the panel and
+// its tabs stay in front of the organizer. The stage modes are a deliberate
+// choice the organizer makes from the menu, never where they land.
+export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_CARD;
 
 let currentOverlayMode = OVERLAY_MODE_CARD;
 
@@ -828,6 +826,68 @@ export async function setOverlayMode(mode, currentImageUrl) {
 }
 
 /**
+ * Clear both video pipelines, whatever we believe is on them.
+ *
+ * Two callers, same requirement. Entering a stage mode must leave the user's
+ * video completely untouched — that is the whole promise of share and popout:
+ * your own face, your own background. And the "Clear my video" button is the
+ * organizer's way out when something of ours is stuck on their tile.
+ *
+ * Removing only what the current mode is thought to have applied is not enough,
+ * because that belief can be wrong: a removal may have failed earlier, a push may
+ * have been dropped as superseded, or the client may have restored a background
+ * it had saved. So both are cleared, and a "nothing to remove" error is expected
+ * rather than exceptional.
+ *
+ * Bypasses the overlay queue for the same reason teardownStageMode does.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.force] - Try removeVirtualBackground even when no
+ *   background of ours is on record. That call always costs the user a
+ *   confirmation dialog, so it is skipped by default; the "Clear my video"
+ *   button passes this because the user asking is the whole point, and because
+ *   the reason they are asking is usually that our record has gone stale.
+ * @returns {Promise<boolean>} False if any clear attempt failed for a reason
+ *   other than "nothing was applied"
+ */
+export async function clearVideoPipelines({ force = false } = {}) {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+  activeOverlay = null;
+
+  if (!sdkAvailable || !zoomSdk) {
+    log('[MOCK] Would clear video filter and virtual background', 'warn');
+    virtualBackgroundApplied = false;
+    return false;
+  }
+
+  // Independently attempted: one failing must not leave the other applied.
+  const attempts = [
+    ['video filter', () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
+  ];
+  if (virtualBackgroundApplied || force) {
+    attempts.push(['virtual background', () => zoomSdk.removeVirtualBackground?.()]);
+  }
+  let cleared = true;
+  for (const [what, run] of attempts) {
+    try {
+      const result = run();
+      if (result) await result;
+    } catch (error) {
+      // 10195 just means there was nothing applied, which is the common case.
+      if (error.code !== 10195) {
+        log(`Could not clear ${what}: ${error.message || error.name}`, 'warn');
+        cleared = false;
+      }
+    }
+  }
+  virtualBackgroundApplied = false;
+  log('Video filter and virtual background cleared', 'info');
+  return cleared;
+}
+
+/**
  * Bring down a stage mode: stop the share, or dock the popped-out window.
  *
  * Deliberately NOT routed through enqueueOverlayOp. That queue drops any request
@@ -839,54 +899,6 @@ export async function setOverlayMode(mode, currentImageUrl) {
  *
  * @param {string} mode - Stage mode to tear down
  */
-/**
- * Clear both video pipelines, whatever we believe is on them.
- *
- * Entering a stage mode must leave the user's video completely untouched — that
- * is the whole promise of share and popout: your own face, your own background.
- * Removing only what the previous mode is thought to have applied is not enough,
- * because that belief can be wrong: a removal may have failed earlier, a push may
- * have been dropped as superseded, or the client may have restored a background
- * it had saved. So both are cleared, and a "nothing to remove" error is expected
- * rather than exceptional.
- *
- * Bypasses the overlay queue for the same reason teardownStageMode does.
- */
-async function clearVideoPipelines() {
-  if (!sdkInitialized) {
-    await initializeZoomSdk();
-  }
-  activeOverlay = null;
-
-  if (!sdkAvailable || !zoomSdk) {
-    log('[MOCK] Would clear video filter and virtual background', 'warn');
-    return;
-  }
-
-  // Independently attempted: one failing must not leave the other applied. The
-  // virtual background is only touched when one of ours is actually up, since
-  // that call costs the user a confirmation dialog every time.
-  const attempts = [
-    ['video filter', () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
-  ];
-  if (virtualBackgroundApplied) {
-    attempts.push(['virtual background', () => zoomSdk.removeVirtualBackground?.()]);
-  }
-  for (const [what, run] of attempts) {
-    try {
-      const result = run();
-      if (result) await result;
-    } catch (error) {
-      // 10195 just means there was nothing applied, which is the common case.
-      if (error.code !== 10195) {
-        log(`Could not clear ${what} for stage mode: ${error.message || error.name}`, 'warn');
-      }
-    }
-  }
-  virtualBackgroundApplied = false;
-  log('Video pipelines cleared for stage mode', 'info');
-}
-
 async function teardownStageMode(mode) {
   if (!sdkInitialized) {
     await initializeZoomSdk();
