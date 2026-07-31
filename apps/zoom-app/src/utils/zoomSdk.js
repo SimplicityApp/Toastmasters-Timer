@@ -133,7 +133,37 @@ let cameraResolution = null;
 // a "remove the video filter?" prompt every time, so it is only called when
 // there is genuinely something of ours to remove. setVideoFilter's counterpart,
 // deleteVideoFilter, prompts for nothing and needs no such guard.
-let virtualBackgroundApplied = false;
+//
+// Persisted, because Zoom reloads the app's webview every time the panel is
+// closed and reopened. A purely in-memory flag reads false in precisely the
+// situation the "Clear my video" button exists for: a background of ours left on
+// the tile by an earlier session.
+const VIRTUAL_BACKGROUND_APPLIED_KEY = 'toastmaster_zoom_virtual_background_applied';
+
+function readVirtualBackgroundApplied() {
+  try {
+    return localStorage.getItem(VIRTUAL_BACKGROUND_APPLIED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+let virtualBackgroundApplied = readVirtualBackgroundApplied();
+
+/**
+ * Record whether one of our virtual backgrounds is on the user's video.
+ * @param {boolean} applied
+ */
+function markVirtualBackgroundApplied(applied) {
+  virtualBackgroundApplied = applied;
+  try {
+    if (applied) localStorage.setItem(VIRTUAL_BACKGROUND_APPLIED_KEY, 'true');
+    else localStorage.removeItem(VIRTUAL_BACKGROUND_APPLIED_KEY);
+  } catch {
+    // Storage unavailable (private mode). The in-memory flag still holds for
+    // this session, which is the pre-existing behaviour.
+  }
+}
 
 // Stage-mode state. Neither is a video overlay, so neither is tracked by
 // activeOverlay: appShareActive means the app is screen-shared into the meeting,
@@ -825,66 +855,96 @@ export async function setOverlayMode(mode, currentImageUrl) {
   return true;
 }
 
+// Zoom's code for "there was nothing applied", which is a normal outcome here,
+// not a failure.
+const ERROR_NOTHING_APPLIED = 10195;
+// removeVirtualBackground always asks the user to confirm. This is them saying no.
+const ERROR_REMOVAL_DECLINED = 10017;
+
 /**
- * Clear both video pipelines, whatever we believe is on them.
+ * Clear the video pipelines: the timer card, and any virtual background of ours.
  *
  * Two callers, same requirement. Entering a stage mode must leave the user's
  * video completely untouched — that is the whole promise of share and popout:
  * your own face, your own background. And the "Clear my video" button is the
  * organizer's way out when something of ours is stuck on their tile.
  *
- * Removing only what the current mode is thought to have applied is not enough,
- * because that belief can be wrong: a removal may have failed earlier, a push may
- * have been dropped as superseded, or the client may have restored a background
- * it had saved. So both are cleared, and a "nothing to remove" error is expected
- * rather than exceptional.
+ * Only applicable pipelines are touched, and only genuine failures are reported:
+ *
+ * - The video filter is always attempted. Deleting one prompts for nothing and
+ *   costs nothing, and it is the pipeline card mode uses.
+ * - The virtual background is attempted only when one is believed to be up, or
+ *   when the user asks from camera mode — the only mode that applies one. Asking
+ *   Zoom to remove a background that was never there raises a pointless
+ *   confirmation dialog and then errors.
+ * - An error on a pipeline we did not believe was holding anything is not a
+ *   failure, whatever code it carries. "Remove the thing that was not there"
+ *   failing is the expected answer, and different clients word it differently;
+ *   treating it as an error is what made the button report failure in card mode.
  *
  * Bypasses the overlay queue for the same reason teardownStageMode does.
  *
  * @param {Object} [options]
- * @param {boolean} [options.force] - Try removeVirtualBackground even when no
- *   background of ours is on record. That call always costs the user a
- *   confirmation dialog, so it is skipped by default; the "Clear my video"
- *   button passes this because the user asking is the whole point, and because
- *   the reason they are asking is usually that our record has gone stale.
- * @returns {Promise<boolean>} False if any clear attempt failed for a reason
- *   other than "nothing was applied"
+ * @param {boolean} [options.force] - The user asked for this directly. Widens
+ *   the virtual-background attempt to camera mode even with nothing on record,
+ *   since a stale record is a common reason to press the button.
+ * @returns {Promise<{ok: boolean, declined: boolean}>} ok is false only when
+ *   something we believed was applied would not come off; declined is true when
+ *   the user dismissed Zoom's removal confirmation, which changed nothing.
  */
 export async function clearVideoPipelines({ force = false } = {}) {
   if (!sdkInitialized) {
     await initializeZoomSdk();
   }
+
+  // What we believe is on each pipeline, captured before activeOverlay is reset.
+  const hadFilter = activeOverlay?.mode === OVERLAY_MODE_CARD;
+  const hadBackground = virtualBackgroundApplied;
   activeOverlay = null;
 
   if (!sdkAvailable || !zoomSdk) {
     log('[MOCK] Would clear video filter and virtual background', 'warn');
-    virtualBackgroundApplied = false;
-    return false;
+    markVirtualBackgroundApplied(false);
+    return { ok: false, declined: false };
   }
 
   // Independently attempted: one failing must not leave the other applied.
   const attempts = [
-    ['video filter', () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
+    ['video filter', hadFilter, () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
   ];
-  if (virtualBackgroundApplied || force) {
-    attempts.push(['virtual background', () => zoomSdk.removeVirtualBackground?.()]);
+  if (hadBackground || (force && currentOverlayMode === OVERLAY_MODE_CAMERA)) {
+    attempts.push(['virtual background', hadBackground, () => zoomSdk.removeVirtualBackground?.()]);
   }
-  let cleared = true;
-  for (const [what, run] of attempts) {
+
+  let ok = true;
+  let declined = false;
+  // Only forget the background once it is genuinely gone: a declined or failed
+  // removal leaves it up, and the next attempt still needs to know that.
+  let backgroundGone = true;
+
+  for (const [what, expected, run] of attempts) {
     try {
       const result = run();
       if (result) await result;
+      log(`Cleared ${what}`, 'info');
     } catch (error) {
-      // 10195 just means there was nothing applied, which is the common case.
-      if (error.code !== 10195) {
-        log(`Could not clear ${what}: ${error.message || error.name}`, 'warn');
-        cleared = false;
+      const code = error.code ?? 'none';
+      if (error.code === ERROR_REMOVAL_DECLINED) {
+        log(`User declined to remove the ${what}`, 'info');
+        declined = true;
+        if (what === 'virtual background') backgroundGone = false;
+      } else if (error.code === ERROR_NOTHING_APPLIED || !expected) {
+        log(`No ${what} to clear (code ${code})`, 'info');
+      } else {
+        log(`Could not clear ${what} (code ${code}): ${error.message || error.name}`, 'warn');
+        ok = false;
+        if (what === 'virtual background') backgroundGone = false;
       }
     }
   }
-  virtualBackgroundApplied = false;
-  log('Video filter and virtual background cleared', 'info');
-  return cleared;
+
+  if (backgroundGone) markVirtualBackgroundApplied(false);
+  return { ok, declined };
 }
 
 /**
@@ -938,7 +998,7 @@ async function removeOverlayInternal(mode) {
         if (typeof zoomSdk.removeVirtualBackground === 'function') {
           log('Removing virtual background', 'info');
           await zoomSdk.removeVirtualBackground();
-          virtualBackgroundApplied = false;
+          markVirtualBackgroundApplied(false);
           log('Successfully removed virtual background', 'info');
         } else {
           log('[MOCK] Would remove virtual background', 'warn');
@@ -1037,7 +1097,7 @@ async function applyOverlayInternal(imageUrl) {
             log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
             // No pixels pushed, so no budget to go stale.
             activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null };
-            virtualBackgroundApplied = true;
+            markVirtualBackgroundApplied(true);
             lastError = null;
             return;
           } catch (fileUrlError) {
@@ -1053,7 +1113,7 @@ async function applyOverlayInternal(imageUrl) {
           const result = await zoomSdk.setVirtualBackground({ imageData });
           log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
           activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
-          virtualBackgroundApplied = true;
+          markVirtualBackgroundApplied(true);
           lastError = null;
           return;
         }

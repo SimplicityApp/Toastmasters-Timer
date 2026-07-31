@@ -513,12 +513,14 @@ export default memo(function LiveTab() {
     }
     try {
       addDebugLog('Clearing all filters and backgrounds', 'info');
-      const cleared = await clearVideoPipelines({ force: true });
-      // Outside Zoom every SDK call "fails", so only a real client's failure is
-      // worth a toast.
-      if (!cleared && sdkStatus?.available) {
+      const { ok, declined } = await clearVideoPipelines({ force: true });
+      if (!sdkStatus?.available) {
+        // Outside Zoom every SDK call is a no-op, so there is nothing to report.
+      } else if (declined) {
+        showToast('Zoom needs your confirmation to remove the background — nothing was changed.', 'info', 5000);
+      } else if (!ok) {
         showToast('Zoom would not clear your video. Check Zoom\'s own background and filter settings.', 'error', 6000);
-      } else if (cleared) {
+      } else {
         showToast('Cleared the timer from your video.', 'success');
       }
     } finally {

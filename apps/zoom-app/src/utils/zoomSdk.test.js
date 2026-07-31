@@ -101,6 +101,12 @@ async function loadModule() {
   return import('./zoomSdk');
 }
 
+// The module reads its "a background of ours is applied" flag from localStorage
+// at import time, so a leftover value would follow the next loadModule().
+beforeEach(() => {
+  localStorage.clear();
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -912,5 +918,102 @@ describe('entering a stage mode leaves the camera untouched', () => {
 
     expect(accepted).toBe(true);
     expect(isAppShareActive()).toBe(true);
+  });
+});
+
+describe('clearing the video on request', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+  });
+
+  it('leaves the virtual background alone in card mode, where none is ever applied', async () => {
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+
+    const result = await clearVideoPipelines({ force: true });
+
+    // Card mode drives videoFilter only. Asking to remove a background that was
+    // never applied costs the user a confirmation dialog and then fails.
+    expect(sdkMock.deleteVideoFilter).toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, declined: false });
+  });
+
+  it('reports success when a pipeline we never touched refuses to clear', async () => {
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    // Whatever the client calls it, "nothing was there" is the expected answer,
+    // not a failure the organizer should see a red toast about.
+    sdkMock.deleteVideoFilter.mockRejectedValueOnce(
+      Object.assign(new Error('no filter'), { code: 99999 })
+    );
+
+    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: true, declined: false });
+  });
+
+  it('reports failure when something we did apply will not come off', async () => {
+    const { initializeZoomSdk, applyOverlay, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+    sdkMock.deleteVideoFilter.mockRejectedValueOnce(
+      Object.assign(new Error('busy'), { code: 99999 })
+    );
+
+    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: false, declined: false });
+  });
+
+  it('removes a background applied in camera mode, and only asks once', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    sdkMock.removeVirtualBackground.mockClear();
+
+    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: true, declined: false });
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
+
+    // Already gone: clearing again must not re-prompt.
+    sdkMock.removeVirtualBackground.mockClear();
+    await clearVideoPipelines({ force: true });
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a declined confirmation as declined, not as a failure', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    // 10017: the user dismissed Zoom's "remove background?" dialog.
+    sdkMock.removeVirtualBackground.mockRejectedValueOnce(
+      Object.assign(new Error('declined'), { code: 10017 })
+    );
+
+    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: true, declined: true });
+
+    // Still up, so a second press must try again rather than assume it is gone.
+    sdkMock.removeVirtualBackground.mockClear();
+    await clearVideoPipelines({ force: true });
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('still finds a background left behind by an earlier session', async () => {
+    // Zoom reloads the webview whenever the panel is reopened, which is exactly
+    // when an organizer reaches for this button. An in-memory flag would be false
+    // here and the stuck background would survive the clear.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false });
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(localStorage.getItem('toastmaster_zoom_virtual_background_applied')).toBeNull();
   });
 });
