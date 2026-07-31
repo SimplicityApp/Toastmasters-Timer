@@ -10,7 +10,22 @@ import {
 // Four modes on one row left each button too small to read and gave no hint what
 // any of them did. As a menu there is room for a name and a line of explanation,
 // which these need: the difference between them is not something an icon conveys.
+// Ordered by how we expect clubs to reach for them, most first. The two stage
+// modes lead because they leave the organizer's video alone; the video modes
+// follow for anyone who prefers the color on their own tile.
 export const OVERLAY_MODES = [
+  {
+    mode: OVERLAY_MODE_POPOUT,
+    Icon: PictureInPicture2,
+    label: 'Timer Window',
+    description: 'Own window for a second screen',
+  },
+  {
+    mode: OVERLAY_MODE_SHARE,
+    Icon: ScreenShare,
+    label: 'Share Timer',
+    description: 'Screen-share the timer, camera untouched',
+  },
   {
     mode: OVERLAY_MODE_CARD,
     Icon: Monitor,
@@ -22,18 +37,6 @@ export const OVERLAY_MODES = [
     Icon: Camera,
     label: 'Timer + Camera',
     description: 'Color behind your face',
-  },
-  {
-    mode: OVERLAY_MODE_SHARE,
-    Icon: ScreenShare,
-    label: 'Share Timer',
-    description: 'Screen-share the timer, camera untouched',
-  },
-  {
-    mode: OVERLAY_MODE_POPOUT,
-    Icon: PictureInPicture2,
-    label: 'Timer Window',
-    description: 'Own window for a second screen',
   },
 ];
 

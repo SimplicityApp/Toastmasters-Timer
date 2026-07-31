@@ -851,7 +851,7 @@ describe('entering a stage mode leaves the camera untouched', () => {
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
   });
 
-  it('clears both pipelines, not just the one the previous mode used', async () => {
+  it('does not touch the virtual background when none of ours is applied', async () => {
     const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_POPOUT } = await loadModule();
     await initializeZoomSdk();
     stubImage();
@@ -861,9 +861,28 @@ describe('entering a stage mode leaves the camera untouched', () => {
 
     await setOverlayMode(OVERLAY_MODE_POPOUT, null);
 
-    // Our record of what is applied can be stale, so neither is trusted.
+    // deleteVideoFilter is silent, so it is always safe to call. Its virtual
+    // background counterpart raises a confirmation dialog every single time, so
+    // calling it here would mean prompting the user to remove something that was
+    // never applied.
     expect(sdkMock.deleteVideoFilter).toHaveBeenCalled();
-    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+  });
+
+  it('stops prompting once the virtual background has been removed', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
+    sdkMock.removeVirtualBackground.mockClear();
+
+    // Hopping between stage modes must not re-prompt: it is already gone.
+    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
   });
 
   it('still clears the camera when a newer overlay push supersedes the switch', async () => {

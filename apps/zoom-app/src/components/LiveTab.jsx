@@ -9,7 +9,7 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, isSdkAvailable, DEFAULT_OVERLAY_MODE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
 import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
@@ -24,6 +24,21 @@ const DEBUG_PANEL_ENABLED =
 const PromptDebugControls = DEBUG_PANEL_ENABLED
   ? lazy(() => import('./PromptDebugControls'))
   : null;
+
+/**
+ * The mode to open in.
+ *
+ * Share is deliberately never restored, even though it is saved nowhere and so
+ * could only arrive here from an older build: starting a screen share is an
+ * outward-facing act, and nobody should have one begin on its own because of a
+ * preference set last week. Timer Window is safe to restore by contrast — the
+ * window is local to the organizer's machine and the meeting never sees it.
+ */
+function resolveInitialMode() {
+  const persisted = loadOverlayMode();
+  const known = [OVERLAY_MODE_POPOUT, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
+  return known.includes(persisted) ? persisted : DEFAULT_OVERLAY_MODE;
+}
 
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
@@ -65,12 +80,7 @@ export default memo(function LiveTab() {
   // on whether a ticking clock helps or distracts their speakers.
   const [stageClockHidden, setStageClockHidden] = useState(loadStageClockHidden);
 
-  // Stage modes are session-only: a stored 'share' would otherwise come back as a
-  // covered panel with no share behind it.
-  const [overlayMode, setOverlayModeLocal] = useState(() => {
-    const persisted = loadOverlayMode();
-    return persisted && isVideoOverlayMode(persisted) ? persisted : OVERLAY_MODE_CARD;
-  });
+  const [overlayMode, setOverlayModeLocal] = useState(resolveInitialMode);
 
   // Debug panel state - collapsed by default, remember user preference in localStorage
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
@@ -149,14 +159,33 @@ export default memo(function LiveTab() {
     return () => setLogCallback(null);
   }, []);
 
-  // Sync persisted overlay mode to zoomSdk module on mount.
-  // The stage modes are deliberately not restored: re-entering them would start a
-  // screen share or pop a window open before the user has asked for anything.
+  // Enter the starting mode. For Timer Window this actually pops the app out, so
+  // the organizer lands in the timer window rather than merely seeing it selected
+  // — a selected-but-not-entered stage mode would just be a panel covered by a
+  // stage with nothing behind it.
   useEffect(() => {
-    const persisted = loadOverlayMode();
-    if (persisted && isVideoOverlayMode(persisted) && persisted !== getOverlayMode()) {
-      setOverlayMode(persisted, null);
-    }
+    if (overlayMode === getOverlayMode()) return undefined;
+    let cancelled = false;
+    (async () => {
+      const accepted = await setOverlayMode(overlayMode, null);
+      // Quietly, unlike an explicit mode switch: clients that cannot pop out
+      // (mobile, web) would otherwise raise an error toast on every single
+      // launch, for a mode the user never asked for. isSdkAvailable is settled by
+      // now because setOverlayMode initializes the SDK on the way through, and it
+      // keeps the stage rendering outside Zoom, where every call "fails".
+      //
+      // Pointedly not persisted: this is a fallback for the client at hand, not a
+      // change of preference. Writing it would mean one launch on a phone quietly
+      // demoted the organizer's desktop default.
+      if (!cancelled && accepted === false && isSdkAvailable()) {
+        addDebugLog('Client refused the default Timer Window; falling back to Timer Card', 'warn');
+        setOverlayModeLocal(OVERLAY_MODE_CARD);
+        setOverlayMode(OVERLAY_MODE_CARD, null);
+      }
+    })();
+    return () => { cancelled = true; };
+    // Mount only: later changes are driven by handleModeSwitch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Popping the app back in from Zoom's own ellipsis menu is the same intent as
@@ -233,32 +262,34 @@ export default memo(function LiveTab() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle overlay removal based on isHidden state
-  // TimerContext handles applying overlays, we only need to remove them when isHidden is false
-  // Skip in camera mode — face is always visible — and in the stage modes, where
-  // removeOverlay would tear down the share or the popped-out window itself.
+  // Card mode covers the organizer's face entirely, so it only runs while a
+  // speech is actually being timed: no color before START, and none once the
+  // speech is finished or reset. That gives the organizer their face back
+  // between speakers instead of leaving a blue card up all meeting.
+  //
+  // A pause counts as active — the speech is on hold, not over — which is why
+  // this tracks elapsedTime rather than isRunning alone.
+  //
+  // Card mode only. Camera mode keeps its always-on background because clearing
+  // one costs the user a confirmation dialog every time (Zoom's design, see
+  // removeVirtualBackground), and the stage modes push no pixels at all.
+  const speechActive = isRunning || elapsedTime > 0;
   useEffect(() => {
-    if (overlayMode === OVERLAY_MODE_CAMERA || !isVideoOverlayMode(overlayMode)) return;
-    if (!isHidden) {
-      addDebugLog('Removing overlay (reveal face mode)', 'info');
-      removeOverlay();
+    if (overlayMode !== OVERLAY_MODE_CARD) return;
+    if (isHidden && speechActive) {
+      const imageUrl = getBackgroundUrl(currentStatus || 'blue');
+      addDebugLog(`Applying overlay (speech running): ${currentStatus} -> ${imageUrl}`, 'info');
+      // Usually redundant with TimerContext's own push on status change; the
+      // already-showing guard in applyOverlay makes the duplicate free.
+      applyOverlay(imageUrl);
     } else {
-      if (currentStatus) {
-        const imageUrl = getBackgroundUrl(currentStatus);
-        addDebugLog(`Applying overlay (hidden mode): ${currentStatus} -> ${imageUrl}`, 'info');
-        applyOverlay(imageUrl);
-      }
-    }
-  }, [isHidden, overlayMode]);
-
-  // Watch for status changes and remove overlay if not hidden (card mode only)
-  useEffect(() => {
-    if (overlayMode === OVERLAY_MODE_CAMERA || !isVideoOverlayMode(overlayMode)) return;
-    if (!isHidden) {
-      addDebugLog('Status changed but in reveal mode - removing overlay', 'info');
+      addDebugLog(
+        speechActive ? 'Removing overlay (reveal face mode)' : 'Removing overlay (no speech in progress)',
+        'info'
+      );
       removeOverlay();
     }
-  }, [currentStatus, isHidden, overlayMode]);
+  }, [isHidden, overlayMode, speechActive, currentStatus]);
 
   // Log when status changes
   useEffect(() => {
@@ -457,10 +488,16 @@ export default memo(function LiveTab() {
   const handleModeSwitch = async (newMode) => {
     if (newMode === overlayMode) return;
     setOverlayModeLocal(newMode);
-    // Only the video modes are remembered; see the initial state above.
-    if (isVideoOverlayMode(newMode)) saveOverlayMode(newMode);
+    // Everything but share is remembered; see resolveInitialMode for why share
+    // is the exception.
+    if (newMode !== OVERLAY_MODE_SHARE) saveOverlayMode(newMode);
     const imageUrl = getBackgroundUrl(previewColor || currentStatus);
-    const accepted = await setOverlayMode(newMode, isHidden ? imageUrl : null);
+    // Card mode carries the color across only if something should be showing —
+    // mid-speech, or while a preview swatch is held up — otherwise arriving in
+    // card mode paints a blue card over an idle organizer. Camera mode keeps its
+    // always-on behavior.
+    const shouldShow = newMode === OVERLAY_MODE_CAMERA || speechActive || previewColor;
+    const accepted = await setOverlayMode(newMode, isHidden && shouldShow ? imageUrl : null);
     if (newMode === OVERLAY_MODE_CAMERA) setIsHidden(true);
 
     // A refused stage mode would otherwise leave the panel covered by a stage

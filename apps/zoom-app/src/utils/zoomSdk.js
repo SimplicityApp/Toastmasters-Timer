@@ -81,6 +81,15 @@ export const OVERLAY_MODE_CARD = 'card';
 export const OVERLAY_MODE_CAMERA = 'camera';
 export const OVERLAY_MODE_SHARE = 'share';
 export const OVERLAY_MODE_POPOUT = 'popout';
+// What the Live tab starts in when nothing is saved. Timer Window is the pick
+// because it is the only mode that puts a full-size timer on its own screen
+// while leaving the organizer's camera and background completely alone.
+//
+// Note this is the *UI's* default, not this module's starting state, which stays
+// on card: setOverlayMode compares against currentOverlayMode, so the module has
+// to begin somewhere inert for the transition into popout to actually happen.
+export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_POPOUT;
+
 let currentOverlayMode = OVERLAY_MODE_CARD;
 
 /**
@@ -117,6 +126,16 @@ let activeOverlay = null;
 
 // Camera resolution reported by onMyMediaChange, or null until one arrives.
 let cameraResolution = null;
+
+// Whether a virtual background of ours is currently on the user's video.
+//
+// Tracked separately from activeOverlay because it gates a user-visible cost:
+// removeVirtualBackground always raises a confirmation dialog in the client, by
+// Zoom's design, returning 10017 if the user declines. Calling it blindly means
+// a "remove the video filter?" prompt every time, so it is only called when
+// there is genuinely something of ours to remove. setVideoFilter's counterpart,
+// deleteVideoFilter, prompts for nothing and needs no such guard.
+let virtualBackgroundApplied = false;
 
 // Stage-mode state. Neither is a video overlay, so neither is tracked by
 // activeOverlay: appShareActive means the app is screen-shared into the meeting,
@@ -844,11 +863,15 @@ async function clearVideoPipelines() {
     return;
   }
 
-  // Independently attempted: one failing must not leave the other applied.
+  // Independently attempted: one failing must not leave the other applied. The
+  // virtual background is only touched when one of ours is actually up, since
+  // that call costs the user a confirmation dialog every time.
   const attempts = [
     ['video filter', () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
-    ['virtual background', () => zoomSdk.removeVirtualBackground?.()],
   ];
+  if (virtualBackgroundApplied) {
+    attempts.push(['virtual background', () => zoomSdk.removeVirtualBackground?.()]);
+  }
   for (const [what, run] of attempts) {
     try {
       const result = run();
@@ -860,6 +883,7 @@ async function clearVideoPipelines() {
       }
     }
   }
+  virtualBackgroundApplied = false;
   log('Video pipelines cleared for stage mode', 'info');
 }
 
@@ -902,6 +926,7 @@ async function removeOverlayInternal(mode) {
         if (typeof zoomSdk.removeVirtualBackground === 'function') {
           log('Removing virtual background', 'info');
           await zoomSdk.removeVirtualBackground();
+          virtualBackgroundApplied = false;
           log('Successfully removed virtual background', 'info');
         } else {
           log('[MOCK] Would remove virtual background', 'warn');
@@ -1000,6 +1025,7 @@ async function applyOverlayInternal(imageUrl) {
             log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
             // No pixels pushed, so no budget to go stale.
             activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null };
+            virtualBackgroundApplied = true;
             lastError = null;
             return;
           } catch (fileUrlError) {
@@ -1015,6 +1041,7 @@ async function applyOverlayInternal(imageUrl) {
           const result = await zoomSdk.setVirtualBackground({ imageData });
           log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
           activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
+          virtualBackgroundApplied = true;
           lastError = null;
           return;
         }
