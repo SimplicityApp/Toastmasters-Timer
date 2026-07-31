@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import { Play, Square, RotateCcw, X } from 'lucide-react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
+import { getBackgroundUrl } from '../utils/zoomSdk';
 
-// Backgrounds match the PNG overlays used by card and camera mode, so the color
-// signal reads the same whichever mode the club ends up choosing.
+// Shown underneath the branded PNG, so the color signal is already correct while
+// the image loads and stays correct if it fails to load at all.
 const STATUS_COLORS = {
   blue: 'bg-blue-500',
   green: 'bg-green-500',
@@ -44,9 +45,21 @@ export default memo(function TimerStage({
 
   const textShadow = { textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3)' };
 
+  // The same branded PNGs card and camera mode push into the video pipeline. The
+  // stage renders them as DOM instead, so a club sees one consistent visual
+  // whichever mode it settles on. 'contain' keeps the wordmark intact in the tall
+  // sidebar, where 'cover' would crop it away.
+  const stageBackground = {
+    backgroundImage: `url("${getBackgroundUrl(status)}")`,
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 ${bgColor} flex flex-col transition-colors duration-300`}
+      style={stageBackground}
       data-testid="timer-stage"
     >
       <div className="flex items-start justify-between p-4">
