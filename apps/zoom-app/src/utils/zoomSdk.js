@@ -58,24 +58,51 @@ export function getBackgroundUrl(color) {
 const OVERLAY_CEILING_WIDTH = 640;
 const OVERLAY_CEILING_HEIGHT = 360;
 
-const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
-
-// Capabilities the app works fine without: if a client rejects any of them,
-// config() is retried with the required set only, because losing config()
-// altogether would disable every overlay rather than just one nicety.
-//   onMyMediaChange - reports the camera resolution the SDK recommends matching
-//   openUrl         - opens the Marketplace listing in the user's browser
-//   appPopout       - desktop only, so mobile clients reject it; popout mode is
-//                     unavailable there but every other mode still works
-//   onAppVisibilityChange - desktop only; tells us the user has been elsewhere in
-//                     Zoom, so our record of what is on their video is suspect
-const OPTIONAL_CAPABILITIES = [
-  'onMyMediaChange',
-  'openUrl',
-  'appPopout',
-  'onAppPopout',
-  'onAppVisibilityChange',
+/**
+ * Every SDK method the app calls: what to request for it, whether the timer can
+ * work without it, and what breaks when it is missing.
+ *
+ * One list, feeding both the config() request and the debug panel, because these
+ * two drifted apart badly. The panel reported on a hand-kept subset, so a client
+ * missing appPopout or openUrl read as all-green — and config() asked for
+ * "videoFilter" and "virtualBackground", which are not capabilities at all.
+ *
+ * A capability is the exact name of the API or event being granted; there is no
+ * grouped name covering a family of calls. Those two invented names granted
+ * nothing, which is why removeVirtualBackground came back refused while applying
+ * a background appeared to work.
+ *
+ * `required` keeps config() alive on a limited client: reject the full request
+ * and it is retried with these alone, so only what the timer genuinely cannot run
+ * without belongs here. Timer Card is the default mode and the core function;
+ * every other mode degrades to it.
+ *
+ * Keep in step with the zoomSdk.* calls below — a test asserts it, both ways.
+ */
+export const USED_SDK_APIS = [
+  { name: 'config', capability: null, required: true, purpose: 'Grants every capability below' },
+  { name: 'setVideoFilter', capability: 'setVideoFilter', required: true, purpose: 'Timer Card' },
+  { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Card' },
+  { name: 'setVirtualBackground', capability: 'setVirtualBackground', required: false, purpose: 'Timer + Camera' },
+  { name: 'removeVirtualBackground', capability: 'removeVirtualBackground', required: false, purpose: 'Clearing Timer + Camera' },
+  { name: 'getVideoState', capability: 'getVideoState', required: false, purpose: 'Video-off warning' },
+  { name: 'setVideoState', capability: 'setVideoState', required: false, purpose: 'Turn my video on' },
+  { name: 'getMeetingParticipants', capability: 'getMeetingParticipants', required: false, purpose: 'Speaker suggestions' },
+  { name: 'shareApp', capability: 'shareApp', required: false, purpose: 'Share Timer mode' },
+  { name: 'appPopout', capability: 'appPopout', required: false, purpose: 'Timer Window mode' },
+  { name: 'onAppPopout', capability: 'onAppPopout', required: false, purpose: 'Following Zoom\'s own popout menu' },
+  { name: 'onAppVisibilityChange', capability: 'onAppVisibilityChange', required: false, purpose: 'Noticing background changes' },
+  { name: 'onMyMediaChange', capability: 'onMyMediaChange', required: false, purpose: 'Overlay sizing' },
+  { name: 'openUrl', capability: 'openUrl', required: false, purpose: 'Marketplace review link' },
 ];
+
+const capabilitiesWhere = (required) =>
+  USED_SDK_APIS.filter((api) => api.capability && api.required === required).map(
+    (api) => api.capability
+  );
+
+const REQUIRED_CAPABILITIES = capabilitiesWhere(true);
+const OPTIONAL_CAPABILITIES = capabilitiesWhere(false);
 
 // Overlay mode constants.
 //
@@ -537,34 +564,6 @@ function subscribeToAppPopout() {
 export function isSdkAvailable() {
   return sdkAvailable;
 }
-
-/**
- * Every SDK method the app calls, and what stops working without it.
- *
- * One list, so the debug panel reports on what the code actually uses instead of
- * a hand-kept subset. The panel used to show eight of these and stay silent about
- * the rest, which meant a client missing appPopout or openUrl — the two most
- * likely to be missing, since both are desktop-only — read as all-green.
- *
- * `required` marks the ones the timer cannot do its job without; the rest degrade
- * a single feature. Keep this in step with the zoomSdk.* calls below.
- */
-export const USED_SDK_APIS = [
-  { name: 'config', required: true, purpose: 'Grants every capability below' },
-  { name: 'setVideoFilter', required: true, purpose: 'Timer Card' },
-  { name: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Card' },
-  { name: 'setVirtualBackground', required: true, purpose: 'Timer + Camera' },
-  { name: 'removeVirtualBackground', required: true, purpose: 'Clearing Timer + Camera' },
-  { name: 'getVideoState', required: false, purpose: 'Video-off warning' },
-  { name: 'setVideoState', required: false, purpose: 'Turn my video on' },
-  { name: 'getParticipants', required: false, purpose: 'Speaker suggestions' },
-  { name: 'shareApp', required: false, purpose: 'Share Timer mode' },
-  { name: 'appPopout', required: false, purpose: 'Timer Window mode' },
-  { name: 'onAppPopout', required: false, purpose: 'Following Zoom\'s own popout menu' },
-  { name: 'onAppVisibilityChange', required: false, purpose: 'Noticing background changes' },
-  { name: 'onMyMediaChange', required: false, purpose: 'Overlay sizing' },
-  { name: 'openUrl', required: false, purpose: 'Marketplace review link' },
-];
 
 /**
  * Which of the APIs the app uses this client does not offer.
@@ -1400,11 +1399,16 @@ export async function getZoomParticipants() {
       // Try to get participants from Zoom SDK
       // Note: This API may require specific scopes/permissions
       try {
-        const participants = await zoomSdk.getParticipants();
+        // getMeetingParticipants, not getParticipants: the latter is not an API
+        // the SDK has, so this call threw every time and the suggestions were
+        // always empty.
+        const response = await zoomSdk.getMeetingParticipants();
+        const participants = response?.participants;
         if (participants && Array.isArray(participants)) {
+          // The SDK's own field names, with the older guesses kept as fallbacks.
           return participants.map((p, index) => ({
-            id: p.userId || p.id || `user-${index}`,
-            name: p.displayName || p.userName || p.name || 'Unknown'
+            id: p.participantUUID || p.participantId || p.userId || p.id || `user-${index}`,
+            name: p.screenName || p.displayName || p.userName || p.name || 'Unknown'
           }));
         }
       } catch (sdkError) {

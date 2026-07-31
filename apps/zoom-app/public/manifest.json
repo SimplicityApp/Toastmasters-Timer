@@ -8,10 +8,25 @@
     "url": "https://www.timer.simple-tech.app"
   },
   "capabilities": {
-    "virtualBackground": {
+    "setVideoFilter": {
       "enabled": true
     },
-    "videoFilter": {
+    "deleteVideoFilter": {
+      "enabled": true
+    },
+    "setVirtualBackground": {
+      "enabled": true
+    },
+    "removeVirtualBackground": {
+      "enabled": true
+    },
+    "getVideoState": {
+      "enabled": true
+    },
+    "setVideoState": {
+      "enabled": true
+    },
+    "getMeetingParticipants": {
       "enabled": true
     },
     "shareApp": {

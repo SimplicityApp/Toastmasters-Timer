@@ -484,7 +484,10 @@ describe('camera resolution tracking', () => {
     // the optional capability rather than the whole SDK.
     expect(isSdkAvailable()).toBe(true);
     expect(sdkMock.config.mock.calls[1][0].capabilities).not.toContain('onMyMediaChange');
-    expect(sdkMock.config.mock.calls[1][0].capabilities).toContain('videoFilter');
+    // Timer Card is what the retry has to preserve: it is the default mode and
+    // every other mode degrades to it.
+    expect(sdkMock.config.mock.calls[1][0].capabilities).toContain('setVideoFilter');
+    expect(sdkMock.config.mock.calls[1][0].capabilities).toContain('deleteVideoFilter');
   });
 
   it('sizes the overlay to the reported camera resolution', async () => {
@@ -941,6 +944,28 @@ describe('the debug panel reports on every API the app uses', () => {
     expect([...called].filter((name) => !declared.has(name))).toEqual([]);
     // And the reverse, so the list does not accumulate APIs we stopped calling.
     expect([...declared].filter((name) => !called.has(name))).toEqual([]);
+  });
+
+  it('requests capabilities the SDK actually defines', async () => {
+    // A capability is the exact API or event name. "videoFilter" and
+    // "virtualBackground" look like they cover a family of calls but are not
+    // capabilities at all, so requesting them granted nothing — and
+    // removeVirtualBackground, never requested, came back refused.
+    const typings = await import('@zoom/appssdk/dist/sdk.d.ts?raw').then((m) => m.default);
+    const known = new Set(
+      typings
+        .match(/declare type Apis = ([^;]+);/)[1]
+        .split('|')
+        .map((name) => name.trim().replace(/'/g, ''))
+    );
+    const { USED_SDK_APIS } = await loadModule();
+
+    const requested = USED_SDK_APIS.map((api) => api.capability).filter(Boolean);
+    expect(requested.filter((name) => !known.has(name))).toEqual([]);
+    // And the method we call has to be the one we asked for.
+    USED_SDK_APIS.filter((api) => api.capability).forEach((api) => {
+      expect(api.capability).toBe(api.name);
+    });
   });
 
   it('reports what a bare-bones client is missing, with a reason', async () => {
