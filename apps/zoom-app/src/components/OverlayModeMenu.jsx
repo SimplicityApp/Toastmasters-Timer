@@ -5,6 +5,7 @@ import {
   OVERLAY_MODE_CAMERA,
   OVERLAY_MODE_SHARE,
   OVERLAY_MODE_POPOUT,
+  isVideoOverlayMode,
 } from '../utils/zoomSdk';
 
 // Four modes on one row left each button too small to read and gave no hint what
@@ -45,7 +46,7 @@ export const MODE_LABELS = Object.fromEntries(OVERLAY_MODES.map(({ mode, label }
 /**
  * Mode picker for the Live tab: the active mode plus a menu to change it.
  */
-export default memo(function OverlayModeMenu({ value, onChange }) {
+export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenIdle, onToggleRevealFaceWhenIdle }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -126,6 +127,25 @@ export default memo(function OverlayModeMenu({ value, onChange }) {
               </button>
             );
           })}
+
+          {/* Only for the video modes. The stage modes never touch the camera, so
+              the setting would be a control that does nothing there. */}
+          {isVideoOverlayMode(value) && (
+            <label className="flex items-start gap-2.5 px-3 py-2.5 border-t border-gray-200 cursor-pointer hover:bg-gray-50">
+              <input
+                type="checkbox"
+                checked={revealFaceWhenIdle}
+                onChange={onToggleRevealFaceWhenIdle}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-gray-900">Show my face between speeches</span>
+                <span className="block text-xs text-gray-500">
+                  Off keeps the color up the whole meeting
+                </span>
+              </span>
+            </label>
+          )}
         </div>
       )}
     </div>

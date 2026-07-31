@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
-import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode } from '../utils/zoomSdk';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
+import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { recordSpeechFinished } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
@@ -172,14 +172,30 @@ export function TimerProvider({ children }) {
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
-    // A finished or reset speech hands the organizer their video back, in both
-    // video modes. Stage modes are skipped: removeOverlay there would stop the
-    // share or dock the timer window.
+    // Stage modes are skipped entirely: removeOverlay there would stop the share
+    // or dock the timer window.
     //
-    // Gated on something actually being applied, because resetTimer also runs on
-    // every speaker and role change. Without that, camera mode would raise its
-    // removal confirmation dialog each time a speaker was picked.
-    if (isVideoOverlayMode(getOverlayMode()) && isOverlayActive()) {
+    // Everything here is gated on something actually being applied, because
+    // resetTimer also runs on every speaker and role change. Without that, camera
+    // mode would raise its removal confirmation dialog each time a speaker was
+    // picked.
+    const mode = getOverlayMode();
+    if (!isVideoOverlayMode(mode)) return;
+
+    if (!loadRevealFaceWhenIdle()) {
+      // Opted out, so the color stays up and simply returns to blue — but only
+      // if something is already showing, since pushing an overlay nothing is
+      // displaying costs a multi-MB bridge transfer for no visible effect.
+      if (isOverlayActive()) applyOverlay(getBackgroundUrl('blue'));
+      return;
+    }
+
+    // A finished or reset speech hands the organizer their video back. Card mode
+    // clears unconditionally because deleting a video filter is silent; camera
+    // mode asks only when a background of ours is up, since each removal costs
+    // the user a confirmation dialog and resetTimer also runs on every speaker
+    // and role change.
+    if (mode === OVERLAY_MODE_CARD || isOverlayActive()) {
       removeOverlay();
     }
   }, []);

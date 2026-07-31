@@ -10,7 +10,7 @@ const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, isSdkAvailable, DEFAULT_OVERLAY_MODE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
-import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden } from '@toastmaster-timer/shared';
+import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -79,6 +79,11 @@ export default memo(function LiveTab() {
   // Unlike the mode itself, this preference is remembered: it is a club's stance
   // on whether a ticking clock helps or distracts their speakers.
   const [stageClockHidden, setStageClockHidden] = useState(loadStageClockHidden);
+
+  // Whether the video modes hand the organizer their face back between speeches.
+  // On by default; off restores the older always-on behavior for clubs that want
+  // the color up for the whole meeting.
+  const [revealFaceWhenIdle, setRevealFaceWhenIdle] = useState(loadRevealFaceWhenIdle);
 
   const [overlayMode, setOverlayModeLocal] = useState(resolveInitialMode);
 
@@ -275,27 +280,29 @@ export default memo(function LiveTab() {
   const speechActive = isRunning || elapsedTime > 0;
   useEffect(() => {
     if (!isVideoOverlayMode(overlayMode)) return;
-    // Camera mode has no reveal-face toggle — the face shows either way — so
-    // isHidden only gates card mode, where the overlay covers the organizer.
-    const shouldShow = speechActive && (overlayMode === OVERLAY_MODE_CAMERA || isHidden);
+    // isHidden only gates card mode: camera mode has no per-speech reveal toggle
+    // because the face shows through the background either way.
+    const wantsColor = speechActive || !revealFaceWhenIdle;
+    const shouldShow = wantsColor && (overlayMode === OVERLAY_MODE_CAMERA || isHidden);
     if (shouldShow) {
       const imageUrl = getBackgroundUrl(currentStatus || 'blue');
       addDebugLog(`Applying overlay (speech running): ${currentStatus} -> ${imageUrl}`, 'info');
       // Usually redundant with TimerContext's own push on status change; the
       // already-showing guard in applyOverlay makes the duplicate free.
       applyOverlay(imageUrl);
-    } else if (isOverlayActive()) {
-      // Only when something of ours is actually up. In camera mode a removal
-      // costs the user a confirmation dialog, so it must happen when a speech
-      // ends and at no other time — not on mount, not on a speaker change, not
-      // on arriving in the mode with nothing showing.
+      // Clearing a video filter is silent, so card mode just clears — robust
+      // even if our record of what is applied has gone stale. Clearing a virtual
+      // background costs the user a confirmation dialog, so camera mode only asks
+      // when something of ours is genuinely up: not on mount, not on a speaker
+      // change, not on arriving in the mode with nothing showing.
+    } else if (overlayMode === OVERLAY_MODE_CARD || isOverlayActive()) {
       addDebugLog(
         speechActive ? 'Removing overlay (reveal face mode)' : 'Removing overlay (no speech in progress)',
         'info'
       );
       removeOverlay();
     }
-  }, [isHidden, overlayMode, speechActive, currentStatus]);
+  }, [isHidden, overlayMode, speechActive, currentStatus, revealFaceWhenIdle]);
 
   // Log when status changes
   useEffect(() => {
@@ -502,7 +509,8 @@ export default memo(function LiveTab() {
     // mid-speech, or while a preview swatch is held up. Passing it
     // unconditionally is what used to paint an idle organizer blue on arrival.
     const shouldShow =
-      (speechActive || previewColor) && (newMode === OVERLAY_MODE_CAMERA || isHidden);
+      (speechActive || previewColor || !revealFaceWhenIdle) &&
+      (newMode === OVERLAY_MODE_CAMERA || isHidden);
     const accepted = await setOverlayMode(newMode, shouldShow ? imageUrl : null);
     if (newMode === OVERLAY_MODE_CAMERA) setIsHidden(true);
 
@@ -523,6 +531,13 @@ export default memo(function LiveTab() {
     }
 
     (window.requestIdleCallback || setTimeout)(() => trackEvent('overlay_mode_switched', { new_mode: newMode }));
+  };
+
+  const handleToggleRevealFaceWhenIdle = () => {
+    const reveal = !revealFaceWhenIdle;
+    setRevealFaceWhenIdle(reveal);
+    saveRevealFaceWhenIdle(reveal);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('reveal_face_when_idle_toggled', { reveal }));
   };
 
   const handleToggleStageClock = () => {
@@ -593,7 +608,12 @@ export default memo(function LiveTab() {
             )}
           </button>
         )}
-        <OverlayModeMenu value={overlayMode} onChange={handleModeSwitch} />
+        <OverlayModeMenu
+          value={overlayMode}
+          onChange={handleModeSwitch}
+          revealFaceWhenIdle={revealFaceWhenIdle}
+          onToggleRevealFaceWhenIdle={handleToggleRevealFaceWhenIdle}
+        />
       </div>
 
       {/* Video off warning banner - Always visible when video is off */}

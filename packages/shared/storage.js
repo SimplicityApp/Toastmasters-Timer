@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   OVERLAY_MODE: 'toastmaster_overlay_mode',
   TIME_INPUT_MODE: 'toastmaster_time_input_mode',
   STAGE_CLOCK_HIDDEN: 'toastmaster_stage_clock_hidden',
+  REVEAL_FACE_WHEN_IDLE: 'toastmaster_reveal_face_when_idle',
 };
 
 /**
@@ -183,6 +184,32 @@ export function loadOverlayMode() {
   } catch (error) {
     console.error('Failed to load overlay mode:', error);
     return null;
+  }
+}
+
+/**
+ * Save whether the video modes drop their overlay between speeches.
+ * @param {boolean} reveal - True to show the organizer's real video when idle
+ */
+export function saveRevealFaceWhenIdle(reveal) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.REVEAL_FACE_WHEN_IDLE, String(reveal));
+  } catch (error) {
+    console.error('Failed to save reveal-face-when-idle:', error);
+  }
+}
+
+/**
+ * Load whether the video modes drop their overlay between speeches.
+ * @returns {boolean} Defaults to true — only an explicit 'false' turns it off,
+ *   so an unset or unreadable value keeps the organizer's face visible
+ */
+export function loadRevealFaceWhenIdle() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.REVEAL_FACE_WHEN_IDLE) !== 'false';
+  } catch (error) {
+    console.error('Failed to load reveal-face-when-idle:', error);
+    return true;
   }
 }
 
