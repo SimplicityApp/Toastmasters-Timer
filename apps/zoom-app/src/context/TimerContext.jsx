@@ -233,6 +233,18 @@ export function TimerProvider({ children }) {
 
   const reorderAgenda = useCallback((newOrder) => setAgenda(newOrder), []);
 
+  /**
+   * Rename an agenda speaker in place, keeping their position and role.
+   * The current speaker follows along when it is the one being renamed, so a
+   * correction made while they are up does not have to be made twice.
+   * @param {string} id - Agenda item id
+   * @param {string} name - Corrected name
+   */
+  const renameAgendaSpeaker = useCallback((id, name) => {
+    setAgenda(prev => prev.map(item => (item.id === id ? { ...item, name } : item)));
+    setCurrentSpeaker(prev => (prev && activeSpeakerId === id ? { ...prev, name } : prev));
+  }, [activeSpeakerId]);
+
   const clearAllAgenda = useCallback(() => {
     const agendaCount = agenda.length;
     setAgenda([]);
@@ -428,6 +440,7 @@ export function TimerProvider({ children }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    renameAgendaSpeaker,
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
@@ -455,6 +468,7 @@ export function TimerProvider({ children }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    renameAgendaSpeaker,
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,

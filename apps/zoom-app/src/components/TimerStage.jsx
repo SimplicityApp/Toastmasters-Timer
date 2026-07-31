@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 import { getBackgroundUrl } from '../utils/zoomSdk';
-import SpeakerInput from './SpeakerInput';
+import StageSpeakerPicker from './StageSpeakerPicker';
 
 // Shown underneath the branded PNG, so the color signal is already correct while
 // the image loads and stays correct if it fails to load at all.
@@ -72,7 +72,10 @@ export default memo(function TimerStage({
   canPopout,
   onSpeakerNameChange,
   agendaItems,
-  onSelectSuggestion,
+  activeSpeakerId,
+  onSelectSpeaker,
+  onAddSpeaker,
+  onRenameSpeaker,
 }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
@@ -117,17 +120,19 @@ export default memo(function TimerStage({
 
       <div className="relative p-4 space-y-2">
         <div className="flex items-start gap-2">
-          {/* Typeable here, not just on the panel: once the stage is up it covers
+          {/* Editable here, not just on the panel: once the stage is up it covers
               the panel entirely, and the organizer still has to name each speaker
-              as the meeting moves on. Same field as the panel's, so it offers the
-              same agenda and participant suggestions. */}
+              as the meeting moves on — including jumping the running order and
+              fixing a name that came in wrong. */}
           <div className="min-w-0 flex-1">
-            <SpeakerInput
-              variant="stage"
+            <StageSpeakerPicker
               value={speakerName}
               onChange={onSpeakerNameChange}
               agendaItems={agendaItems}
-              onSelectSuggestion={onSelectSuggestion}
+              activeSpeakerId={activeSpeakerId}
+              onSelectSpeaker={onSelectSpeaker}
+              onAddSpeaker={onAddSpeaker}
+              onRenameSpeaker={onRenameSpeaker}
             />
           </div>
           <button

@@ -63,6 +63,8 @@ export default memo(function LiveTab() {
     agenda,
     activeSpeakerId,
     loadSpeakerFromAgenda,
+    addToAgenda,
+    renameAgendaSpeaker,
   } = useTimer();
   const { showToast } = useToast();
 
@@ -347,6 +349,28 @@ export default memo(function LiveTab() {
     }
     const rules = item.role === 'Custom' ? customRules : undefined;
     setCurrentSpeaker({ name: item.name, role: item.role, ...(rules && { rules }) });
+  };
+
+  /**
+   * Add a speaker typed on the stage to the agenda and make them current.
+   *
+   * Typing a name used to change only the label above the timer — nothing was
+   * recorded, and the organizer had no way to tell. Adding them puts the meeting
+   * back on a running order, so finishing can advance to whoever is next.
+   */
+  const handleAddSpeaker = (name) => {
+    const id = addToAgenda({ name, role: selectedRole });
+    loadSpeakerFromAgenda(id);
+    setSpeakerName(name);
+    showToast(`Added ${name} to the agenda`, 'success');
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('stage_speaker_added', { role: selectedRole }));
+  };
+
+  /** Fix a name on the agenda without losing the speaker's place in it. */
+  const handleRenameSpeaker = (id, name) => {
+    renameAgendaSpeaker(id, name);
+    setSpeakerName(name);
+    showToast(`Renamed to ${name}`, 'success');
   };
 
   const handleRoleChange = (role) => {
@@ -660,7 +684,10 @@ export default memo(function LiveTab() {
           canPopout={canPopout}
           onSpeakerNameChange={handleSpeakerChange}
           agendaItems={agenda}
-          onSelectSuggestion={handleSelectSuggestion}
+          activeSpeakerId={activeSpeakerId}
+          onSelectSpeaker={loadSpeakerFromAgenda}
+          onAddSpeaker={handleAddSpeaker}
+          onRenameSpeaker={handleRenameSpeaker}
         />
       )}
 
