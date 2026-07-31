@@ -12,6 +12,18 @@ const STATUS_COLORS = {
   red: 'bg-red-500',
 };
 
+// The controls are visible to the speaker along with everything else on the
+// shared screen, so they are outlined rather than filled. A solid white button
+// pulls the eye harder than the color signal it sits under, which is backwards:
+// the organizer knows where the bar is and only needs to find it, while the
+// speaker should be able to look past it. Contrast comes from the dark scrim
+// behind them, so these read the same against all four status colors.
+const BUTTON_BASE =
+  'py-2.5 px-4 rounded-lg text-sm font-medium tracking-wide text-white border transition-colors flex items-center justify-center gap-2';
+const PRIMARY_BUTTON = `flex-1 ${BUTTON_BASE} bg-white/15 hover:bg-white/25 border-white/40`;
+const SECONDARY_BUTTON = `flex-1 ${BUTTON_BASE} bg-transparent hover:bg-white/15 border-white/20 text-white/85`;
+const ICON_BUTTON = `${BUTTON_BASE} bg-transparent hover:bg-white/15 border-white/20 text-white/85`;
+
 /**
  * Full-panel timer display for the stage modes (share and popout).
  *
@@ -45,12 +57,26 @@ export default memo(function TimerStage({
 
   const textShadow = { textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3)' };
 
-  // The same branded PNGs card and camera mode push into the video pipeline. The
-  // stage renders them as DOM instead, so a club sees one consistent visual
-  // whichever mode it settles on. 'contain' keeps the wordmark intact in the tall
-  // sidebar, where 'cover' would crop it away.
-  const stageBackground = {
-    backgroundImage: `url("${getBackgroundUrl(status)}")`,
+  // The same branded PNGs card and camera mode push into the video pipeline, so a
+  // club sees one consistent visual whichever mode it settles on.
+  //
+  // Two layers, because the stage is rarely the 16:9 the asset was drawn at. A
+  // lone 'contain' leaves flat Tailwind-colored bands down the sides that do not
+  // match the artwork's own blue, and a lone 'cover' crops the wordmark away. So:
+  // a blurred 'cover' copy fills the frame edge to edge, and the crisp 'contain'
+  // copy sits on top with the logo intact. The margins end up as soft artwork
+  // rather than a mismatched slab of color. Scaled past the edges so the blur has
+  // pixels to sample instead of fading to transparent.
+  const backgroundUrl = getBackgroundUrl(status);
+  const backdropLayer = {
+    backgroundImage: `url("${backgroundUrl}")`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    filter: 'blur(28px)',
+    transform: 'scale(1.15)',
+  };
+  const artworkLayer = {
+    backgroundImage: `url("${backgroundUrl}")`,
     backgroundSize: 'contain',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
@@ -59,10 +85,14 @@ export default memo(function TimerStage({
   return (
     <div
       className={`fixed inset-0 z-50 ${bgColor} flex flex-col transition-colors duration-300`}
-      style={stageBackground}
       data-testid="timer-stage"
     >
-      <div className="flex items-start justify-between p-4">
+      {/* Backdrops paint under everything; the flat status color behind them is
+          the fallback for an image that never loads. */}
+      <div aria-hidden className="absolute inset-0 pointer-events-none" style={backdropLayer} />
+      <div aria-hidden className="absolute inset-0 pointer-events-none" style={artworkLayer} />
+
+      <div className="relative flex items-start justify-between p-4">
         <div className="min-w-0">
           {speakerName && (
             <div className="text-white text-lg font-semibold truncate" style={textShadow}>
@@ -86,59 +116,47 @@ export default memo(function TimerStage({
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-0">
-        <div
-          className="text-white font-mono font-bold leading-none text-[clamp(3.5rem,22vw,12rem)]"
-          style={textShadow}
-        >
-          {formatTime(elapsedTime)}
-        </div>
-        {phaseText && (
-          <div className="text-white text-lg sm:text-xl font-medium mt-4 text-center" style={textShadow}>
-            {phaseText}
-          </div>
-        )}
-      </div>
+      {/* Deliberately empty: the color is the signal. A speaker watching a shared
+          screen should be reading green/yellow/red the way they would read timing
+          cards in the room, not a clock counting at them. */}
+      <div className="relative flex-1 min-h-0" />
 
-      {/* Controls sit on a translucent scrim so they stay legible against yellow. */}
-      <div className="p-4 space-y-2 bg-black/10">
+      {/* Organizer instrumentation, grouped at the bottom. Small on purpose:
+          readable to whoever is running the timer, easy for the speaker to
+          ignore. The scrim has to be this dark because white-on-yellow is the
+          worst of the four states and the readout must hold up in all of them. */}
+      <div className="relative p-4 space-y-2 bg-black/35">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-white font-mono text-xl tabular-nums" style={textShadow}>
+            {formatTime(elapsedTime)}
+          </span>
+          {phaseText && (
+            <span className="text-white/85 text-xs truncate" style={textShadow}>
+              {phaseText}
+            </span>
+          )}
+        </div>
         {isRunning ? (
           <div className="flex gap-2">
-            <button
-              onClick={onStop}
-              className="flex-1 bg-white/90 hover:bg-white text-gray-900 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-              <Square className="h-5 w-5" />
+            <button onClick={onStop} className={PRIMARY_BUTTON}>
+              <Square className="h-4 w-4" />
               STOP
             </button>
-            <button
-              onClick={onFinish}
-              className="flex-1 bg-black/30 hover:bg-black/40 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-            >
+            <button onClick={onFinish} className={SECONDARY_BUTTON}>
               FINISH
             </button>
           </div>
         ) : (
           <div className="flex gap-2">
-            <button
-              onClick={elapsedTime === 0 ? onStart : onContinue}
-              className="flex-1 bg-white/90 hover:bg-white text-gray-900 font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-              <Play className="h-5 w-5" />
+            <button onClick={elapsedTime === 0 ? onStart : onContinue} className={PRIMARY_BUTTON}>
+              <Play className="h-4 w-4" />
               {elapsedTime === 0 ? 'START' : 'CONTINUE'}
             </button>
-            <button
-              onClick={onReset}
-              className="bg-black/30 hover:bg-black/40 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition-colors"
-              aria-label="Reset"
-            >
-              <RotateCcw className="h-5 w-5" />
+            <button onClick={onReset} className={ICON_BUTTON} aria-label="Reset">
+              <RotateCcw className="h-4 w-4" />
             </button>
             {elapsedTime > 0 && (
-              <button
-                onClick={onFinish}
-                className="flex-1 bg-black/30 hover:bg-black/40 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-              >
+              <button onClick={onFinish} className={SECONDARY_BUTTON}>
                 FINISH
               </button>
             )}
