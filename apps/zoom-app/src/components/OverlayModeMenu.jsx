@@ -1,0 +1,130 @@
+import { useState, useRef, useEffect, memo } from 'react';
+import { Monitor, Camera, ScreenShare, PictureInPicture2, ChevronDown, Check } from 'lucide-react';
+import {
+  OVERLAY_MODE_CARD,
+  OVERLAY_MODE_CAMERA,
+  OVERLAY_MODE_SHARE,
+  OVERLAY_MODE_POPOUT,
+} from '../utils/zoomSdk';
+
+// Four modes on one row left each button too small to read and gave no hint what
+// any of them did. As a menu there is room for a name and a line of explanation,
+// which these need: the difference between them is not something an icon conveys.
+export const OVERLAY_MODES = [
+  {
+    mode: OVERLAY_MODE_CARD,
+    Icon: Monitor,
+    label: 'Timer Card',
+    description: 'Color replaces your video',
+  },
+  {
+    mode: OVERLAY_MODE_CAMERA,
+    Icon: Camera,
+    label: 'Timer + Camera',
+    description: 'Color behind your face',
+  },
+  {
+    mode: OVERLAY_MODE_SHARE,
+    Icon: ScreenShare,
+    label: 'Share Timer',
+    description: 'Screen-share the timer, camera untouched',
+  },
+  {
+    mode: OVERLAY_MODE_POPOUT,
+    Icon: PictureInPicture2,
+    label: 'Timer Window',
+    description: 'Own window for a second screen',
+  },
+];
+
+export const MODE_LABELS = Object.fromEntries(OVERLAY_MODES.map(({ mode, label }) => [mode, label]));
+
+/**
+ * Mode picker for the Live tab: the active mode plus a menu to change it.
+ */
+export default memo(function OverlayModeMenu({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const active = OVERLAY_MODES.find((m) => m.mode === value) || OVERLAY_MODES[0];
+  const ActiveIcon = active.Icon;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleClickOutside = (e) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target) &&
+        buttonRef.current && !buttonRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  const handleSelect = (mode) => {
+    setOpen(false);
+    if (mode !== value) onChange(mode);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        className="flex items-center gap-1.5 pl-2 pr-1.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-tooltip={`Display mode: ${active.label}`}
+        data-tooltip-direction="down-left"
+      >
+        <ActiveIcon className="h-4 w-4 text-blue-600" />
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          className="absolute right-0 z-20 mt-1 w-60 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+        >
+          {OVERLAY_MODES.map(({ mode, Icon, label, description }) => {
+            const isActive = mode === value;
+            return (
+              <button
+                key={mode}
+                role="menuitemradio"
+                aria-checked={isActive}
+                onClick={() => handleSelect(mode)}
+                className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                  isActive ? 'bg-blue-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <Icon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
+                    {label}
+                  </span>
+                  <span className="block text-xs text-gray-500">{description}</span>
+                </span>
+                {isActive && <Check className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});

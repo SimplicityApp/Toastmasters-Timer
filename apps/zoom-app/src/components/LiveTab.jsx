@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
 import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera, ScreenShare, PictureInPicture2 } from 'lucide-react';
+import { Play, Square, RotateCcw, Eye, EyeOff, Video } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import TimerStage from './TimerStage';
+import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
@@ -23,18 +24,6 @@ const DEBUG_PANEL_ENABLED =
 const PromptDebugControls = DEBUG_PANEL_ENABLED
   ? lazy(() => import('./PromptDebugControls'))
   : null;
-
-// Mode toggle, in the order they appear in the segmented control. Card and
-// camera drive the video pipeline; share and popout put the app's own stage view
-// on screen instead. See isVideoOverlayMode in utils/zoomSdk.
-const OVERLAY_MODES = [
-  { mode: OVERLAY_MODE_CARD, Icon: Monitor, label: 'Timer Card' },
-  { mode: OVERLAY_MODE_CAMERA, Icon: Camera, label: 'Timer + Camera' },
-  { mode: OVERLAY_MODE_SHARE, Icon: ScreenShare, label: 'Share Timer' },
-  { mode: OVERLAY_MODE_POPOUT, Icon: PictureInPicture2, label: 'Timer Window' },
-];
-
-const MODE_LABELS = Object.fromEntries(OVERLAY_MODES.map(({ mode, label }) => [mode, label]));
 
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
@@ -561,24 +550,7 @@ export default memo(function LiveTab() {
             )}
           </button>
         )}
-        {/* Segmented mode toggle: Timer Card | Timer + Camera | Share | Window */}
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {OVERLAY_MODES.map(({ mode, Icon, label }, index) => (
-            <button
-              key={mode}
-              onClick={() => handleModeSwitch(mode)}
-              className={`p-1.5 rounded-md transition-all ${
-                overlayMode === mode
-                  ? 'bg-white shadow-sm text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              data-tooltip={label}
-              data-tooltip-direction={index === OVERLAY_MODES.length - 1 ? 'down-left' : 'down'}
-            >
-              <Icon className="h-4 w-4" />
-            </button>
-          ))}
-        </div>
+        <OverlayModeMenu value={overlayMode} onChange={handleModeSwitch} />
       </div>
 
       {/* Video off warning banner - Always visible when video is off */}
