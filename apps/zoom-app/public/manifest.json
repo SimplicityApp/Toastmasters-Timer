@@ -22,6 +22,15 @@
     },
     "openUrl": {
       "enabled": true
+    },
+    "appPopout": {
+      "enabled": true
+    },
+    "onAppPopout": {
+      "enabled": true
+    },
+    "onAppVisibilityChange": {
+      "enabled": true
     }
   },
   "developer": {

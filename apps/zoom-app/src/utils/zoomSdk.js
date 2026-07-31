@@ -67,7 +67,15 @@ const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
 //   openUrl         - opens the Marketplace listing in the user's browser
 //   appPopout       - desktop only, so mobile clients reject it; popout mode is
 //                     unavailable there but every other mode still works
-const OPTIONAL_CAPABILITIES = ['onMyMediaChange', 'openUrl', 'appPopout', 'onAppPopout'];
+//   onAppVisibilityChange - desktop only; tells us the user has been elsewhere in
+//                     Zoom, so our record of what is on their video is suspect
+const OPTIONAL_CAPABILITIES = [
+  'onMyMediaChange',
+  'openUrl',
+  'appPopout',
+  'onAppPopout',
+  'onAppVisibilityChange',
+];
 
 // Overlay mode constants.
 //
@@ -251,6 +259,7 @@ export async function initializeZoomSdk() {
     log('Video filter capability is available', 'info');
     subscribeToCameraResolution();
     subscribeToAppPopout();
+    subscribeToAppVisibility();
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
@@ -325,10 +334,11 @@ export function handleMyMediaChange(event) {
   // Anything decoded for the previous resolution is the wrong size now.
   imageDataCache.clear();
 
-  // Re-push so what participants see matches the new resolution, but only if an
-  // overlay is actually showing. The redundant-push guard compares the budget the
-  // pixels were rendered for, so this is not treated as a duplicate.
-  if (activeOverlay) {
+  // Re-push so what participants see matches the new resolution, but only if
+  // pixels were actually rendered for the old one. A fileUrl push carries no
+  // pixels — Zoom scales the file itself — so resolution has no bearing on it,
+  // and a null budget is what marks that case.
+  if (activeOverlay?.budget) {
     applyOverlay(activeOverlay.url);
   }
 }
@@ -466,6 +476,42 @@ export function handleAppPopout(event) {
   appPoppedOut = popped;
   log(`App window ${popped ? 'undocked' : 'docked'} by the client`, 'info');
   if (popoutChangeCallback) popoutChangeCallback(popped);
+}
+
+/**
+ * Track the app being hidden and shown again. Exported for testing.
+ *
+ * Coming back to the front is the one moment we know the user has been somewhere
+ * else in Zoom — quite possibly Background & Effects, swapping the branded image
+ * for one of their own or clearing it. Nothing reports that, so the only safe
+ * move is to stop believing our record of what is on their video: the next push
+ * then reapplies for real instead of being skipped as redundant.
+ *
+ * @param {Object} event - OnAppVisibilityChangeEvent
+ */
+export function handleAppVisibilityChange(event) {
+  if (event?.visible !== true) return;
+  if (!activeOverlay) return;
+  log('App back in front; forgetting what we believed was on the video', 'info');
+  activeOverlay = null;
+}
+
+/**
+ * Subscribe to app visibility. Desktop only, and non-fatal where it is missing:
+ * camera mode never trusts the record anyway, so the loss is limited to card mode
+ * skipping a redundant-looking push after the user edited their video filters.
+ */
+function subscribeToAppVisibility() {
+  if (!zoomSdk || typeof zoomSdk.onAppVisibilityChange !== 'function') {
+    log('onAppVisibilityChange unavailable; overlay state will not reset on refocus', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onAppVisibilityChange(handleAppVisibilityChange);
+    log('Subscribed to onAppVisibilityChange', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onAppVisibilityChange: ${error.message || error.name}`, 'warn');
+  }
 }
 
 /**
@@ -785,11 +831,19 @@ export function getOverlayMode() {
 }
 
 /**
- * Whether an overlay is currently pushed to Zoom.
+ * Whether something of ours is currently on the user's video.
+ *
+ * Callers use this to decide whether taking the overlay down is worth a
+ * confirmation dialog, so it has to survive a reload. Zoom re-creates the app's
+ * webview every time the panel is closed and reopened, which zeroes activeOverlay
+ * while the virtual background it describes is still sitting on the organizer's
+ * face. Reading only that in-memory record is what left a branded background up
+ * for a whole meeting: idle or not, nothing believed there was anything to remove.
+ *
  * @returns {boolean}
  */
 export function isOverlayActive() {
-  return activeOverlay !== null;
+  return activeOverlay !== null || virtualBackgroundApplied;
 }
 
 /**
@@ -1023,8 +1077,12 @@ async function removeOverlayInternal(mode) {
     log(`Failed to remove overlay (mode: ${mode}): ${error.message || error.name}`, 'error');
     if (error.code) {
       log(`Error code: ${error.code}`, 'error');
-      if (error.code === 10195) {
+      if (error.code === ERROR_NOTHING_APPLIED) {
         log('No overlay exists to remove', 'warn');
+        // Nothing was there, so stop recording one. Otherwise a flag left true by
+        // a background the user cleared themselves would ask Zoom to remove it —
+        // and prompt them for it — on every idle moment from here on.
+        if (mode === OVERLAY_MODE_CAMERA) markVirtualBackgroundApplied(false);
       }
     }
   }
@@ -1042,10 +1100,27 @@ export function applyOverlay(imageUrl) {
 
 /**
  * Whether what is already on screen matches what we are about to push.
+ *
+ * This is only ever an optimization, and a distrusted one: what is on the user's
+ * video is Zoom's state, not ours, and the user can change it at any time through
+ * Zoom's own UI without a word to the app. Skipping a push on the strength of a
+ * record that has quietly gone stale is what left the branded image off for the
+ * rest of a meeting.
+ *
+ * So it never speaks for camera mode: Background & Effects is a panel the user
+ * visits, and a virtual background is pushed by fileUrl, costing no pixels across
+ * the bridge — there is nothing worth protecting there. Card mode keeps the guard
+ * because a video filter ships megabytes of ImageData, and the record is dropped
+ * there too whenever the app comes back to the front.
+ *
+ * Two call sites pushing the same color at once are collapsed by the overlay
+ * queue, which drops superseded requests, so that is not this function's job.
+ *
  * @param {string} imageUrl
  * @returns {boolean}
  */
 function isAlreadyShowing(imageUrl) {
+  if (currentOverlayMode === OVERLAY_MODE_CAMERA) return false;
   if (!activeOverlay) return false;
   if (activeOverlay.url !== imageUrl || activeOverlay.mode !== currentOverlayMode) return false;
   // A fileUrl push is size-independent, so it is never stale.

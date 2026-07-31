@@ -621,9 +621,13 @@ describe('applyOverlay in camera mode', () => {
     expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
 
     handleMyMediaChange({ media: { video: { width: 480, height: 270 } }, timestamp: 2 });
-    await applyOverlay('https://zoom.example/backgrounds/blue.png');
+    // The re-push, if there were one, is queued rather than awaited.
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Zoom scales the file itself, so resolution has no bearing on this push.
+    // Checked on the resolution event alone: camera mode deliberately no longer
+    // dedupes an explicit apply, since the user may have changed the background
+    // in Zoom without telling us.
     expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
   });
 
@@ -918,6 +922,104 @@ describe('entering a stage mode leaves the camera untouched', () => {
 
     expect(accepted).toBe(true);
     expect(isAppShareActive()).toBe(true);
+  });
+});
+
+describe('the client owns the background, so our record of it goes stale', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+  });
+
+  it('re-applies the branded background after the user swaps it in Zoom', async () => {
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_CAMERA } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalled();
+    sdkMock.setVirtualBackground.mockClear();
+
+    // The organizer opens Zoom's own Background & Effects panel and picks
+    // something else, or clears it. Nothing reports that to the app, so our
+    // record still claims green is up — and skipping the push on the strength of
+    // that record leaves the branded image gone for the rest of the meeting.
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('forgets what it believed once the app is brought back to the front', async () => {
+    const { initializeZoomSdk, applyOverlay, isOverlayActive, handleAppVisibilityChange } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await applyOverlay('https://zoom.example/backgrounds/blue.png');
+    expect(isOverlayActive()).toBe(true);
+    sdkMock.setVideoFilter.mockClear();
+
+    // Away and back: time enough to have changed anything in Zoom's own settings.
+    handleAppVisibilityChange({ visible: false });
+    handleAppVisibilityChange({ visible: true });
+
+    await applyOverlay('https://zoom.example/backgrounds/blue.png');
+    expect(sdkMock.setVideoFilter).toHaveBeenCalled();
+  });
+
+  it('knows a background of ours is up even after the webview was re-created', async () => {
+    // Camera mode, branded background applied, then the organizer closes and
+    // reopens the app panel. Zoom re-creates the webview, so the in-memory record
+    // is gone while the background is still on their face. Callers ask
+    // isOverlayActive() before paying for a removal dialog, so a false here is
+    // what left the branded image up whether or not the timer was running.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, setOverlayMode, isOverlayActive, removeOverlay, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, null);
+
+    expect(isOverlayActive()).toBe(true);
+
+    await removeOverlay();
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(isOverlayActive()).toBe(false);
+  });
+
+  it('stops believing in a background the user has already cleared themselves', async () => {
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, setOverlayMode, isOverlayActive, removeOverlay, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, null);
+    // 10195: there was nothing to remove, because they cleared it in Zoom.
+    sdkMock.removeVirtualBackground.mockRejectedValueOnce(
+      Object.assign(new Error('none'), { code: 10195 })
+    );
+
+    await removeOverlay();
+
+    // isOverlayActive is the gate callers check before paying for a removal.
+    // Left true, every idle moment from here on would ask Zoom to remove a
+    // background that is not there, prompting the organizer each time.
+    expect(isOverlayActive()).toBe(false);
+  });
+
+  it('still collapses the duplicate push two call sites make for one change', async () => {
+    const { initializeZoomSdk, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+
+    // TimerContext and LiveTab both react to the same status change. The queue
+    // drops the superseded request, so this must stay one push.
+    await Promise.all([
+      applyOverlay('https://zoom.example/backgrounds/red.png'),
+      applyOverlay('https://zoom.example/backgrounds/red.png'),
+    ]);
+
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
   });
 });
 
