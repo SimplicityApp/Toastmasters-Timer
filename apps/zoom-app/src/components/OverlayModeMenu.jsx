@@ -139,9 +139,9 @@ export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenId
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
               />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-gray-900">Show my face between speeches</span>
+                <span className="block text-sm font-medium text-gray-900">Show my own background</span>
                 <span className="block text-xs text-gray-500">
-                  Off keeps the color up the whole meeting
+                  Between speeches. Zoom asks you to confirm each time
                 </span>
               </span>
             </label>

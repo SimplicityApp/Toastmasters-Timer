@@ -73,6 +73,9 @@ export default memo(function LiveTab() {
 
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isClearingVideo, setIsClearingVideo] = useState(false);
+  // Bumped by the clear button. Guarantees the overlay effect re-runs exactly
+  // once afterwards, which is the run it skips — see handleClearVideo.
+  const [clearGeneration, setClearGeneration] = useState(0);
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
   // Unlike the mode itself, this preference is remembered: it is a club's stance
@@ -114,6 +117,7 @@ export default memo(function LiveTab() {
   const [debugLogs, setDebugLogs] = useState([]);
   const initializedRef = useRef(false);
   const isLocalNameEdit = useRef(false);
+  const lastClearGenerationRef = useRef(0);
 
   // Nothing to report: connected, and this client offers every API we call.
   const sdkHealthy =
@@ -298,6 +302,13 @@ export default memo(function LiveTab() {
   // no pixels, and removeOverlay there would tear down the share or the
   // popped-out window itself.
   useEffect(() => {
+    // The run triggered by the clear button itself: leave the video as it was
+    // just cleared to. Bumping the generation is what makes this run happen at
+    // all, so the skip is always consumed and never swallows a later push.
+    if (lastClearGenerationRef.current !== clearGeneration) {
+      lastClearGenerationRef.current = clearGeneration;
+      return;
+    }
     if (!isVideoOverlayMode(overlayMode)) return;
     if (wantsColorNow) {
       const imageUrl = getBackgroundUrl(desiredStatus);
@@ -314,7 +325,7 @@ export default memo(function LiveTab() {
       addDebugLog('Removing overlay (no speech in progress)', 'info');
       removeOverlay();
     }
-  }, [overlayMode, wantsColorNow, desiredStatus]);
+  }, [overlayMode, wantsColorNow, desiredStatus, clearGeneration]);
 
   // Log when status changes
   useEffect(() => {
@@ -504,23 +515,23 @@ export default memo(function LiveTab() {
    *
    * The escape hatch for the state nobody can talk their way out of: a color
    * stuck on your tile, usually because a previous session ended without
-   * unwinding, or because a removal was refused. So it is always available, not
-   * gated on the mode or on our record of what is applied, and it forces the
-   * virtual background removal that the automatic paths deliberately skip.
+   * unwinding, or because a removal was refused. Always available, whatever the
+   * mode.
    *
-   * Any preview swatch is dropped too, and reveal-when-idle is turned on: leaving
-   * either set would have the overlay effect push a color straight back.
+   * A one-shot affair. Any preview swatch is dropped, and the overlay effect is
+   * told to sit out the render this causes, so the color it would otherwise push
+   * straight back does not undo the clear. It stays off until the next thing that
+   * legitimately wants a color on the tile — starting a speech, a status change,
+   * a mode switch. Notably it does not touch the display preference: pressing
+   * clear is a one-time act, not a decision to reveal after every speech.
    */
   const handleClearVideo = async () => {
     setIsClearingVideo(true);
     setPreviewColor(null);
-    if (!revealFaceWhenIdle) {
-      setRevealFaceWhenIdle(true);
-      saveRevealFaceWhenIdle(true);
-    }
+    setClearGeneration((n) => n + 1);
     try {
       addDebugLog('Clearing all filters and backgrounds', 'info');
-      const { ok, declined } = await clearVideoPipelines({ force: true });
+      const { ok, declined } = await clearVideoPipelines();
       if (!sdkStatus?.available) {
         // Outside Zoom every SDK call is a no-op, so there is nothing to report.
       } else if (declined) {

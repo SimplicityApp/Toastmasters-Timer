@@ -970,15 +970,11 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *
  * Bypasses the overlay queue for the same reason teardownStageMode does.
  *
- * @param {Object} [options]
- * @param {boolean} [options.force] - The user asked for this directly. Widens
- *   the virtual-background attempt to camera mode even with nothing on record,
- *   since a stale record is a common reason to press the button.
  * @returns {Promise<{ok: boolean, declined: boolean}>} ok is false only when
  *   something we believed was applied would not come off; declined is true when
  *   the user dismissed Zoom's removal confirmation, which changed nothing.
  */
-export async function clearVideoPipelines({ force = false } = {}) {
+export async function clearVideoPipelines() {
   if (!sdkInitialized) {
     await initializeZoomSdk();
   }
@@ -998,7 +994,13 @@ export async function clearVideoPipelines({ force = false } = {}) {
   const attempts = [
     ['video filter', hadFilter, () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
   ];
-  if (hadBackground || (force && currentOverlayMode === OVERLAY_MODE_CAMERA)) {
+  // Strictly on the record, never speculatively. Zoom offers no way to read the
+  // current virtual background — there is no getVirtualBackground, and
+  // getVideoSettings reports camera, HD, mirror and ratio but not this — so the
+  // record is the only thing that can answer "is one of ours up?". Asking anyway
+  // means the client puts a "remove your virtual background?" dialog in front of
+  // someone who has no virtual background at all.
+  if (hadBackground) {
     attempts.push(['virtual background', hadBackground, () => zoomSdk.removeVirtualBackground?.()]);
   }
 

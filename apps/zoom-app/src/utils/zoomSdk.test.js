@@ -1102,11 +1102,28 @@ describe('clearing the video on request', () => {
     const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
     await initializeZoomSdk();
 
-    const result = await clearVideoPipelines({ force: true });
+    const result = await clearVideoPipelines();
 
     // Card mode drives videoFilter only. Asking to remove a background that was
     // never applied costs the user a confirmation dialog and then fails.
     expect(sdkMock.deleteVideoFilter).toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, declined: false });
+  });
+
+  it('does not ask about a virtual background in camera mode when none is ours', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, null);
+    sdkMock.removeVirtualBackground.mockClear();
+
+    const result = await clearVideoPipelines();
+
+    // Being in camera mode is not evidence that a background is applied. Zoom
+    // offers no way to ask, so the record is all there is — and asking anyway
+    // puts a "remove your virtual background?" dialog in front of someone who
+    // does not have one.
     expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, declined: false });
   });
@@ -1120,7 +1137,7 @@ describe('clearing the video on request', () => {
       Object.assign(new Error('no filter'), { code: 99999 })
     );
 
-    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: true, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false });
   });
 
   it('reports failure when something we did apply will not come off', async () => {
@@ -1132,7 +1149,7 @@ describe('clearing the video on request', () => {
       Object.assign(new Error('busy'), { code: 99999 })
     );
 
-    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: false, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: false, declined: false });
   });
 
   it('removes a background applied in camera mode, and only asks once', async () => {
@@ -1143,13 +1160,13 @@ describe('clearing the video on request', () => {
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
     sdkMock.removeVirtualBackground.mockClear();
 
-    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: true, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false });
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
 
     // Already gone: clearing again must not re-prompt.
     sdkMock.removeVirtualBackground.mockClear();
-    await clearVideoPipelines({ force: true });
-    expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
+    await clearVideoPipelines();
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
   });
 
   it('reports a declined confirmation as declined, not as a failure', async () => {
@@ -1163,11 +1180,11 @@ describe('clearing the video on request', () => {
       Object.assign(new Error('declined'), { code: 10017 })
     );
 
-    expect(await clearVideoPipelines({ force: true })).toEqual({ ok: true, declined: true });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: true });
 
     // Still up, so a second press must try again rather than assume it is gone.
     sdkMock.removeVirtualBackground.mockClear();
-    await clearVideoPipelines({ force: true });
+    await clearVideoPipelines();
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
   });
 

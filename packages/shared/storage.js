@@ -188,8 +188,9 @@ export function loadOverlayMode() {
 }
 
 /**
- * Save whether the video modes drop their overlay between speeches.
- * @param {boolean} reveal - True to show the organizer's real video when idle
+ * Save whether the video modes drop their overlay between speeches, handing the
+ * organizer their own background back.
+ * @param {boolean} reveal - True to show the organizer's own background when idle
  */
 export function saveRevealFaceWhenIdle(reveal) {
   try {
@@ -201,15 +202,19 @@ export function saveRevealFaceWhenIdle(reveal) {
 
 /**
  * Load whether the video modes drop their overlay between speeches.
- * @returns {boolean} Defaults to true — only an explicit 'false' turns it off,
- *   so an unset or unreadable value keeps the organizer's face visible
+ *
+ * @returns {boolean} Defaults to false — only an explicit 'true' turns it on.
+ *   Off by default because in Timer + Camera every reveal costs a Zoom
+ *   confirmation dialog, by Zoom's design: there is no silent way to take a
+ *   virtual background off. Once per speech is enough to wear an organizer down,
+ *   so the color stays up and the clear button takes it off once, when asked.
  */
 export function loadRevealFaceWhenIdle() {
   try {
-    return localStorage.getItem(STORAGE_KEYS.REVEAL_FACE_WHEN_IDLE) !== 'false';
+    return localStorage.getItem(STORAGE_KEYS.REVEAL_FACE_WHEN_IDLE) === 'true';
   } catch (error) {
     console.error('Failed to load reveal-face-when-idle:', error);
-    return true;
+    return false;
   }
 }
 
