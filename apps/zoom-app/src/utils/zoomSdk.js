@@ -65,12 +65,34 @@ const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
 // altogether would disable every overlay rather than just one nicety.
 //   onMyMediaChange - reports the camera resolution the SDK recommends matching
 //   openUrl         - opens the Marketplace listing in the user's browser
-const OPTIONAL_CAPABILITIES = ['onMyMediaChange', 'openUrl'];
+//   appPopout       - desktop only, so mobile clients reject it; popout mode is
+//                     unavailable there but every other mode still works
+const OPTIONAL_CAPABILITIES = ['onMyMediaChange', 'openUrl', 'appPopout', 'onAppPopout'];
 
-// Overlay mode constants
+// Overlay mode constants.
+//
+// Two families, and the difference matters at every call site below:
+//   card / camera   - push an image into the video pipeline (videoFilter or
+//                     virtualBackground). The color rides on the user's tile.
+//   share / popout  - put the app's own UI on screen instead, so they push no
+//                     pixels at all: the color is DOM rendered by the app, and
+//                     the user's camera and background are left untouched.
 export const OVERLAY_MODE_CARD = 'card';
 export const OVERLAY_MODE_CAMERA = 'camera';
+export const OVERLAY_MODE_SHARE = 'share';
+export const OVERLAY_MODE_POPOUT = 'popout';
 let currentOverlayMode = OVERLAY_MODE_CARD;
+
+/**
+ * Whether a mode drives the video pipeline. The stage modes (share, popout)
+ * show the color through the app's own UI, so pushing a background as well
+ * would put the color in two places at once.
+ * @param {string} [mode] - Defaults to the current mode
+ * @returns {boolean}
+ */
+export function isVideoOverlayMode(mode = currentOverlayMode) {
+  return mode === OVERLAY_MODE_CARD || mode === OVERLAY_MODE_CAMERA;
+}
 
 // Track SDK initialization state
 let sdkInitialized = false;
@@ -95,6 +117,16 @@ let activeOverlay = null;
 
 // Camera resolution reported by onMyMediaChange, or null until one arrives.
 let cameraResolution = null;
+
+// Stage-mode state. Neither is a video overlay, so neither is tracked by
+// activeOverlay: appShareActive means the app is screen-shared into the meeting,
+// appPoppedOut means it is undocked into its own window.
+let appShareActive = false;
+let appPoppedOut = false;
+
+// Notified when the popout state changes, including when the user drives it from
+// Zoom's own ellipsis menu rather than from our toggle.
+let popoutChangeCallback = null;
 
 // Monotonic id used to drop overlay requests that a newer one has superseded.
 let overlayRequestId = 0;
@@ -164,6 +196,7 @@ export async function initializeZoomSdk() {
     log(`Zoom SDK initialized successfully. Config: ${JSON.stringify(configResult)}`, 'info');
     log('Video filter capability is available', 'info');
     subscribeToCameraResolution();
+    subscribeToAppPopout();
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
@@ -264,6 +297,141 @@ function subscribeToCameraResolution() {
 }
 
 /**
+ * Whether the app is currently screen-shared into the meeting.
+ * @returns {boolean}
+ */
+export function isAppShareActive() {
+  return appShareActive;
+}
+
+/**
+ * Whether the app is currently undocked into its own window.
+ * @returns {boolean}
+ */
+export function isAppPoppedOut() {
+  return appPoppedOut;
+}
+
+/**
+ * Start or stop sharing the app itself into the meeting.
+ *
+ * This is a screen share of the app's own webview, not a video effect: the
+ * camera pipeline is untouched, so the user keeps their face and whatever
+ * background they already chose. What participants see is whatever the app
+ * panel is showing, which is why the stage view has to carry its own controls.
+ *
+ * @param {boolean} active - True to start sharing, false to stop
+ * @param {{withSound?: boolean}} [options]
+ * @returns {Promise<boolean>} True if the client accepted the request
+ */
+export async function setAppShare(active, { withSound = false } = {}) {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+
+  if (!sdkAvailable || !zoomSdk || typeof zoomSdk.shareApp !== 'function') {
+    log(`[MOCK] Would ${active ? 'start' : 'stop'} sharing the app`, 'warn');
+    appShareActive = active;
+    return false;
+  }
+
+  try {
+    await zoomSdk.shareApp(active ? { action: 'start', withSound } : { action: 'stop' });
+    appShareActive = active;
+    log(`App share ${active ? 'started' : 'stopped'}`, 'info');
+    return true;
+  } catch (error) {
+    log(`Failed to ${active ? 'start' : 'stop'} app share: ${error.message || error.name}`, 'error');
+    if (error.code) log(`Error code: ${error.code}`, 'error');
+    // Only a start can leave the meeting sharing; a failed stop means the share
+    // is either already gone or still up, and the next state change re-reconciles.
+    if (active) appShareActive = false;
+    return false;
+  }
+}
+
+/**
+ * Pop the app out into its own window, or merge it back into the main client.
+ * Equivalent to "Popout" / "Merge Back to Main Window" in the app's ellipsis
+ * menu. Desktop only: other clients report 10247, or reject the capability
+ * outright at config() time.
+ *
+ * @param {boolean} popped - True to undock, false to dock back
+ * @returns {Promise<boolean>} True if the client accepted the request
+ */
+export async function setAppPopout(popped) {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+
+  if (!sdkAvailable || !zoomSdk || typeof zoomSdk.appPopout !== 'function') {
+    log(`[MOCK] Would ${popped ? 'undock' : 'dock'} the app window`, 'warn');
+    appPoppedOut = popped;
+    return false;
+  }
+
+  try {
+    await zoomSdk.appPopout({ action: popped ? 'undock' : 'dock' });
+    // onAppPopout also reports this, but the event does not arrive on every
+    // client, so the requested state is recorded here too.
+    appPoppedOut = popped;
+    log(`App window ${popped ? 'undocked' : 'docked'}`, 'info');
+    return true;
+  } catch (error) {
+    log(`Failed to ${popped ? 'undock' : 'dock'} the app: ${error.message || error.name}`, 'error');
+    if (error.code) {
+      log(`Error code: ${error.code}`, 'error');
+      if (error.code === 10247) {
+        log('This client or running context does not support popping the app out', 'warn');
+      }
+    }
+    return false;
+  }
+}
+
+/**
+ * Register a callback for popout state changes, so the UI stays in sync when the
+ * user pops the app out from Zoom's own menu instead of from our toggle.
+ * @param {Function|null} callback - Receives the new popped-out boolean
+ */
+export function setPopoutChangeCallback(callback) {
+  popoutChangeCallback = callback;
+}
+
+/**
+ * Track the docked/undocked state from an onAppPopout event. Exported for testing.
+ * @param {Object} event - OnAppPopoutEvent
+ */
+export function handleAppPopout(event) {
+  const action = event?.action;
+  if (action !== 'dock' && action !== 'undock') return;
+
+  const popped = action === 'undock';
+  if (popped === appPoppedOut) return;
+
+  appPoppedOut = popped;
+  log(`App window ${popped ? 'undocked' : 'docked'} by the client`, 'info');
+  if (popoutChangeCallback) popoutChangeCallback(popped);
+}
+
+/**
+ * Subscribe to popout updates. Failure is non-fatal: the toggle still drives the
+ * window, it just will not follow changes made from Zoom's own menu.
+ */
+function subscribeToAppPopout() {
+  if (!zoomSdk || typeof zoomSdk.onAppPopout !== 'function') {
+    log('onAppPopout unavailable; popout state will not track the client menu', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onAppPopout(handleAppPopout);
+    log('Subscribed to onAppPopout', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onAppPopout: ${error.message || error.name}`, 'warn');
+  }
+}
+
+/**
  * Check if SDK is available (for debugging)
  */
 export function isSdkAvailable() {
@@ -285,7 +453,11 @@ export function getSdkStatus() {
     hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
     hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
     hasRemoveVirtualBackground: zoomSdk && typeof zoomSdk.removeVirtualBackground === 'function',
+    hasShareApp: zoomSdk && typeof zoomSdk.shareApp === 'function',
+    hasAppPopout: zoomSdk && typeof zoomSdk.appPopout === 'function',
     overlayMode: currentOverlayMode,
+    appShareActive,
+    appPoppedOut,
     // Overlay sizing, so a slow-color-change report can be diagnosed from the
     // debug panel without a code change.
     cameraResolution: cameraResolution ? `${cameraResolution.width}x${cameraResolution.height}` : 'unreported',
@@ -591,26 +763,39 @@ function enqueueOverlayOp(op) {
 }
 
 /**
- * Set overlay mode and reapply overlay if needed
- * @param {string} mode - New overlay mode ('card' or 'camera')
+ * Set overlay mode, tearing down whatever the previous mode had on screen and
+ * bringing up the new one.
+ * @param {string} mode - New overlay mode ('card', 'camera', 'share' or 'popout')
  * @param {string|null} currentImageUrl - Current image URL to reapply, or null to skip reapply
+ * @returns {Promise<boolean>} False only when a stage mode was refused by the client
  */
 export async function setOverlayMode(mode, currentImageUrl) {
-  if (mode === currentOverlayMode) return;
+  if (mode === currentOverlayMode) return true;
   // Remove overlay using the old mode, captured now because currentOverlayMode
   // changes before the queued operation runs.
   const previousMode = currentOverlayMode;
   await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
   currentOverlayMode = mode;
+
+  // Stage modes put the app itself on screen rather than pushing pixels, so they
+  // are entered here instead of through applyOverlay.
+  if (mode === OVERLAY_MODE_SHARE) {
+    return setAppShare(true);
+  }
+  if (mode === OVERLAY_MODE_POPOUT) {
+    return setAppPopout(true);
+  }
+
   // Reapply with new mode if an image URL is provided
   if (currentImageUrl) {
     await applyOverlay(currentImageUrl);
   }
+  return true;
 }
 
 /**
- * Internal helper to remove overlay by mode type
- * @param {string} mode - Overlay mode to remove ('card' or 'camera')
+ * Internal helper to remove whatever a mode had on screen.
+ * @param {string} mode - Overlay mode to tear down
  */
 async function removeOverlayInternal(mode) {
   if (!sdkInitialized) {
@@ -621,6 +806,17 @@ async function removeOverlayInternal(mode) {
   // Clear this up front: once removal is requested, nothing is considered
   // applied, even if the removal itself fails because there was no overlay.
   activeOverlay = null;
+
+  // Stage modes never pushed a background, so there is nothing to clear from the
+  // video pipeline — but the share or the popped-out window has to come down.
+  if (mode === OVERLAY_MODE_SHARE) {
+    if (appShareActive) await setAppShare(false);
+    return;
+  }
+  if (mode === OVERLAY_MODE_POPOUT) {
+    if (appPoppedOut) await setAppPopout(false);
+    return;
+  }
 
   try {
     if (sdkAvailable && zoomSdk) {
@@ -691,6 +887,14 @@ async function applyOverlayInternal(imageUrl) {
   if (!sdkInitialized) {
     log('SDK not initialized yet, initializing now...', 'warn');
     await initializeZoomSdk();
+  }
+
+  // In a stage mode the app renders the color itself. TimerContext calls this on
+  // every status change regardless of mode, so the guard lives here rather than
+  // at each call site.
+  if (!isVideoOverlayMode()) {
+    log(`Stage mode (${currentOverlayMode}) renders the color in-app; skipping video push`, 'info');
+    return;
   }
 
   if (!imageUrl) {

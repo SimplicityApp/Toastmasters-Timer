@@ -10,6 +10,9 @@ const { sdkMock } = vi.hoisted(() => ({
     deleteVideoFilter: vi.fn(),
     setVirtualBackground: vi.fn(),
     removeVirtualBackground: vi.fn(),
+    shareApp: vi.fn(),
+    appPopout: vi.fn(),
+    onAppPopout: vi.fn(),
   },
 }));
 
@@ -107,6 +110,9 @@ afterEach(() => {
   sdkMock.deleteVideoFilter.mockReset();
   sdkMock.setVirtualBackground.mockReset();
   sdkMock.removeVirtualBackground.mockReset();
+  sdkMock.shareApp.mockReset();
+  sdkMock.appPopout.mockReset();
+  sdkMock.onAppPopout.mockReset();
 });
 
 describe('getBackgroundUrl', () => {
@@ -628,5 +634,130 @@ describe('applyOverlay in camera mode', () => {
     await removeOverlay();
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
     expect(isOverlayActive()).toBe(false);
+  });
+});
+
+describe('stage modes (share and popout)', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    sdkMock.shareApp.mockResolvedValue({});
+    sdkMock.appPopout.mockResolvedValue({});
+  });
+
+  it('starts an app share on entering share mode and leaves the camera alone', async () => {
+    const { initializeZoomSdk, setOverlayMode, isAppShareActive, OVERLAY_MODE_SHARE } = await loadModule();
+    await initializeZoomSdk();
+
+    await setOverlayMode(OVERLAY_MODE_SHARE, 'https://zoom.example/backgrounds/blue.png');
+
+    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'start', withSound: false });
+    expect(isAppShareActive()).toBe(true);
+    // The whole point of share mode: the user keeps their own face and background.
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+  });
+
+  it('pushes no pixels while a stage mode is active, whoever asks', async () => {
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_SHARE } = await loadModule();
+    await initializeZoomSdk();
+    const loads = stubImage();
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+
+    // TimerContext calls applyOverlay on every status change regardless of mode.
+    await applyOverlay('https://zoom.example/backgrounds/red.png');
+
+    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(loads).toEqual([]);
+  });
+
+  it('stops the share when leaving share mode', async () => {
+    const { initializeZoomSdk, setOverlayMode, isAppShareActive, OVERLAY_MODE_SHARE, OVERLAY_MODE_CARD } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+
+    await setOverlayMode(OVERLAY_MODE_CARD, null);
+
+    expect(sdkMock.shareApp).toHaveBeenLastCalledWith({ action: 'stop' });
+    expect(isAppShareActive()).toBe(false);
+  });
+
+  it('undocks on entering popout mode and docks again on leaving', async () => {
+    const { initializeZoomSdk, setOverlayMode, isAppPoppedOut, OVERLAY_MODE_POPOUT, OVERLAY_MODE_CARD } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+
+    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+    expect(sdkMock.appPopout).toHaveBeenCalledWith({ action: 'undock' });
+    expect(isAppPoppedOut()).toBe(true);
+
+    await setOverlayMode(OVERLAY_MODE_CARD, null);
+    expect(sdkMock.appPopout).toHaveBeenLastCalledWith({ action: 'dock' });
+    expect(isAppPoppedOut()).toBe(false);
+  });
+
+  it('reports a refused popout instead of leaving the panel covered', async () => {
+    const { initializeZoomSdk, setOverlayMode, isAppPoppedOut, OVERLAY_MODE_POPOUT } = await loadModule();
+    await initializeZoomSdk();
+    // 10247: the running context cannot pop out. Mobile clients also reject the
+    // capability outright at config() time.
+    const refusal = Object.assign(new Error('cannot popout'), { code: 10247 });
+    sdkMock.appPopout.mockRejectedValueOnce(refusal);
+
+    const accepted = await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+
+    expect(accepted).toBe(false);
+    expect(isAppPoppedOut()).toBe(false);
+  });
+
+  it('does not dock a window the client already docked itself', async () => {
+    const { initializeZoomSdk, setOverlayMode, handleAppPopout, isAppPoppedOut, OVERLAY_MODE_POPOUT, OVERLAY_MODE_CARD } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+
+    // The user merged the window back from Zoom's own ellipsis menu.
+    handleAppPopout({ action: 'dock', timestamp: 1 });
+    expect(isAppPoppedOut()).toBe(false);
+    sdkMock.appPopout.mockClear();
+
+    await setOverlayMode(OVERLAY_MODE_CARD, null);
+
+    expect(sdkMock.appPopout).not.toHaveBeenCalled();
+  });
+
+  it('notifies the popout callback when the client docks the window', async () => {
+    const { initializeZoomSdk, setPopoutChangeCallback, handleAppPopout } = await loadModule();
+    await initializeZoomSdk();
+    const seen = [];
+    setPopoutChangeCallback((popped) => seen.push(popped));
+
+    handleAppPopout({ action: 'undock', timestamp: 1 });
+    handleAppPopout({ action: 'undock', timestamp: 2 }); // duplicate, no second call
+    handleAppPopout({ action: 'dock', timestamp: 3 });
+    handleAppPopout({ timestamp: 4 }); // malformed payload
+
+    expect(seen).toEqual([true, false]);
+  });
+
+  it('restores the video overlay when returning from a stage mode', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_SHARE, OVERLAY_MODE_CAMERA } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/green.png',
+    });
   });
 });

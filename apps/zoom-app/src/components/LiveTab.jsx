@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
 import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera } from 'lucide-react';
+import { Play, Square, RotateCcw, Eye, EyeOff, Video, Monitor, Camera, ScreenShare, PictureInPicture2 } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
+import TimerStage from './TimerStage';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
 import { saveOverlayMode, loadOverlayMode } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
@@ -22,6 +23,18 @@ const DEBUG_PANEL_ENABLED =
 const PromptDebugControls = DEBUG_PANEL_ENABLED
   ? lazy(() => import('./PromptDebugControls'))
   : null;
+
+// Mode toggle, in the order they appear in the segmented control. Card and
+// camera drive the video pipeline; share and popout put the app's own stage view
+// on screen instead. See isVideoOverlayMode in utils/zoomSdk.
+const OVERLAY_MODES = [
+  { mode: OVERLAY_MODE_CARD, Icon: Monitor, label: 'Timer Card' },
+  { mode: OVERLAY_MODE_CAMERA, Icon: Camera, label: 'Timer + Camera' },
+  { mode: OVERLAY_MODE_SHARE, Icon: ScreenShare, label: 'Share Timer' },
+  { mode: OVERLAY_MODE_POPOUT, Icon: PictureInPicture2, label: 'Timer Window' },
+];
+
+const MODE_LABELS = Object.fromEntries(OVERLAY_MODES.map(({ mode, label }) => [mode, label]));
 
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
@@ -59,7 +72,12 @@ export default memo(function LiveTab() {
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
-  const [overlayMode, setOverlayModeLocal] = useState(() => loadOverlayMode() || OVERLAY_MODE_CARD);
+  // Stage modes are session-only: a stored 'share' would otherwise come back as a
+  // covered panel with no share behind it.
+  const [overlayMode, setOverlayModeLocal] = useState(() => {
+    const persisted = loadOverlayMode();
+    return persisted && isVideoOverlayMode(persisted) ? persisted : OVERLAY_MODE_CARD;
+  });
 
   // Debug panel state - collapsed by default, remember user preference in localStorage
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(() => {
@@ -138,13 +156,29 @@ export default memo(function LiveTab() {
     return () => setLogCallback(null);
   }, []);
 
-  // Sync persisted overlay mode to zoomSdk module on mount
+  // Sync persisted overlay mode to zoomSdk module on mount.
+  // The stage modes are deliberately not restored: re-entering them would start a
+  // screen share or pop a window open before the user has asked for anything.
   useEffect(() => {
     const persisted = loadOverlayMode();
-    if (persisted && persisted !== getOverlayMode()) {
+    if (persisted && isVideoOverlayMode(persisted) && persisted !== getOverlayMode()) {
       setOverlayMode(persisted, null);
     }
   }, []);
+
+  // Popping the app back in from Zoom's own ellipsis menu is the same intent as
+  // pressing our exit button, so leave popout mode when the client reports a dock.
+  // The window is already docked by then, so setOverlayMode only has to bring the
+  // card overlay back.
+  useEffect(() => {
+    setPopoutChangeCallback((poppedOut) => {
+      if (poppedOut || overlayMode !== OVERLAY_MODE_POPOUT) return;
+      setOverlayModeLocal(OVERLAY_MODE_CARD);
+      saveOverlayMode(OVERLAY_MODE_CARD);
+      setOverlayMode(OVERLAY_MODE_CARD, isHidden ? getBackgroundUrl(currentStatus) : null);
+    });
+    return () => setPopoutChangeCallback(null);
+  }, [overlayMode, isHidden, currentStatus]);
 
   // Check SDK status on mount and periodically
   useEffect(() => {
@@ -208,9 +242,10 @@ export default memo(function LiveTab() {
 
   // Handle overlay removal based on isHidden state
   // TimerContext handles applying overlays, we only need to remove them when isHidden is false
-  // Skip in camera mode — face is always visible
+  // Skip in camera mode — face is always visible — and in the stage modes, where
+  // removeOverlay would tear down the share or the popped-out window itself.
   useEffect(() => {
-    if (overlayMode === OVERLAY_MODE_CAMERA) return;
+    if (overlayMode === OVERLAY_MODE_CAMERA || !isVideoOverlayMode(overlayMode)) return;
     if (!isHidden) {
       addDebugLog('Removing overlay (reveal face mode)', 'info');
       removeOverlay();
@@ -225,7 +260,7 @@ export default memo(function LiveTab() {
 
   // Watch for status changes and remove overlay if not hidden (card mode only)
   useEffect(() => {
-    if (overlayMode === OVERLAY_MODE_CAMERA) return;
+    if (overlayMode === OVERLAY_MODE_CAMERA || !isVideoOverlayMode(overlayMode)) return;
     if (!isHidden) {
       addDebugLog('Status changed but in reveal mode - removing overlay', 'info');
       removeOverlay();
@@ -429,10 +464,28 @@ export default memo(function LiveTab() {
   const handleModeSwitch = async (newMode) => {
     if (newMode === overlayMode) return;
     setOverlayModeLocal(newMode);
-    saveOverlayMode(newMode);
+    // Only the video modes are remembered; see the initial state above.
+    if (isVideoOverlayMode(newMode)) saveOverlayMode(newMode);
     const imageUrl = getBackgroundUrl(previewColor || currentStatus);
-    await setOverlayMode(newMode, isHidden ? imageUrl : null);
+    const accepted = await setOverlayMode(newMode, isHidden ? imageUrl : null);
     if (newMode === OVERLAY_MODE_CAMERA) setIsHidden(true);
+
+    // A refused stage mode would otherwise leave the panel covered by a stage
+    // that nobody can see. Only real clients are rolled back: outside Zoom the
+    // request always "fails", and the stage still needs to render for dev work.
+    if (accepted === false && sdkStatus?.available) {
+      showToast(
+        newMode === OVERLAY_MODE_POPOUT
+          ? 'This Zoom client cannot open the timer in its own window.'
+          : 'Zoom would not start the timer share. Another share may be in progress.',
+        'error'
+      );
+      setOverlayModeLocal(OVERLAY_MODE_CARD);
+      saveOverlayMode(OVERLAY_MODE_CARD);
+      await setOverlayMode(OVERLAY_MODE_CARD, isHidden ? imageUrl : null);
+      return;
+    }
+
     (window.requestIdleCallback || setTimeout)(() => trackEvent('overlay_mode_switched', { new_mode: newMode }));
   };
 
@@ -458,6 +511,26 @@ export default memo(function LiveTab() {
 
   return (
     <div className="p-4 space-y-4 relative">
+      {/* Stage modes cover the whole panel: in share mode every pixel of the app
+          is broadcast, so nothing else may stay on screen. */}
+      {!isVideoOverlayMode(overlayMode) && (
+        <TimerStage
+          status={previewColor || currentStatus}
+          elapsedTime={elapsedTime}
+          rules={currentSpeaker?.rules}
+          speakerName={speakerName}
+          role={selectedRole}
+          isRunning={isRunning}
+          onStart={handleStart}
+          onContinue={handleContinue}
+          onStop={handleStop}
+          onReset={handleReset}
+          onFinish={handleFinish}
+          onExit={() => handleModeSwitch(OVERLAY_MODE_CARD)}
+          exitLabel={overlayMode === OVERLAY_MODE_SHARE ? 'Stop sharing' : 'Back to the main window'}
+        />
+      )}
+
       {/* Reveal Face + Overlay mode toggle in top right */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
         {/* Reveal Face button — only in Timer Card mode */}
@@ -475,32 +548,23 @@ export default memo(function LiveTab() {
             )}
           </button>
         )}
-        {/* Segmented mode toggle: Timer Card | Timer + Camera */}
+        {/* Segmented mode toggle: Timer Card | Timer + Camera | Share | Window */}
         <div className="flex bg-gray-100 rounded-lg p-0.5">
-          <button
-            onClick={() => handleModeSwitch(OVERLAY_MODE_CARD)}
-            className={`p-1.5 rounded-md transition-all ${
-              overlayMode === OVERLAY_MODE_CARD
-                ? 'bg-white shadow-sm text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-            data-tooltip="Timer Card"
-            data-tooltip-direction="down"
-          >
-            <Monitor className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => handleModeSwitch(OVERLAY_MODE_CAMERA)}
-            className={`p-1.5 rounded-md transition-all ${
-              overlayMode === OVERLAY_MODE_CAMERA
-                ? 'bg-white shadow-sm text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-            data-tooltip="Timer + Camera"
-            data-tooltip-direction="down-left"
-          >
-            <Camera className="h-4 w-4" />
-          </button>
+          {OVERLAY_MODES.map(({ mode, Icon, label }, index) => (
+            <button
+              key={mode}
+              onClick={() => handleModeSwitch(mode)}
+              className={`p-1.5 rounded-md transition-all ${
+                overlayMode === mode
+                  ? 'bg-white shadow-sm text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              data-tooltip={label}
+              data-tooltip-direction={index === OVERLAY_MODES.length - 1 ? 'down-left' : 'down'}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          ))}
         </div>
       </div>
 
@@ -615,7 +679,9 @@ export default memo(function LiveTab() {
                 <div>Video State: {videoState === null ? 'Unknown' : videoState ? 'ON' : 'OFF'}</div>
                 <div>Current Status: {currentStatus || 'None'}</div>
                 <div>Is Hidden: {isHidden ? 'Yes' : 'No'}</div>
-                <div>Overlay Mode: {overlayMode === OVERLAY_MODE_CARD ? 'Timer Card' : 'Timer + Camera'}</div>
+                <div>Overlay Mode: {MODE_LABELS[overlayMode] || overlayMode}</div>
+                <div>App Shared: {sdkStatus?.appShareActive ? 'Yes' : 'No'}</div>
+                <div>Popped Out: {sdkStatus?.appPoppedOut ? 'Yes' : 'No'}</div>
               </div>
 
               {/* Lazy so the prompt scheduler UI never ships inside the main
