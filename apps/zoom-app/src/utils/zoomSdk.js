@@ -781,10 +781,14 @@ export async function setOverlayMode(mode, currentImageUrl) {
   // Remove overlay using the old mode, captured now because currentOverlayMode
   // changes before the queued operation runs.
   const previousMode = currentOverlayMode;
-  if (isVideoOverlayMode(previousMode)) {
-    await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
-  } else {
+  if (!isVideoOverlayMode(previousMode)) {
     await teardownStageMode(previousMode);
+  } else if (!isVideoOverlayMode(mode)) {
+    // Entering a stage mode: clear both pipelines rather than just unwinding the
+    // previous one, and do it outside the queue so no concurrent push can drop it.
+    await clearVideoPipelines();
+  } else {
+    await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
   }
   currentOverlayMode = mode;
 
@@ -816,6 +820,49 @@ export async function setOverlayMode(mode, currentImageUrl) {
  *
  * @param {string} mode - Stage mode to tear down
  */
+/**
+ * Clear both video pipelines, whatever we believe is on them.
+ *
+ * Entering a stage mode must leave the user's video completely untouched — that
+ * is the whole promise of share and popout: your own face, your own background.
+ * Removing only what the previous mode is thought to have applied is not enough,
+ * because that belief can be wrong: a removal may have failed earlier, a push may
+ * have been dropped as superseded, or the client may have restored a background
+ * it had saved. So both are cleared, and a "nothing to remove" error is expected
+ * rather than exceptional.
+ *
+ * Bypasses the overlay queue for the same reason teardownStageMode does.
+ */
+async function clearVideoPipelines() {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+  activeOverlay = null;
+
+  if (!sdkAvailable || !zoomSdk) {
+    log('[MOCK] Would clear video filter and virtual background', 'warn');
+    return;
+  }
+
+  // Independently attempted: one failing must not leave the other applied.
+  const attempts = [
+    ['video filter', () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
+    ['virtual background', () => zoomSdk.removeVirtualBackground?.()],
+  ];
+  for (const [what, run] of attempts) {
+    try {
+      const result = run();
+      if (result) await result;
+    } catch (error) {
+      // 10195 just means there was nothing applied, which is the common case.
+      if (error.code !== 10195) {
+        log(`Could not clear ${what} for stage mode: ${error.message || error.name}`, 'warn');
+      }
+    }
+  }
+  log('Video pipelines cleared for stage mode', 'info');
+}
+
 async function teardownStageMode(mode) {
   if (!sdkInitialized) {
     await initializeZoomSdk();

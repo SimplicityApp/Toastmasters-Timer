@@ -825,3 +825,73 @@ describe('leaving a stage mode is never dropped by the overlay queue', () => {
     expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'stop' });
   });
 });
+
+describe('entering a stage mode leaves the camera untouched', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    sdkMock.shareApp.mockResolvedValue({});
+    sdkMock.appPopout.mockResolvedValue({});
+  });
+
+  it('clears the virtual background when switching from camera mode to share', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    sdkMock.removeVirtualBackground.mockClear();
+
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+
+    // Otherwise the color stays behind the user's face while the stage is shared.
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('clears both pipelines, not just the one the previous mode used', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_POPOUT } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CARD, 'https://zoom.example/backgrounds/blue.png');
+    sdkMock.deleteVideoFilter.mockClear();
+    sdkMock.removeVirtualBackground.mockClear();
+
+    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+
+    // Our record of what is applied can be stale, so neither is trusted.
+    expect(sdkMock.deleteVideoFilter).toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('still clears the camera when a newer overlay push supersedes the switch', async () => {
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    sdkMock.removeVirtualBackground.mockClear();
+
+    const switching = setOverlayMode(OVERLAY_MODE_SHARE, null);
+    applyOverlay('https://zoom.example/backgrounds/red.png');
+    await switching;
+
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('carries on when the client reports there was nothing to clear', async () => {
+    const { initializeZoomSdk, setOverlayMode, isAppShareActive, OVERLAY_MODE_SHARE } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    // 10195: no overlay exists to remove. Expected, not a reason to abort.
+    sdkMock.deleteVideoFilter.mockRejectedValueOnce(Object.assign(new Error('none'), { code: 10195 }));
+    sdkMock.removeVirtualBackground.mockRejectedValueOnce(Object.assign(new Error('none'), { code: 10195 }));
+
+    const accepted = await setOverlayMode(OVERLAY_MODE_SHARE, null);
+
+    expect(accepted).toBe(true);
+    expect(isAppShareActive()).toBe(true);
+  });
+});
