@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Play, Square, RotateCcw, X } from 'lucide-react';
+import { Play, Square, RotateCcw, X, Eye, EyeOff } from 'lucide-react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 import { getBackgroundUrl } from '../utils/zoomSdk';
 
@@ -50,6 +50,8 @@ export default memo(function TimerStage({
   onFinish,
   onExit,
   exitLabel,
+  clockHidden,
+  onToggleClock,
 }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
@@ -126,10 +128,28 @@ export default memo(function TimerStage({
           ignore. The scrim has to be this dark because white-on-yellow is the
           worst of the four states and the readout must hold up in all of them. */}
       <div className="relative p-4 space-y-2 bg-black/35">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-white font-mono text-xl tabular-nums" style={textShadow}>
-            {formatTime(elapsedTime)}
-          </span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={onToggleClock}
+              className="p-1 -m-1 rounded text-white/70 hover:text-white transition-colors flex-shrink-0"
+              aria-label={clockHidden ? 'Show countdown' : 'Hide countdown'}
+              aria-pressed={clockHidden}
+              title={clockHidden ? 'Show countdown' : 'Hide countdown'}
+            >
+              {clockHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+            {/* Hidden with invisible rather than unmounted: the bar keeps its
+                height and the phase text keeps its position, so toggling does not
+                make the shared screen jump. */}
+            <span
+              className={`text-white font-mono text-xl tabular-nums ${clockHidden ? 'invisible' : ''}`}
+              style={textShadow}
+              aria-hidden={clockHidden}
+            >
+              {formatTime(elapsedTime)}
+            </span>
+          </div>
           {phaseText && (
             <span className="text-white/85 text-xs truncate" style={textShadow}>
               {phaseText}

@@ -9,7 +9,7 @@ const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
-import { saveOverlayMode, loadOverlayMode } from '@toastmaster-timer/shared';
+import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -72,6 +72,10 @@ export default memo(function LiveTab() {
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
+  // Unlike the mode itself, this preference is remembered: it is a club's stance
+  // on whether a ticking clock helps or distracts their speakers.
+  const [stageClockHidden, setStageClockHidden] = useState(loadStageClockHidden);
+
   // Stage modes are session-only: a stored 'share' would otherwise come back as a
   // covered panel with no share behind it.
   const [overlayMode, setOverlayModeLocal] = useState(() => {
@@ -489,6 +493,13 @@ export default memo(function LiveTab() {
     (window.requestIdleCallback || setTimeout)(() => trackEvent('overlay_mode_switched', { new_mode: newMode }));
   };
 
+  const handleToggleStageClock = () => {
+    const hidden = !stageClockHidden;
+    setStageClockHidden(hidden);
+    saveStageClockHidden(hidden);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('stage_clock_toggled', { hidden }));
+  };
+
   const handleTurnVideoOn = async () => {
     setIsEnablingVideo(true);
     try {
@@ -528,6 +539,8 @@ export default memo(function LiveTab() {
           onFinish={handleFinish}
           onExit={() => handleModeSwitch(OVERLAY_MODE_CARD)}
           exitLabel={overlayMode === OVERLAY_MODE_SHARE ? 'Stop sharing' : 'Back to the main window'}
+          clockHidden={stageClockHidden}
+          onToggleClock={handleToggleStageClock}
         />
       )}
 

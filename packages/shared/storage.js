@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   HIDDEN_BUILTIN_ROLES: 'toastmaster_hidden_builtin_roles',
   OVERLAY_MODE: 'toastmaster_overlay_mode',
   TIME_INPUT_MODE: 'toastmaster_time_input_mode',
+  STAGE_CLOCK_HIDDEN: 'toastmaster_stage_clock_hidden',
 };
 
 /**
@@ -182,6 +183,33 @@ export function loadOverlayMode() {
   } catch (error) {
     console.error('Failed to load overlay mode:', error);
     return null;
+  }
+}
+
+/**
+ * Save whether the stage-mode countdown is hidden. Remembered across meetings:
+ * a club that finds a ticking clock distracting for its speakers wants it off
+ * every time, not once per session.
+ * @param {boolean} hidden
+ */
+export function saveStageClockHidden(hidden) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.STAGE_CLOCK_HIDDEN, String(hidden));
+  } catch (error) {
+    console.error('Failed to save stage clock visibility:', error);
+  }
+}
+
+/**
+ * Load whether the stage-mode countdown is hidden.
+ * @returns {boolean} Defaults to false, so the clock shows until hidden
+ */
+export function loadStageClockHidden() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.STAGE_CLOCK_HIDDEN) === 'true';
+  } catch (error) {
+    console.error('Failed to load stage clock visibility:', error);
+    return false;
   }
 }
 
