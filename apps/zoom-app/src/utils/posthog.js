@@ -101,6 +101,24 @@ export function identifyUser(userId, userProperties = {}) {
 }
 
 /**
+ * Attach properties to the current person, so every other event can be
+ * segmented by them (e.g. which Toastmasters club the user belongs to).
+ *
+ * @param {Object} properties - Person properties
+ */
+export function setUserProperties(properties = {}) {
+  try {
+    if (posthog && posthog.__loaded) {
+      posthog.setPersonProperties(properties);
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('PostHog setPersonProperties failed:', error);
+    }
+  }
+}
+
+/**
  * Reset user identification (for logout)
  */
 export function resetUser() {

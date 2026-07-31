@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   HIDDEN_BUILTIN_ROLES: 'toastmaster_hidden_builtin_roles',
   OVERLAY_MODE: 'toastmaster_overlay_mode',
   TIME_INPUT_MODE: 'toastmaster_time_input_mode',
+  STAGE_CLOCK_HIDDEN: 'toastmaster_stage_clock_hidden',
+  REVEAL_FACE_WHEN_IDLE: 'toastmaster_reveal_face_when_idle',
 };
 
 /**
@@ -182,6 +184,64 @@ export function loadOverlayMode() {
   } catch (error) {
     console.error('Failed to load overlay mode:', error);
     return null;
+  }
+}
+
+/**
+ * Save whether the video modes drop their overlay between speeches, handing the
+ * organizer their own background back.
+ * @param {boolean} reveal - True to show the organizer's own background when idle
+ */
+export function saveRevealFaceWhenIdle(reveal) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.REVEAL_FACE_WHEN_IDLE, String(reveal));
+  } catch (error) {
+    console.error('Failed to save reveal-face-when-idle:', error);
+  }
+}
+
+/**
+ * Load whether the video modes drop their overlay between speeches.
+ *
+ * @returns {boolean} Defaults to false — only an explicit 'true' turns it on.
+ *   Off by default because in Timer + Camera every reveal costs a Zoom
+ *   confirmation dialog, by Zoom's design: there is no silent way to take a
+ *   virtual background off. Once per speech is enough to wear an organizer down,
+ *   so the color stays up and the clear button takes it off once, when asked.
+ */
+export function loadRevealFaceWhenIdle() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.REVEAL_FACE_WHEN_IDLE) === 'true';
+  } catch (error) {
+    console.error('Failed to load reveal-face-when-idle:', error);
+    return false;
+  }
+}
+
+/**
+ * Save whether the stage-mode countdown is hidden. Remembered across meetings:
+ * a club that finds a ticking clock distracting for its speakers wants it off
+ * every time, not once per session.
+ * @param {boolean} hidden
+ */
+export function saveStageClockHidden(hidden) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.STAGE_CLOCK_HIDDEN, String(hidden));
+  } catch (error) {
+    console.error('Failed to save stage clock visibility:', error);
+  }
+}
+
+/**
+ * Load whether the stage-mode countdown is hidden.
+ * @returns {boolean} Defaults to false, so the clock shows until hidden
+ */
+export function loadStageClockHidden() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.STAGE_CLOCK_HIDDEN) === 'true';
+  } catch (error) {
+    console.error('Failed to load stage clock visibility:', error);
+    return false;
   }
 }
 

@@ -1,7 +1,10 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
+  // Needed for the automatic JSX runtime in component tests, as in apps/web.
+  plugins: [react()],
   test: {
     globals: true,
     environment: 'jsdom',

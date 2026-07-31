@@ -1,8 +1,125 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { trackEvent } from '../utils/posthog'
 import YouTubePlayer from '../components/YouTubePlayer'
 
 const ZOOM_APP_URL = 'https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg/context/meeting/target/launch/deeplink'
+
+/**
+ * A tutorial screenshot.
+ *
+ * Until the PNG is dropped into apps/web/public/zoom/tutorial/, the image fails
+ * to load and this falls back to a labelled box naming the file it wants. That
+ * way the page never shows a broken image icon, and adding a screenshot is just
+ * copying a file into place with no code change.
+ */
+function Shot({ src, alt, hint }) {
+  const [missing, setMissing] = useState(false)
+
+  if (missing) {
+    return (
+      <div className="w-full aspect-video rounded-xl border-2 border-dashed border-white/25 bg-white/5 flex flex-col items-center justify-center text-center px-4 py-6">
+        <span className="text-sm font-medium text-gray-300">Screenshot coming soon</span>
+        <span className="mt-1 text-xs text-gray-400">{hint}</span>
+        <code className="mt-2 text-[11px] text-gray-500 break-all">{src}</code>
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setMissing(true)}
+      // Same box as the placeholder, so nothing shifts when a screenshot lands
+      // and a shot that is not quite 16:9 is letterboxed rather than cropped.
+      className="w-full aspect-video object-contain rounded-xl border border-white/15 bg-white/5 shadow-lg shadow-black/30"
+    />
+  )
+}
+
+// Screenshots to capture in the Zoom app, one per step.
+const TUTORIAL_STEPS = [
+  {
+    title: 'Open the app in your meeting',
+    body: 'Add the app to Zoom once. After that it sits in the Apps panel of every meeting, so you can open it as soon as you join.',
+    src: '/zoom/tutorial/01-open-in-meeting.png',
+    hint: 'Zoom meeting with the Apps panel open and the timer showing',
+  },
+  {
+    title: 'Load your agenda',
+    body: 'Paste your list of speakers, or paste the meeting page straight from EasySpeak. Every speaker comes in with the right role and time limits, and you can drag them into order.',
+    src: '/zoom/tutorial/02-agenda-import.png',
+    hint: 'Agenda tab with the import box and a filled agenda',
+  },
+  {
+    title: 'Pick how the timer shows up',
+    body: 'Open the mode menu at the top of the Live tab. There are three modes, explained below. You can switch at any point, even in the middle of a meeting.',
+    src: '/zoom/tutorial/03-mode-menu.png',
+    hint: 'Live tab with the display mode menu open, showing all three modes',
+  },
+  {
+    title: 'Run the timer',
+    body: 'Press START when the speaker begins. Green, yellow and red come up on their own at your club times. Press FINISH to save the time and load the next speaker.',
+    src: '/zoom/tutorial/04-live-controls.png',
+    hint: 'Live tab mid speech, timer running with the green signal up',
+  },
+  {
+    title: 'Share the report',
+    body: 'The Report tab lists every speaker with their time and whether they were inside the limits. One click copies it, ready to paste into the meeting chat.',
+    src: '/zoom/tutorial/05-report.png',
+    hint: 'Report tab with a few finished speeches and the copy button',
+  },
+]
+
+// The three display modes. This is the part clubs ask about most, so each one
+// gets its own picture and a plain line about who it suits.
+const DISPLAY_MODES = [
+  {
+    name: 'Timer Stage',
+    body: 'The timer fills the whole app panel in full color. Your camera is left alone. From the stage you can share it to the meeting so everyone sees the same signal, or pop it out into its own window and park it on a second screen.',
+    bestFor: 'Best for clubs who want one timer everybody can see.',
+    src: '/zoom/tutorial/mode-stage.png',
+    hint: 'Timer Stage open in green, with the share and pop out buttons visible',
+  },
+  {
+    name: 'Timer Card',
+    body: 'Your video tile turns into the color card. Your camera stays on but the picture is replaced, so your tile becomes one big green, yellow or red signal in the gallery.',
+    bestFor: 'Best for the classic look, where speakers watch the timer’s tile.',
+    src: '/zoom/tutorial/mode-card.png',
+    hint: 'Zoom gallery view with the timer tile showing a yellow card',
+  },
+  {
+    name: 'Timer + Camera',
+    body: 'The color sits behind you as a virtual background. Speakers see your face and the color at the same time.',
+    bestFor: 'Best for timers who also want to be seen, for nods and hand signals.',
+    src: '/zoom/tutorial/mode-camera.png',
+    hint: 'Timer on camera with a red background behind their face',
+  },
+]
+
+// Small options that are easy to miss but change how a meeting feels.
+const TIPS = [
+  {
+    title: 'Hide the countdown',
+    body: 'On the Timer Stage, the eye icon hides the clock. Speakers then read only the color, the way they would read timing cards in the room. You still see the numbers and the controls.',
+    src: '/zoom/tutorial/tip-hide-clock.png',
+    hint: 'Timer Stage with the clock hidden, eye icon highlighted',
+  },
+  {
+    title: 'Show my own background between speeches',
+    body: 'In the two video modes, your normal camera comes back the moment a speech ends and the color returns when the next one starts. Zoom asks you to confirm each switch. Turn it off if you would rather keep the color up all meeting.',
+    src: '/zoom/tutorial/tip-reveal-face.png',
+    hint: 'Mode menu with the "Show my own background" checkbox',
+  },
+  {
+    title: 'Clear the timer from your video',
+    body: 'One button takes the timer off your video and puts your camera back the way it was. Handy when you hand the role to someone else, or if anything looks stuck.',
+    src: '/zoom/tutorial/tip-clear-video.png',
+    hint: 'Live tab with the clear video button',
+  },
+]
 
 export default function Landing() {
   const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT
@@ -96,9 +213,68 @@ export default function Landing() {
             </li>
             <li className="flex items-start gap-2">
               <span className="inline-block h-2 w-2 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
-              In Zoom: virtual backgrounds change automatically
+              In Zoom: three display modes, including a full-size timer you can share to the whole meeting
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
+              In Zoom: virtual backgrounds change automatically, and your own camera comes back between speeches
             </li>
           </ul>
+        </section>
+
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h2 className="text-lg font-semibold text-white mb-2">How to Use the Timer in Zoom</h2>
+          <p className="text-gray-300 mb-6">Five steps from joining the meeting to sharing the report.</p>
+
+          <ol className="space-y-8">
+            {TUTORIAL_STEPS.map((step, index) => (
+              <li key={step.title} className="grid gap-4 sm:grid-cols-2 sm:items-center">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white flex-shrink-0">
+                      {index + 1}
+                    </span>
+                    <h3 className="text-base font-semibold text-white">{step.title}</h3>
+                  </div>
+                  <p className="mt-2 text-gray-300 text-sm leading-relaxed">{step.body}</p>
+                </div>
+                <Shot src={step.src} alt={`Step ${index + 1}: ${step.title}`} hint={step.hint} />
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Three Ways to Show the Timer</h2>
+          <p className="text-gray-300 mb-6">
+            Pick the one that fits your club. Switching modes takes one click, and the app remembers your choice for next time.
+          </p>
+
+          <div className="grid gap-6 sm:grid-cols-3">
+            {DISPLAY_MODES.map((mode) => (
+              <div key={mode.name}>
+                <Shot src={mode.src} alt={`${mode.name} mode in Zoom`} hint={mode.hint} />
+                <h3 className="mt-3 text-base font-semibold text-white">{mode.name}</h3>
+                <p className="mt-1 text-sm text-gray-300 leading-relaxed">{mode.body}</p>
+                <p className="mt-2 text-sm text-blue-300">{mode.bestFor}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Small Things Worth Knowing</h2>
+          <p className="text-gray-300 mb-6">Options that are easy to miss and change how the meeting feels.</p>
+
+          <div className="grid gap-6 sm:grid-cols-3">
+            {TIPS.map((tip) => (
+              <div key={tip.title}>
+                <Shot src={tip.src} alt={tip.title} hint={tip.hint} />
+                <h3 className="mt-3 text-base font-semibold text-white">{tip.title}</h3>
+                <p className="mt-1 text-sm text-gray-300 leading-relaxed">{tip.body}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">

@@ -50,27 +50,95 @@ export function getBackgroundUrl(color) {
 // nearly hit at 14.7MB. Sizes for reference:
 //   2560x1440 = 14.7MB   1280x720 = 3.7MB   960x540 = 2.1MB   640x360 = 0.9MB
 //
-// Hard upper bound, never exceeded regardless of what the camera reports.
-const MAX_OVERLAY_WIDTH = 1280;
-const MAX_OVERLAY_HEIGHT = 720;
+// The overlay is a flat color plus a logo, so it needs far fewer pixels than a
+// camera feed: the color carries the timing signal and stays exact at any size.
+// 640x360 was picked by rendering the shipped asset through a downscale-then-
+// upscale round trip; it is where the "TOASTMASTERS" wordmark stops being crisp,
+// and below it the logo breaks down. Raising this costs bytes on every push.
+const OVERLAY_CEILING_WIDTH = 640;
+const OVERLAY_CEILING_HEIGHT = 360;
 
-// Used until the camera resolution is known, and if it is never reported. The
-// overlay is a solid color plus a logo, so the conservative size costs nothing
-// visible while halving the bytes of a 720p push.
-const DEFAULT_OVERLAY_WIDTH = 960;
-const DEFAULT_OVERLAY_HEIGHT = 540;
+/**
+ * Every SDK method the app calls: what to request for it, whether the timer can
+ * work without it, and what breaks when it is missing.
+ *
+ * One list, feeding both the config() request and the debug panel, because these
+ * two drifted apart badly. The panel reported on a hand-kept subset, so a client
+ * missing appPopout or openUrl read as all-green — and config() asked for
+ * "videoFilter" and "virtualBackground", which are not capabilities at all.
+ *
+ * A capability is the exact name of the API or event being granted; there is no
+ * grouped name covering a family of calls. Those two invented names granted
+ * nothing, which is why removeVirtualBackground came back refused while applying
+ * a background appeared to work.
+ *
+ * `required` keeps config() alive on a limited client: reject the full request
+ * and it is retried with these alone, so only what the timer genuinely cannot run
+ * without belongs here. Timer Card is the default mode and the core function;
+ * every other mode degrades to it.
+ *
+ * Keep in step with the zoomSdk.* calls below — a test asserts it, both ways.
+ */
+export const USED_SDK_APIS = [
+  { name: 'config', capability: null, required: true, purpose: 'Grants every capability below' },
+  { name: 'setVideoFilter', capability: 'setVideoFilter', required: true, purpose: 'Timer Card' },
+  { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Card' },
+  { name: 'setVirtualBackground', capability: 'setVirtualBackground', required: false, purpose: 'Timer + Camera' },
+  { name: 'removeVirtualBackground', capability: 'removeVirtualBackground', required: false, purpose: 'Clearing Timer + Camera' },
+  { name: 'getVideoState', capability: 'getVideoState', required: false, purpose: 'Video-off warning' },
+  { name: 'setVideoState', capability: 'setVideoState', required: false, purpose: 'Turn my video on' },
+  { name: 'getMeetingParticipants', capability: 'getMeetingParticipants', required: false, purpose: 'Speaker suggestions' },
+  { name: 'shareApp', capability: 'shareApp', required: false, purpose: 'Sharing the stage to the meeting' },
+  { name: 'onShareApp', capability: 'onShareApp', required: false, purpose: 'Following Zoom\'s own sharing toolbar' },
+  { name: 'appPopout', capability: 'appPopout', required: false, purpose: 'Opening the stage in its own window' },
+  { name: 'onAppPopout', capability: 'onAppPopout', required: false, purpose: 'Following Zoom\'s own popout menu' },
+  { name: 'onAppVisibilityChange', capability: 'onAppVisibilityChange', required: false, purpose: 'Noticing background changes' },
+  { name: 'onMyMediaChange', capability: 'onMyMediaChange', required: false, purpose: 'Overlay sizing' },
+  { name: 'openUrl', capability: 'openUrl', required: false, purpose: 'Marketplace review link' },
+];
 
-const REQUIRED_CAPABILITIES = ['shareApp', 'videoFilter', 'virtualBackground'];
+const capabilitiesWhere = (required) =>
+  USED_SDK_APIS.filter((api) => api.capability && api.required === required).map(
+    (api) => api.capability
+  );
 
-// Reports the camera resolution the SDK recommends matching. Optional: if a
-// client rejects it, config() is retried without it, because losing config()
-// altogether would disable every overlay rather than just this optimization.
-const OPTIONAL_CAPABILITIES = ['onMyMediaChange'];
+const REQUIRED_CAPABILITIES = capabilitiesWhere(true);
+const OPTIONAL_CAPABILITIES = capabilitiesWhere(false);
 
-// Overlay mode constants
+// Overlay mode constants.
+//
+// Two families, and the difference matters at every call site below:
+//   card / camera - push an image into the video pipeline (videoFilter or
+//                   virtualBackground). The color rides on the user's tile.
+//   stage         - puts the app's own UI on screen instead, pushing no pixels at
+//                   all: the color is DOM rendered by the app, and the user's
+//                   camera and background are left untouched.
 export const OVERLAY_MODE_CARD = 'card';
 export const OVERLAY_MODE_CAMERA = 'camera';
+export const OVERLAY_MODE_STAGE = 'stage';
+// What the Live tab starts in when nothing is saved. Timer Card is the pick
+// because it is the only mode that changes nothing about the meeting on its own:
+// opening the app neither undocks a window nor starts a share, and the panel and
+// its tabs stay in front of the organizer. The stage is a deliberate choice the
+// organizer makes from the menu, never where they land.
+export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_CARD;
+
+// Modes an older build may have persisted, before sharing and popping out became
+// actions taken from inside the stage rather than modes of their own. Only the
+// window one is carried over: a saved preference must never start a screen share.
+export const LEGACY_OVERLAY_MODES = { popout: OVERLAY_MODE_STAGE };
+
 let currentOverlayMode = OVERLAY_MODE_CARD;
+
+/**
+ * Whether a mode drives the video pipeline. The stage shows the color through the
+ * app's own UI, so pushing a background as well would put it in two places.
+ * @param {string} [mode] - Defaults to the current mode
+ * @returns {boolean}
+ */
+export function isVideoOverlayMode(mode = currentOverlayMode) {
+  return mode === OVERLAY_MODE_CARD || mode === OVERLAY_MODE_CAMERA;
+}
 
 // Track SDK initialization state
 let sdkInitialized = false;
@@ -95,6 +163,60 @@ let activeOverlay = null;
 
 // Camera resolution reported by onMyMediaChange, or null until one arrives.
 let cameraResolution = null;
+
+// Whether a virtual background of ours is currently on the user's video.
+//
+// Tracked separately from activeOverlay because it gates a user-visible cost:
+// removeVirtualBackground always raises a confirmation dialog in the client, by
+// Zoom's design, returning 10017 if the user declines. Calling it blindly means
+// a "remove the video filter?" prompt every time, so it is only called when
+// there is genuinely something of ours to remove. setVideoFilter's counterpart,
+// deleteVideoFilter, prompts for nothing and needs no such guard.
+//
+// Persisted, because Zoom reloads the app's webview every time the panel is
+// closed and reopened. A purely in-memory flag reads false in precisely the
+// situation the "Clear my video" button exists for: a background of ours left on
+// the tile by an earlier session.
+const VIRTUAL_BACKGROUND_APPLIED_KEY = 'toastmaster_zoom_virtual_background_applied';
+
+function readVirtualBackgroundApplied() {
+  try {
+    return localStorage.getItem(VIRTUAL_BACKGROUND_APPLIED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+let virtualBackgroundApplied = readVirtualBackgroundApplied();
+
+/**
+ * Record whether one of our virtual backgrounds is on the user's video.
+ * @param {boolean} applied
+ */
+function markVirtualBackgroundApplied(applied) {
+  virtualBackgroundApplied = applied;
+  try {
+    if (applied) localStorage.setItem(VIRTUAL_BACKGROUND_APPLIED_KEY, 'true');
+    else localStorage.removeItem(VIRTUAL_BACKGROUND_APPLIED_KEY);
+  } catch {
+    // Storage unavailable (private mode). The in-memory flag still holds for
+    // this session, which is the pre-existing behaviour.
+  }
+}
+
+// What the app itself is doing, as opposed to what it has put on the video.
+// Neither is an overlay, so neither is tracked by activeOverlay: appShareActive
+// means the app is screen-shared into the meeting, appPoppedOut means it is
+// undocked into its own window. Independent of each other and of the mode — they
+// are actions the organizer takes from the stage, not modes.
+let appShareActive = false;
+let appPoppedOut = false;
+
+// Notified when either changes, including when the user drives it from Zoom's own
+// UI — the ellipsis menu for the window, the sharing toolbar for the share —
+// rather than from our buttons.
+let popoutChangeCallback = null;
+let shareChangeCallback = null;
 
 // Monotonic id used to drop overlay requests that a newer one has superseded.
 let overlayRequestId = 0;
@@ -142,7 +264,14 @@ export async function initializeZoomSdk() {
     // Check if we're in a Zoom environment
     // The SDK will be available when running in Zoom client
     log('Initializing Zoom SDK...', 'info');
-    const baseOptions = { popoutSize: { width: 400, height: 600 }, version: '1.0.0' };
+    // Landscape 16:9, matching the branded backgrounds, so Timer Window mode
+    // opens close to the asset's shape instead of the old 400x600 portrait that
+    // letterboxed it badly. The client clamps this: documented minimums are
+    // 336x342 on Windows and 320x760 on Mac, with a 75%-of-screen maximum, so a
+    // small Mac display may still force a taller window. The layered backdrop in
+    // TimerStage is what keeps those cases presentable — this only improves the
+    // starting point, and the user can always resize.
+    const baseOptions = { popoutSize: { width: 1152, height: 648 }, version: '1.0.0' };
     let configResult;
     try {
       configResult = await zoomSdk.config({
@@ -164,6 +293,9 @@ export async function initializeZoomSdk() {
     log(`Zoom SDK initialized successfully. Config: ${JSON.stringify(configResult)}`, 'info');
     log('Video filter capability is available', 'info');
     subscribeToCameraResolution();
+    subscribeToAppPopout();
+    subscribeToAppVisibility();
+    subscribeToShareApp();
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
@@ -171,6 +303,37 @@ export async function initializeZoomSdk() {
     log('[MOCK] Zoom SDK: Running in mock mode (not in Zoom environment)', 'warn');
     log(`SDK initialization error: ${error.message || error.name} (Code: ${error.code || 'N/A'})`, 'warn');
     log('Note: Virtual backgrounds will only work when running inside Zoom client', 'warn');
+    return false;
+  }
+}
+
+/**
+ * Open a link outside the app. The Zoom client webview ignores a plain
+ * target="_blank" anchor, so links have to go through the SDK; window.open is
+ * the fallback for local development and for clients that refused the openUrl
+ * capability.
+ *
+ * @param {string} url - Absolute URL to open
+ * @returns {Promise<boolean>} True if the URL was handed off successfully
+ */
+export async function openExternalUrl(url) {
+  if (sdkAvailable && typeof zoomSdk.openUrl === 'function') {
+    try {
+      await zoomSdk.openUrl({ url });
+      return true;
+    } catch (error) {
+      log(`openUrl failed, falling back to window.open: ${error.message || error.name}`, 'warn');
+    }
+  }
+
+  try {
+    // The Zoom webview usually refuses window.open and returns null, so the
+    // return value is the only way to know the link actually went somewhere.
+    if (window.open(url, '_blank', 'noopener,noreferrer')) return true;
+    log(`window.open was blocked for ${url}`, 'warn');
+    return false;
+  } catch (error) {
+    log(`Failed to open ${url}: ${error.message || error.name}`, 'error');
     return false;
   }
 }
@@ -207,10 +370,11 @@ export function handleMyMediaChange(event) {
   // Anything decoded for the previous resolution is the wrong size now.
   imageDataCache.clear();
 
-  // Re-push so what participants see matches the new resolution, but only if an
-  // overlay is actually showing. The redundant-push guard compares the budget the
-  // pixels were rendered for, so this is not treated as a duplicate.
-  if (activeOverlay) {
+  // Re-push so what participants see matches the new resolution, but only if
+  // pixels were actually rendered for the old one. A fileUrl push carries no
+  // pixels — Zoom scales the file itself — so resolution has no bearing on it,
+  // and a null budget is what marks that case.
+  if (activeOverlay?.budget) {
     applyOverlay(activeOverlay.url);
   }
 }
@@ -233,6 +397,221 @@ function subscribeToCameraResolution() {
 }
 
 /**
+ * Whether the app is currently screen-shared into the meeting.
+ * @returns {boolean}
+ */
+export function isAppShareActive() {
+  return appShareActive;
+}
+
+/**
+ * Whether the app is currently undocked into its own window.
+ * @returns {boolean}
+ */
+export function isAppPoppedOut() {
+  return appPoppedOut;
+}
+
+/**
+ * Start or stop sharing the app itself into the meeting.
+ *
+ * This is a screen share of the app's own webview, not a video effect: the
+ * camera pipeline is untouched, so the user keeps their face and whatever
+ * background they already chose. What participants see is whatever the app
+ * panel is showing, which is why the stage view has to carry its own controls.
+ *
+ * @param {boolean} active - True to start sharing, false to stop
+ * @param {{withSound?: boolean}} [options]
+ * @returns {Promise<boolean>} True if the client accepted the request
+ */
+export async function setAppShare(active, { withSound = false } = {}) {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+
+  if (!sdkAvailable || !zoomSdk || typeof zoomSdk.shareApp !== 'function') {
+    log(`[MOCK] Would ${active ? 'start' : 'stop'} sharing the app`, 'warn');
+    appShareActive = active;
+    return false;
+  }
+
+  try {
+    await zoomSdk.shareApp(active ? { action: 'start', withSound } : { action: 'stop' });
+    appShareActive = active;
+    log(`App share ${active ? 'started' : 'stopped'}`, 'info');
+    return true;
+  } catch (error) {
+    log(`Failed to ${active ? 'start' : 'stop'} app share: ${error.message || error.name}`, 'error');
+    if (error.code) log(`Error code: ${error.code}`, 'error');
+    // Only a start can leave the meeting sharing; a failed stop means the share
+    // is either already gone or still up, and the next state change re-reconciles.
+    if (active) appShareActive = false;
+    return false;
+  }
+}
+
+/**
+ * Pop the app out into its own window, or merge it back into the main client.
+ * Equivalent to "Popout" / "Merge Back to Main Window" in the app's ellipsis
+ * menu. Desktop only: other clients report 10247, or reject the capability
+ * outright at config() time.
+ *
+ * @param {boolean} popped - True to undock, false to dock back
+ * @returns {Promise<boolean>} True if the client accepted the request
+ */
+export async function setAppPopout(popped) {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+
+  if (!sdkAvailable || !zoomSdk || typeof zoomSdk.appPopout !== 'function') {
+    log(`[MOCK] Would ${popped ? 'undock' : 'dock'} the app window`, 'warn');
+    appPoppedOut = popped;
+    return false;
+  }
+
+  try {
+    await zoomSdk.appPopout({ action: popped ? 'undock' : 'dock' });
+    // onAppPopout also reports this, but the event does not arrive on every
+    // client, so the requested state is recorded here too.
+    appPoppedOut = popped;
+    log(`App window ${popped ? 'undocked' : 'docked'}`, 'info');
+    return true;
+  } catch (error) {
+    log(`Failed to ${popped ? 'undock' : 'dock'} the app: ${error.message || error.name}`, 'error');
+    if (error.code) {
+      log(`Error code: ${error.code}`, 'error');
+      if (error.code === 10247) {
+        log('This client or running context does not support popping the app out', 'warn');
+      }
+    }
+    return false;
+  }
+}
+
+/**
+ * Register a callback for popout state changes, so the UI stays in sync when the
+ * user pops the app out from Zoom's own menu instead of from our toggle.
+ * @param {Function|null} callback - Receives the new popped-out boolean
+ */
+export function setPopoutChangeCallback(callback) {
+  popoutChangeCallback = callback;
+}
+
+/**
+ * Register a callback for share state changes, so the stage's share button shows
+ * what is true rather than what we last asked for. The organizer can stop a share
+ * from Zoom's own sharing toolbar, which never goes near our button.
+ * @param {Function|null} callback - Receives the new sharing boolean
+ */
+export function setShareChangeCallback(callback) {
+  shareChangeCallback = callback;
+}
+
+/**
+ * Track sharing from an onShareApp event. Exported for testing.
+ * @param {Object|string} event - OnShareAppEvent: 'start' | 'stop', or an object
+ *   carrying one under `action`, depending on client version
+ */
+export function handleShareApp(event) {
+  const action = typeof event === 'string' ? event : event?.action;
+  if (action !== 'start' && action !== 'stop') return;
+
+  const sharing = action === 'start';
+  if (sharing === appShareActive) return;
+
+  appShareActive = sharing;
+  log(`App share ${sharing ? 'started' : 'stopped'} by the client`, 'info');
+  if (shareChangeCallback) shareChangeCallback(sharing);
+}
+
+/**
+ * Subscribe to share updates. Failure is non-fatal: the button still starts and
+ * stops the share, it just will not follow a stop made from Zoom's own toolbar.
+ */
+function subscribeToShareApp() {
+  if (!zoomSdk || typeof zoomSdk.onShareApp !== 'function') {
+    log('onShareApp unavailable; share state will not track the Zoom toolbar', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onShareApp(handleShareApp);
+    log('Subscribed to onShareApp', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onShareApp: ${error.message || error.name}`, 'warn');
+  }
+}
+
+/**
+ * Track the docked/undocked state from an onAppPopout event. Exported for testing.
+ * @param {Object} event - OnAppPopoutEvent
+ */
+export function handleAppPopout(event) {
+  const action = event?.action;
+  if (action !== 'dock' && action !== 'undock') return;
+
+  const popped = action === 'undock';
+  if (popped === appPoppedOut) return;
+
+  appPoppedOut = popped;
+  log(`App window ${popped ? 'undocked' : 'docked'} by the client`, 'info');
+  if (popoutChangeCallback) popoutChangeCallback(popped);
+}
+
+/**
+ * Track the app being hidden and shown again. Exported for testing.
+ *
+ * Coming back to the front is the one moment we know the user has been somewhere
+ * else in Zoom — quite possibly Background & Effects, swapping the branded image
+ * for one of their own or clearing it. Nothing reports that, so the only safe
+ * move is to stop believing our record of what is on their video: the next push
+ * then reapplies for real instead of being skipped as redundant.
+ *
+ * @param {Object} event - OnAppVisibilityChangeEvent
+ */
+export function handleAppVisibilityChange(event) {
+  if (event?.visible !== true) return;
+  if (!activeOverlay) return;
+  log('App back in front; forgetting what we believed was on the video', 'info');
+  activeOverlay = null;
+}
+
+/**
+ * Subscribe to app visibility. Desktop only, and non-fatal where it is missing:
+ * camera mode never trusts the record anyway, so the loss is limited to card mode
+ * skipping a redundant-looking push after the user edited their video filters.
+ */
+function subscribeToAppVisibility() {
+  if (!zoomSdk || typeof zoomSdk.onAppVisibilityChange !== 'function') {
+    log('onAppVisibilityChange unavailable; overlay state will not reset on refocus', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onAppVisibilityChange(handleAppVisibilityChange);
+    log('Subscribed to onAppVisibilityChange', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onAppVisibilityChange: ${error.message || error.name}`, 'warn');
+  }
+}
+
+/**
+ * Subscribe to popout updates. Failure is non-fatal: the toggle still drives the
+ * window, it just will not follow changes made from Zoom's own menu.
+ */
+function subscribeToAppPopout() {
+  if (!zoomSdk || typeof zoomSdk.onAppPopout !== 'function') {
+    log('onAppPopout unavailable; popout state will not track the client menu', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onAppPopout(handleAppPopout);
+    log('Subscribed to onAppPopout', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onAppPopout: ${error.message || error.name}`, 'warn');
+  }
+}
+
+/**
  * Check if SDK is available (for debugging)
  */
 export function isSdkAvailable() {
@@ -240,21 +619,30 @@ export function isSdkAvailable() {
 }
 
 /**
+ * Which of the APIs the app uses this client does not offer.
+ * @returns {Array<{name: string, required: boolean, purpose: string}>}
+ */
+export function getMissingSdkApis() {
+  if (!zoomSdk) return USED_SDK_APIS;
+  return USED_SDK_APIS.filter((api) => typeof zoomSdk[api.name] !== 'function');
+}
+
+/**
  * Get SDK status for debugging
  */
 export function getSdkStatus() {
+  const missingApis = getMissingSdkApis();
   const status = {
     initialized: sdkInitialized,
     available: sdkAvailable,
     sdkExists: typeof zoomSdk !== 'undefined',
+    apiCount: USED_SDK_APIS.length,
+    missingApis,
+    // Kept because the video-off banner branches on it by name.
     hasSetVideoFilter: zoomSdk && typeof zoomSdk.setVideoFilter === 'function',
-    hasDeleteVideoFilter: zoomSdk && typeof zoomSdk.deleteVideoFilter === 'function',
-    hasGetUserContext: zoomSdk && typeof zoomSdk.getUserContext === 'function',
-    hasGetVideoState: zoomSdk && typeof zoomSdk.getVideoState === 'function',
-    hasSetVideoState: zoomSdk && typeof zoomSdk.setVideoState === 'function',
-    hasSetVirtualBackground: zoomSdk && typeof zoomSdk.setVirtualBackground === 'function',
-    hasRemoveVirtualBackground: zoomSdk && typeof zoomSdk.removeVirtualBackground === 'function',
     overlayMode: currentOverlayMode,
+    appShareActive,
+    appPoppedOut,
     // Overlay sizing, so a slow-color-change report can be diagnosed from the
     // debug panel without a code change.
     cameraResolution: cameraResolution ? `${cameraResolution.width}x${cameraResolution.height}` : 'unreported',
@@ -278,24 +666,31 @@ export function getSdkStatus() {
  * @returns {{width: number, height: number}}
  */
 export function getOverlayBudget() {
-  // The SDK recommends matching the camera resolution reported by onMyMediaChange.
+  // The SDK suggests matching the camera resolution, but that advice assumes
+  // camera-like content. For a flat color plus a logo the camera resolution is
+  // only useful as an *upper* bound — never send more pixels than the stream can
+  // display, and never more than the content needs. Treating it as a target
+  // instead would make a 720p camera cost more than sending nothing at all.
   if (cameraResolution) {
-    return { ...cameraResolution };
+    return {
+      width: Math.min(cameraResolution.width, OVERLAY_CEILING_WIDTH),
+      height: Math.min(cameraResolution.height, OVERLAY_CEILING_HEIGHT),
+    };
   }
-  return { width: DEFAULT_OVERLAY_WIDTH, height: DEFAULT_OVERLAY_HEIGHT };
+  return { width: OVERLAY_CEILING_WIDTH, height: OVERLAY_CEILING_HEIGHT };
 }
 
 /**
  * Fit a source image inside the overlay budget, preserving aspect ratio.
- * Never upscales, and never exceeds the hard cap. Exported for testing.
+ * Never upscales, and never exceeds the ceiling. Exported for testing.
  * @param {number} naturalWidth
  * @param {number} naturalHeight
  * @param {{width: number, height: number}} [budget] - Defaults to getOverlayBudget()
  * @returns {{width: number, height: number}}
  */
 export function getOverlayDimensions(naturalWidth, naturalHeight, budget = getOverlayBudget()) {
-  const maxWidth = Math.min(budget.width, MAX_OVERLAY_WIDTH);
-  const maxHeight = Math.min(budget.height, MAX_OVERLAY_HEIGHT);
+  const maxWidth = Math.min(budget.width, OVERLAY_CEILING_WIDTH);
+  const maxHeight = Math.min(budget.height, OVERLAY_CEILING_HEIGHT);
   const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
   return {
     width: Math.max(1, Math.round(naturalWidth * scale)),
@@ -521,11 +916,19 @@ export function getOverlayMode() {
 }
 
 /**
- * Whether an overlay is currently pushed to Zoom.
+ * Whether something of ours is currently on the user's video.
+ *
+ * Callers use this to decide whether taking the overlay down is worth a
+ * confirmation dialog, so it has to survive a reload. Zoom re-creates the app's
+ * webview every time the panel is closed and reopened, which zeroes activeOverlay
+ * while the virtual background it describes is still sitting on the organizer's
+ * face. Reading only that in-memory record is what left a branded background up
+ * for a whole meeting: idle or not, nothing believed there was anything to remove.
+ *
  * @returns {boolean}
  */
 export function isOverlayActive() {
-  return activeOverlay !== null;
+  return activeOverlay !== null || virtualBackgroundApplied;
 }
 
 /**
@@ -553,26 +956,160 @@ function enqueueOverlayOp(op) {
 }
 
 /**
- * Set overlay mode and reapply overlay if needed
- * @param {string} mode - New overlay mode ('card' or 'camera')
+ * Set overlay mode, tearing down whatever the previous mode had on screen and
+ * bringing up the new one.
+ *
+ * Entering the stage starts nothing on its own — no share, no undocked window.
+ * Those are actions the organizer takes from the stage itself, so that a screen
+ * share is always something they pressed a button for. Leaving the stage does
+ * unwind both, since neither should outlive the view that offered it.
+ *
+ * @param {string} mode - New overlay mode ('card', 'camera' or 'stage')
  * @param {string|null} currentImageUrl - Current image URL to reapply, or null to skip reapply
+ * @returns {Promise<void>}
  */
 export async function setOverlayMode(mode, currentImageUrl) {
   if (mode === currentOverlayMode) return;
   // Remove overlay using the old mode, captured now because currentOverlayMode
   // changes before the queued operation runs.
   const previousMode = currentOverlayMode;
-  await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
+  if (!isVideoOverlayMode(previousMode)) {
+    await leaveStage();
+  } else if (!isVideoOverlayMode(mode)) {
+    // Entering the stage: clear both pipelines rather than just unwinding the
+    // previous one, and do it outside the queue so no concurrent push can drop it.
+    await clearVideoPipelines();
+  } else {
+    await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
+  }
   currentOverlayMode = mode;
+
   // Reapply with new mode if an image URL is provided
   if (currentImageUrl) {
     await applyOverlay(currentImageUrl);
   }
 }
 
+// Zoom's code for "there was nothing applied", which is a normal outcome here,
+// not a failure.
+const ERROR_NOTHING_APPLIED = 10195;
+// removeVirtualBackground always asks the user to confirm. This is them saying no.
+const ERROR_REMOVAL_DECLINED = 10017;
+
 /**
- * Internal helper to remove overlay by mode type
- * @param {string} mode - Overlay mode to remove ('card' or 'camera')
+ * Clear the video pipelines: the timer card, and any virtual background of ours.
+ *
+ * Two callers, same requirement. Entering a stage mode must leave the user's
+ * video completely untouched — that is the whole promise of share and popout:
+ * your own face, your own background. And the "Clear my video" button is the
+ * organizer's way out when something of ours is stuck on their tile.
+ *
+ * Only applicable pipelines are touched, and only genuine failures are reported:
+ *
+ * - The video filter is always attempted. Deleting one prompts for nothing and
+ *   costs nothing, and it is the pipeline card mode uses.
+ * - The virtual background is attempted only when one is believed to be up, or
+ *   when the user asks from camera mode — the only mode that applies one. Asking
+ *   Zoom to remove a background that was never there raises a pointless
+ *   confirmation dialog and then errors.
+ * - An error on a pipeline we did not believe was holding anything is not a
+ *   failure, whatever code it carries. "Remove the thing that was not there"
+ *   failing is the expected answer, and different clients word it differently;
+ *   treating it as an error is what made the button report failure in card mode.
+ *
+ * Bypasses the overlay queue for the same reason leaveStage does.
+ *
+ * @returns {Promise<{ok: boolean, declined: boolean}>} ok is false only when
+ *   something we believed was applied would not come off; declined is true when
+ *   the user dismissed Zoom's removal confirmation, which changed nothing.
+ */
+export async function clearVideoPipelines() {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+
+  // What we believe is on each pipeline, captured before activeOverlay is reset.
+  const hadFilter = activeOverlay?.mode === OVERLAY_MODE_CARD;
+  const hadBackground = virtualBackgroundApplied;
+  activeOverlay = null;
+
+  if (!sdkAvailable || !zoomSdk) {
+    log('[MOCK] Would clear video filter and virtual background', 'warn');
+    markVirtualBackgroundApplied(false);
+    return { ok: false, declined: false };
+  }
+
+  // Independently attempted: one failing must not leave the other applied.
+  const attempts = [
+    ['video filter', hadFilter, () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
+  ];
+  // Strictly on the record, never speculatively. Zoom offers no way to read the
+  // current virtual background — there is no getVirtualBackground, and
+  // getVideoSettings reports camera, HD, mirror and ratio but not this — so the
+  // record is the only thing that can answer "is one of ours up?". Asking anyway
+  // means the client puts a "remove your virtual background?" dialog in front of
+  // someone who has no virtual background at all.
+  if (hadBackground) {
+    attempts.push(['virtual background', hadBackground, () => zoomSdk.removeVirtualBackground?.()]);
+  }
+
+  let ok = true;
+  let declined = false;
+  // Only forget the background once it is genuinely gone: a declined or failed
+  // removal leaves it up, and the next attempt still needs to know that.
+  let backgroundGone = true;
+
+  for (const [what, expected, run] of attempts) {
+    try {
+      const result = run();
+      if (result) await result;
+      log(`Cleared ${what}`, 'info');
+    } catch (error) {
+      const code = error.code ?? 'none';
+      if (error.code === ERROR_REMOVAL_DECLINED) {
+        log(`User declined to remove the ${what}`, 'info');
+        declined = true;
+        if (what === 'virtual background') backgroundGone = false;
+      } else if (error.code === ERROR_NOTHING_APPLIED || !expected) {
+        log(`No ${what} to clear (code ${code})`, 'info');
+      } else {
+        log(`Could not clear ${what} (code ${code}): ${error.message || error.name}`, 'warn');
+        ok = false;
+        if (what === 'virtual background') backgroundGone = false;
+      }
+    }
+  }
+
+  if (backgroundGone) markVirtualBackgroundApplied(false);
+  return { ok, declined };
+}
+
+/**
+ * Leave the stage: stop any share it started, and dock the window if it is out.
+ * Neither should outlive the view that offered it — closing the stage while the
+ * meeting is still watching it would be the worst kind of surprise.
+ *
+ * Deliberately NOT routed through enqueueOverlayOp. That queue drops any request
+ * a newer one has superseded, which is right for image pushes and wrong here:
+ * leaving the stage also flips React state, whose effects fire an applyOverlay
+ * for the incoming mode. That push bumps the request id and the queued teardown
+ * is skipped — the visible symptom being an X button that closes the stage while
+ * the meeting is still being shared.
+ */
+export async function leaveStage() {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+  activeOverlay = null;
+
+  // Stop first, dock second: the share is what the meeting can see.
+  if (appShareActive) await setAppShare(false);
+  if (appPoppedOut) await setAppPopout(false);
+}
+
+/**
+ * Internal helper to remove a video overlay.
+ * @param {string} mode - Overlay mode to tear down ('card' or 'camera')
  */
 async function removeOverlayInternal(mode) {
   if (!sdkInitialized) {
@@ -590,6 +1127,7 @@ async function removeOverlayInternal(mode) {
         if (typeof zoomSdk.removeVirtualBackground === 'function') {
           log('Removing virtual background', 'info');
           await zoomSdk.removeVirtualBackground();
+          markVirtualBackgroundApplied(false);
           log('Successfully removed virtual background', 'info');
         } else {
           log('[MOCK] Would remove virtual background', 'warn');
@@ -614,8 +1152,12 @@ async function removeOverlayInternal(mode) {
     log(`Failed to remove overlay (mode: ${mode}): ${error.message || error.name}`, 'error');
     if (error.code) {
       log(`Error code: ${error.code}`, 'error');
-      if (error.code === 10195) {
+      if (error.code === ERROR_NOTHING_APPLIED) {
         log('No overlay exists to remove', 'warn');
+        // Nothing was there, so stop recording one. Otherwise a flag left true by
+        // a background the user cleared themselves would ask Zoom to remove it —
+        // and prompt them for it — on every idle moment from here on.
+        if (mode === OVERLAY_MODE_CAMERA) markVirtualBackgroundApplied(false);
       }
     }
   }
@@ -633,10 +1175,27 @@ export function applyOverlay(imageUrl) {
 
 /**
  * Whether what is already on screen matches what we are about to push.
+ *
+ * This is only ever an optimization, and a distrusted one: what is on the user's
+ * video is Zoom's state, not ours, and the user can change it at any time through
+ * Zoom's own UI without a word to the app. Skipping a push on the strength of a
+ * record that has quietly gone stale is what left the branded image off for the
+ * rest of a meeting.
+ *
+ * So it never speaks for camera mode: Background & Effects is a panel the user
+ * visits, and a virtual background is pushed by fileUrl, costing no pixels across
+ * the bridge — there is nothing worth protecting there. Card mode keeps the guard
+ * because a video filter ships megabytes of ImageData, and the record is dropped
+ * there too whenever the app comes back to the front.
+ *
+ * Two call sites pushing the same color at once are collapsed by the overlay
+ * queue, which drops superseded requests, so that is not this function's job.
+ *
  * @param {string} imageUrl
  * @returns {boolean}
  */
 function isAlreadyShowing(imageUrl) {
+  if (currentOverlayMode === OVERLAY_MODE_CAMERA) return false;
   if (!activeOverlay) return false;
   if (activeOverlay.url !== imageUrl || activeOverlay.mode !== currentOverlayMode) return false;
   // A fileUrl push is size-independent, so it is never stale.
@@ -653,6 +1212,14 @@ async function applyOverlayInternal(imageUrl) {
   if (!sdkInitialized) {
     log('SDK not initialized yet, initializing now...', 'warn');
     await initializeZoomSdk();
+  }
+
+  // In a stage mode the app renders the color itself. TimerContext calls this on
+  // every status change regardless of mode, so the guard lives here rather than
+  // at each call site.
+  if (!isVideoOverlayMode()) {
+    log(`Stage mode (${currentOverlayMode}) renders the color in-app; skipping video push`, 'info');
+    return;
   }
 
   if (!imageUrl) {
@@ -680,6 +1247,7 @@ async function applyOverlayInternal(imageUrl) {
             log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
             // No pixels pushed, so no budget to go stale.
             activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null };
+            markVirtualBackgroundApplied(true);
             lastError = null;
             return;
           } catch (fileUrlError) {
@@ -695,6 +1263,7 @@ async function applyOverlayInternal(imageUrl) {
           const result = await zoomSdk.setVirtualBackground({ imageData });
           log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
           activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
+          markVirtualBackgroundApplied(true);
           lastError = null;
           return;
         }
@@ -762,6 +1331,10 @@ async function applyOverlayInternal(imageUrl) {
  */
 export function removeOverlay() {
   const mode = currentOverlayMode;
+  // On the stage there is no overlay to remove: the color is DOM, and the share
+  // and the window are the organizer's to end, not something a status change or
+  // a finished speech should tear down under them.
+  if (!isVideoOverlayMode(mode)) return Promise.resolve();
   return enqueueOverlayOp(() => removeOverlayInternal(mode));
 }
 
@@ -872,11 +1445,16 @@ export async function getZoomParticipants() {
       // Try to get participants from Zoom SDK
       // Note: This API may require specific scopes/permissions
       try {
-        const participants = await zoomSdk.getParticipants();
+        // getMeetingParticipants, not getParticipants: the latter is not an API
+        // the SDK has, so this call threw every time and the suggestions were
+        // always empty.
+        const response = await zoomSdk.getMeetingParticipants();
+        const participants = response?.participants;
         if (participants && Array.isArray(participants)) {
+          // The SDK's own field names, with the older guesses kept as fallbacks.
           return participants.map((p, index) => ({
-            id: p.userId || p.id || `user-${index}`,
-            name: p.displayName || p.userName || p.name || 'Unknown'
+            id: p.participantUUID || p.participantId || p.userId || p.id || `user-${index}`,
+            name: p.screenName || p.displayName || p.userName || p.name || 'Unknown'
           }));
         }
       } catch (sdkError) {
@@ -886,7 +1464,7 @@ export async function getZoomParticipants() {
       return [];
     } else {
       // Mock participants for local development
-      console.error('Failed to get Zoom sdk:', error);
+      log(`[MOCK] SDK is not available; no participants to report.`, 'warn');
       return [];
     }
   } catch (error) {

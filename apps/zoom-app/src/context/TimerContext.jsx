@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
-import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
-import { applyOverlay, getBackgroundUrl, isOverlayActive } from '../utils/zoomSdk';
+import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
+import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
+import { recordSpeechFinished } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
 import { trackEvent } from '../utils/posthog';
 
@@ -171,11 +172,31 @@ export function TimerProvider({ children }) {
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
-    // Only push blue back if a background is actually showing. resetTimer also
-    // runs on every speaker/role change, and pushing an overlay that nothing is
-    // displaying costs a multi-MB bridge transfer for no visible effect.
-    if (isOverlayActive()) {
-      applyOverlay(getBackgroundUrl('blue'));
+    // Stage modes are skipped entirely: removeOverlay there would stop the share
+    // or dock the timer window.
+    //
+    // Everything here is gated on something actually being applied, because
+    // resetTimer also runs on every speaker and role change. Without that, camera
+    // mode would raise its removal confirmation dialog each time a speaker was
+    // picked.
+    const mode = getOverlayMode();
+    if (!isVideoOverlayMode(mode)) return;
+
+    if (!loadRevealFaceWhenIdle()) {
+      // Opted out, so the color stays up and simply returns to blue — but only
+      // if something is already showing, since pushing an overlay nothing is
+      // displaying costs a multi-MB bridge transfer for no visible effect.
+      if (isOverlayActive()) applyOverlay(getBackgroundUrl('blue'));
+      return;
+    }
+
+    // A finished or reset speech hands the organizer their video back. Card mode
+    // clears unconditionally because deleting a video filter is silent; camera
+    // mode asks only when a background of ours is up, since each removal costs
+    // the user a confirmation dialog and resetTimer also runs on every speaker
+    // and role change.
+    if (mode === OVERLAY_MODE_CARD || isOverlayActive()) {
+      removeOverlay();
     }
   }, []);
 
@@ -211,6 +232,18 @@ export function TimerProvider({ children }) {
   }, [activeSpeakerId, agenda]);
 
   const reorderAgenda = useCallback((newOrder) => setAgenda(newOrder), []);
+
+  /**
+   * Rename an agenda speaker in place, keeping their position and role.
+   * The current speaker follows along when it is the one being renamed, so a
+   * correction made while they are up does not have to be made twice.
+   * @param {string} id - Agenda item id
+   * @param {string} name - Corrected name
+   */
+  const renameAgendaSpeaker = useCallback((id, name) => {
+    setAgenda(prev => prev.map(item => (item.id === id ? { ...item, name } : item)));
+    setCurrentSpeaker(prev => (prev && activeSpeakerId === id ? { ...prev, name } : prev));
+  }, [activeSpeakerId]);
 
   const clearAllAgenda = useCallback(() => {
     const agendaCount = agenda.length;
@@ -318,6 +351,8 @@ export function TimerProvider({ children }) {
       }
       addReport({ name: currentSpeaker.name, role: currentSpeaker.role, duration: elapsedTime, color: currentStatus, comments: comment, disqualified });
       trackEvent('speech_finished', { speaker_name: currentSpeaker.name || 'Unnamed', role: currentSpeaker.role, duration: elapsedTime, final_status: currentStatus });
+      // Drives the periodic prompt cadence (see PeriodicPrompts).
+      recordSpeechFinished();
       if (activeSpeakerId) markCompleted(activeSpeakerId);
       resetTimer();
       setActiveSpeakerId(null);
@@ -405,6 +440,7 @@ export function TimerProvider({ children }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    renameAgendaSpeaker,
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
@@ -432,6 +468,7 @@ export function TimerProvider({ children }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    renameAgendaSpeaker,
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,

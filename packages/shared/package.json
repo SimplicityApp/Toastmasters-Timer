@@ -9,6 +9,9 @@
     "./timerLogic": "./timerLogic.js",
     "./timingRules": "./timingRules.js",
     "./easySpeakParser": "./easySpeakParser.js",
-    "./storage": "./storage.js"
+    "./storage": "./storage.js",
+    "./promptScheduler": "./promptScheduler.js",
+    "./surveyIds": "./surveyIds.js",
+    "./appLinks": "./appLinks.js"
   }
 }

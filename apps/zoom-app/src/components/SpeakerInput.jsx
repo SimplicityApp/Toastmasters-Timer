@@ -2,7 +2,16 @@ import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { getZoomParticipants } from '../utils/zoomSdk';
 import { ChevronDown } from 'lucide-react';
 
-export default memo(function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion }) {
+/**
+ * @param {'panel'|'stage'} [variant] - 'stage' is the compact form the timer
+ *   stage uses: the name field alone, styled for a colored backdrop. The role
+ *   picker and the rules link stay behind on the panel, where there is room for
+ *   them and where changing a role is not something to do mid-speech in front of
+ *   the meeting. The suggestion list is shared, so picking a speaker off the
+ *   agenda works the same in both.
+ */
+export default memo(function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion, variant = 'panel' }) {
+  const isStage = variant === 'stage';
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [participants, setParticipants] = useState([]);
@@ -83,7 +92,8 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
   const showHeaders = hasAgenda && hasParticipants;
 
   return (
-    <div className="space-y-3">
+    <div className={isStage ? '' : 'space-y-3'}>
+      {!isStage && (
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Timing Role
@@ -113,11 +123,14 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
           Edit timing rules
         </a>
       </div>
+      )}
 
       <div className="relative">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Speaker Name
-        </label>
+        {!isStage && (
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Speaker Name
+          </label>
+        )}
         <input
           ref={inputRef}
           type="text"
@@ -128,8 +141,13 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
           }}
           onFocus={() => setShowSuggestions(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Type speaker name..."
-          className="w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder={isStage ? 'Speaker name' : 'Type speaker name...'}
+          aria-label={isStage ? 'Speaker name' : undefined}
+          className={
+            isStage
+              ? 'w-full rounded-md border border-white/30 bg-black/25 py-1.5 px-2.5 text-lg font-semibold text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/60 focus:border-transparent'
+              : 'w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+          }
         />
         {showSuggestions && (suggestions.length > 0 || isCustomName) && (
           <ul
