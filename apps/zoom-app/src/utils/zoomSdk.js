@@ -1128,7 +1128,7 @@ export async function getZoomParticipants() {
       return [];
     } else {
       // Mock participants for local development
-      console.error('Failed to get Zoom sdk:', error);
+      log(`[MOCK] SDK is not available; no participants to report.`, 'warn');
       return [];
     }
   } catch (error) {

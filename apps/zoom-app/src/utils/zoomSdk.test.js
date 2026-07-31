@@ -761,3 +761,19 @@ describe('stage modes (share and popout)', () => {
     });
   });
 });
+
+describe('getZoomParticipants', () => {
+  it('returns an empty list without logging a bogus error when the SDK is unavailable', async () => {
+    // A fresh module has sdkAvailable === false, which is also what every
+    // dev-server page load sees (SpeakerInput calls this on mount). The
+    // unavailable branch used to log a variable that was not bound in its
+    // scope, so the call threw a ReferenceError that the outer catch swallowed
+    // and relogged as 'Failed to get Zoom participants: ReferenceError'.
+    const { getZoomParticipants } = await loadModule();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(getZoomParticipants()).resolves.toEqual([]);
+
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
