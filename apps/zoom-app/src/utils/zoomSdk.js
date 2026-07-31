@@ -88,8 +88,9 @@ export const USED_SDK_APIS = [
   { name: 'getVideoState', capability: 'getVideoState', required: false, purpose: 'Video-off warning' },
   { name: 'setVideoState', capability: 'setVideoState', required: false, purpose: 'Turn my video on' },
   { name: 'getMeetingParticipants', capability: 'getMeetingParticipants', required: false, purpose: 'Speaker suggestions' },
-  { name: 'shareApp', capability: 'shareApp', required: false, purpose: 'Share Timer mode' },
-  { name: 'appPopout', capability: 'appPopout', required: false, purpose: 'Timer Window mode' },
+  { name: 'shareApp', capability: 'shareApp', required: false, purpose: 'Sharing the stage to the meeting' },
+  { name: 'onShareApp', capability: 'onShareApp', required: false, purpose: 'Following Zoom\'s own sharing toolbar' },
+  { name: 'appPopout', capability: 'appPopout', required: false, purpose: 'Opening the stage in its own window' },
   { name: 'onAppPopout', capability: 'onAppPopout', required: false, purpose: 'Following Zoom\'s own popout menu' },
   { name: 'onAppVisibilityChange', capability: 'onAppVisibilityChange', required: false, purpose: 'Noticing background changes' },
   { name: 'onMyMediaChange', capability: 'onMyMediaChange', required: false, purpose: 'Overlay sizing' },
@@ -107,28 +108,31 @@ const OPTIONAL_CAPABILITIES = capabilitiesWhere(false);
 // Overlay mode constants.
 //
 // Two families, and the difference matters at every call site below:
-//   card / camera   - push an image into the video pipeline (videoFilter or
-//                     virtualBackground). The color rides on the user's tile.
-//   share / popout  - put the app's own UI on screen instead, so they push no
-//                     pixels at all: the color is DOM rendered by the app, and
-//                     the user's camera and background are left untouched.
+//   card / camera - push an image into the video pipeline (videoFilter or
+//                   virtualBackground). The color rides on the user's tile.
+//   stage         - puts the app's own UI on screen instead, pushing no pixels at
+//                   all: the color is DOM rendered by the app, and the user's
+//                   camera and background are left untouched.
 export const OVERLAY_MODE_CARD = 'card';
 export const OVERLAY_MODE_CAMERA = 'camera';
-export const OVERLAY_MODE_SHARE = 'share';
-export const OVERLAY_MODE_POPOUT = 'popout';
+export const OVERLAY_MODE_STAGE = 'stage';
 // What the Live tab starts in when nothing is saved. Timer Card is the pick
 // because it is the only mode that changes nothing about the meeting on its own:
 // opening the app neither undocks a window nor starts a share, and the panel and
-// its tabs stay in front of the organizer. The stage modes are a deliberate
-// choice the organizer makes from the menu, never where they land.
+// its tabs stay in front of the organizer. The stage is a deliberate choice the
+// organizer makes from the menu, never where they land.
 export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_CARD;
+
+// Modes an older build may have persisted, before sharing and popping out became
+// actions taken from inside the stage rather than modes of their own. Only the
+// window one is carried over: a saved preference must never start a screen share.
+export const LEGACY_OVERLAY_MODES = { popout: OVERLAY_MODE_STAGE };
 
 let currentOverlayMode = OVERLAY_MODE_CARD;
 
 /**
- * Whether a mode drives the video pipeline. The stage modes (share, popout)
- * show the color through the app's own UI, so pushing a background as well
- * would put the color in two places at once.
+ * Whether a mode drives the video pipeline. The stage shows the color through the
+ * app's own UI, so pushing a background as well would put it in two places.
  * @param {string} [mode] - Defaults to the current mode
  * @returns {boolean}
  */
@@ -200,15 +204,19 @@ function markVirtualBackgroundApplied(applied) {
   }
 }
 
-// Stage-mode state. Neither is a video overlay, so neither is tracked by
-// activeOverlay: appShareActive means the app is screen-shared into the meeting,
-// appPoppedOut means it is undocked into its own window.
+// What the app itself is doing, as opposed to what it has put on the video.
+// Neither is an overlay, so neither is tracked by activeOverlay: appShareActive
+// means the app is screen-shared into the meeting, appPoppedOut means it is
+// undocked into its own window. Independent of each other and of the mode — they
+// are actions the organizer takes from the stage, not modes.
 let appShareActive = false;
 let appPoppedOut = false;
 
-// Notified when the popout state changes, including when the user drives it from
-// Zoom's own ellipsis menu rather than from our toggle.
+// Notified when either changes, including when the user drives it from Zoom's own
+// UI — the ellipsis menu for the window, the sharing toolbar for the share —
+// rather than from our buttons.
 let popoutChangeCallback = null;
+let shareChangeCallback = null;
 
 // Monotonic id used to drop overlay requests that a newer one has superseded.
 let overlayRequestId = 0;
@@ -287,6 +295,7 @@ export async function initializeZoomSdk() {
     subscribeToCameraResolution();
     subscribeToAppPopout();
     subscribeToAppVisibility();
+    subscribeToShareApp();
     return true;
   } catch (error) {
     // SDK not available (running locally or not in Zoom environment)
@@ -487,6 +496,50 @@ export async function setAppPopout(popped) {
  */
 export function setPopoutChangeCallback(callback) {
   popoutChangeCallback = callback;
+}
+
+/**
+ * Register a callback for share state changes, so the stage's share button shows
+ * what is true rather than what we last asked for. The organizer can stop a share
+ * from Zoom's own sharing toolbar, which never goes near our button.
+ * @param {Function|null} callback - Receives the new sharing boolean
+ */
+export function setShareChangeCallback(callback) {
+  shareChangeCallback = callback;
+}
+
+/**
+ * Track sharing from an onShareApp event. Exported for testing.
+ * @param {Object|string} event - OnShareAppEvent: 'start' | 'stop', or an object
+ *   carrying one under `action`, depending on client version
+ */
+export function handleShareApp(event) {
+  const action = typeof event === 'string' ? event : event?.action;
+  if (action !== 'start' && action !== 'stop') return;
+
+  const sharing = action === 'start';
+  if (sharing === appShareActive) return;
+
+  appShareActive = sharing;
+  log(`App share ${sharing ? 'started' : 'stopped'} by the client`, 'info');
+  if (shareChangeCallback) shareChangeCallback(sharing);
+}
+
+/**
+ * Subscribe to share updates. Failure is non-fatal: the button still starts and
+ * stops the share, it just will not follow a stop made from Zoom's own toolbar.
+ */
+function subscribeToShareApp() {
+  if (!zoomSdk || typeof zoomSdk.onShareApp !== 'function') {
+    log('onShareApp unavailable; share state will not track the Zoom toolbar', 'warn');
+    return;
+  }
+  try {
+    zoomSdk.onShareApp(handleShareApp);
+    log('Subscribed to onShareApp', 'info');
+  } catch (error) {
+    log(`Failed to subscribe to onShareApp: ${error.message || error.name}`, 'warn');
+  }
 }
 
 /**
@@ -905,19 +958,25 @@ function enqueueOverlayOp(op) {
 /**
  * Set overlay mode, tearing down whatever the previous mode had on screen and
  * bringing up the new one.
- * @param {string} mode - New overlay mode ('card', 'camera', 'share' or 'popout')
+ *
+ * Entering the stage starts nothing on its own — no share, no undocked window.
+ * Those are actions the organizer takes from the stage itself, so that a screen
+ * share is always something they pressed a button for. Leaving the stage does
+ * unwind both, since neither should outlive the view that offered it.
+ *
+ * @param {string} mode - New overlay mode ('card', 'camera' or 'stage')
  * @param {string|null} currentImageUrl - Current image URL to reapply, or null to skip reapply
- * @returns {Promise<boolean>} False only when a stage mode was refused by the client
+ * @returns {Promise<void>}
  */
 export async function setOverlayMode(mode, currentImageUrl) {
-  if (mode === currentOverlayMode) return true;
+  if (mode === currentOverlayMode) return;
   // Remove overlay using the old mode, captured now because currentOverlayMode
   // changes before the queued operation runs.
   const previousMode = currentOverlayMode;
   if (!isVideoOverlayMode(previousMode)) {
-    await teardownStageMode(previousMode);
+    await leaveStage();
   } else if (!isVideoOverlayMode(mode)) {
-    // Entering a stage mode: clear both pipelines rather than just unwinding the
+    // Entering the stage: clear both pipelines rather than just unwinding the
     // previous one, and do it outside the queue so no concurrent push can drop it.
     await clearVideoPipelines();
   } else {
@@ -925,20 +984,10 @@ export async function setOverlayMode(mode, currentImageUrl) {
   }
   currentOverlayMode = mode;
 
-  // Stage modes put the app itself on screen rather than pushing pixels, so they
-  // are entered here instead of through applyOverlay.
-  if (mode === OVERLAY_MODE_SHARE) {
-    return setAppShare(true);
-  }
-  if (mode === OVERLAY_MODE_POPOUT) {
-    return setAppPopout(true);
-  }
-
   // Reapply with new mode if an image URL is provided
   if (currentImageUrl) {
     await applyOverlay(currentImageUrl);
   }
-  return true;
 }
 
 // Zoom's code for "there was nothing applied", which is a normal outcome here,
@@ -968,7 +1017,7 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *   failing is the expected answer, and different clients word it differently;
  *   treating it as an error is what made the button report failure in card mode.
  *
- * Bypasses the overlay queue for the same reason teardownStageMode does.
+ * Bypasses the overlay queue for the same reason leaveStage does.
  *
  * @returns {Promise<{ok: boolean, declined: boolean}>} ok is false only when
  *   something we believed was applied would not come off; declined is true when
@@ -1036,34 +1085,26 @@ export async function clearVideoPipelines() {
 }
 
 /**
- * Bring down a stage mode: stop the share, or dock the popped-out window.
+ * Leave the stage: stop any share it started, and dock the window if it is out.
+ * Neither should outlive the view that offered it — closing the stage while the
+ * meeting is still watching it would be the worst kind of surprise.
  *
  * Deliberately NOT routed through enqueueOverlayOp. That queue drops any request
  * a newer one has superseded, which is right for image pushes and wrong here:
- * leaving a stage mode also flips React state, whose effects fire an applyOverlay
+ * leaving the stage also flips React state, whose effects fire an applyOverlay
  * for the incoming mode. That push bumps the request id and the queued teardown
  * is skipped — the visible symptom being an X button that closes the stage while
  * the meeting is still being shared.
- *
- * @param {string} mode - Stage mode to tear down
  */
-async function teardownStageMode(mode) {
+export async function leaveStage() {
   if (!sdkInitialized) {
     await initializeZoomSdk();
   }
   activeOverlay = null;
 
-  if (mode === OVERLAY_MODE_SHARE) {
-    // Unconditional, unlike the popout below. Nothing tells us when the user
-    // stops the share from Zoom's own toolbar, so appShareActive can be stale;
-    // a redundant stop just logs, while a skipped one keeps the meeting shared.
-    await setAppShare(false);
-    return;
-  }
-  if (mode === OVERLAY_MODE_POPOUT) {
-    // onAppPopout does report a client-side dock, so this flag is trustworthy.
-    if (appPoppedOut) await setAppPopout(false);
-  }
+  // Stop first, dock second: the share is what the meeting can see.
+  if (appShareActive) await setAppShare(false);
+  if (appPoppedOut) await setAppPopout(false);
 }
 
 /**
@@ -1290,7 +1331,10 @@ async function applyOverlayInternal(imageUrl) {
  */
 export function removeOverlay() {
   const mode = currentOverlayMode;
-  if (!isVideoOverlayMode(mode)) return teardownStageMode(mode);
+  // On the stage there is no overlay to remove: the color is DOM, and the share
+  // and the window are the organizer's to end, not something a status change or
+  // a finished speech should tear down under them.
+  if (!isVideoOverlayMode(mode)) return Promise.resolve();
   return enqueueOverlayOp(() => removeOverlayInternal(mode));
 }
 

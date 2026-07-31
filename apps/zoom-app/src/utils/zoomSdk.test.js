@@ -664,24 +664,59 @@ describe('stage modes (share and popout)', () => {
     sdkMock.appPopout.mockResolvedValue({});
   });
 
-  it('starts an app share on entering share mode and leaves the camera alone', async () => {
-    const { initializeZoomSdk, setOverlayMode, isAppShareActive, OVERLAY_MODE_SHARE } = await loadModule();
+  it('starts nothing on its own when the stage opens', async () => {
+    const { initializeZoomSdk, setOverlayMode, isAppShareActive, isAppPoppedOut, OVERLAY_MODE_STAGE } =
+      await loadModule();
     await initializeZoomSdk();
 
-    await setOverlayMode(OVERLAY_MODE_SHARE, 'https://zoom.example/backgrounds/blue.png');
+    await setOverlayMode(OVERLAY_MODE_STAGE, 'https://zoom.example/backgrounds/blue.png');
 
-    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'start', withSound: false });
-    expect(isAppShareActive()).toBe(true);
-    // The whole point of share mode: the user keeps their own face and background.
+    // Opening a view must never broadcast anything. Sharing and popping out are
+    // buttons on the stage, so a screen share is always something the organizer
+    // pressed rather than a consequence of picking a mode.
+    expect(sdkMock.shareApp).not.toHaveBeenCalled();
+    expect(sdkMock.appPopout).not.toHaveBeenCalled();
+    expect(isAppShareActive()).toBe(false);
+    expect(isAppPoppedOut()).toBe(false);
+    // And the camera is left alone, which is the whole point of the stage.
     expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
     expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
   });
 
-  it('pushes no pixels while a stage mode is active, whoever asks', async () => {
-    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_SHARE } = await loadModule();
+  it('shares the stage without touching the camera', async () => {
+    const { initializeZoomSdk, setOverlayMode, setAppShare, isAppShareActive, OVERLAY_MODE_STAGE } =
+      await loadModule();
+    await initializeZoomSdk();
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
+
+    expect(await setAppShare(true)).toBe(true);
+
+    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'start', withSound: false });
+    expect(isAppShareActive()).toBe(true);
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+  });
+
+  it('shares and pops out independently, so the two compose', async () => {
+    const { initializeZoomSdk, setOverlayMode, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, OVERLAY_MODE_STAGE } =
+      await loadModule();
+    await initializeZoomSdk();
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
+
+    await setAppPopout(true);
+    await setAppShare(true);
+
+    // Neither cancels the other: a timer on a second monitor can still be the
+    // thing the meeting is watching.
+    expect(isAppPoppedOut()).toBe(true);
+    expect(isAppShareActive()).toBe(true);
+  });
+
+  it('pushes no pixels while the stage is up, whoever asks', async () => {
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_STAGE } = await loadModule();
     await initializeZoomSdk();
     const loads = stubImage();
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
 
     // TimerContext calls applyOverlay on every status change regardless of mode.
     await applyOverlay('https://zoom.example/backgrounds/red.png');
@@ -691,54 +726,43 @@ describe('stage modes (share and popout)', () => {
     expect(loads).toEqual([]);
   });
 
-  it('stops the share when leaving share mode', async () => {
-    const { initializeZoomSdk, setOverlayMode, isAppShareActive, OVERLAY_MODE_SHARE, OVERLAY_MODE_CARD } =
+  it('stops a share and docks the window when the stage closes', async () => {
+    const { initializeZoomSdk, setOverlayMode, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD } =
       await loadModule();
     await initializeZoomSdk();
     stubImage();
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
+    await setAppShare(true);
+    await setAppPopout(true);
 
     await setOverlayMode(OVERLAY_MODE_CARD, null);
 
+    // Neither should outlive the view that offered it — least of all the share,
+    // which would leave the meeting watching a stage that is no longer there.
     expect(sdkMock.shareApp).toHaveBeenLastCalledWith({ action: 'stop' });
-    expect(isAppShareActive()).toBe(false);
-  });
-
-  it('undocks on entering popout mode and docks again on leaving', async () => {
-    const { initializeZoomSdk, setOverlayMode, isAppPoppedOut, OVERLAY_MODE_POPOUT, OVERLAY_MODE_CARD } =
-      await loadModule();
-    await initializeZoomSdk();
-    stubImage();
-
-    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
-    expect(sdkMock.appPopout).toHaveBeenCalledWith({ action: 'undock' });
-    expect(isAppPoppedOut()).toBe(true);
-
-    await setOverlayMode(OVERLAY_MODE_CARD, null);
     expect(sdkMock.appPopout).toHaveBeenLastCalledWith({ action: 'dock' });
+    expect(isAppShareActive()).toBe(false);
     expect(isAppPoppedOut()).toBe(false);
   });
 
-  it('reports a refused popout instead of leaving the panel covered', async () => {
-    const { initializeZoomSdk, setOverlayMode, isAppPoppedOut, OVERLAY_MODE_POPOUT } = await loadModule();
+  it('reports a refused popout rather than claiming the window opened', async () => {
+    const { initializeZoomSdk, setAppPopout, isAppPoppedOut } = await loadModule();
     await initializeZoomSdk();
     // 10247: the running context cannot pop out. Mobile clients also reject the
     // capability outright at config() time.
-    const refusal = Object.assign(new Error('cannot popout'), { code: 10247 });
-    sdkMock.appPopout.mockRejectedValueOnce(refusal);
+    sdkMock.appPopout.mockRejectedValueOnce(Object.assign(new Error('cannot popout'), { code: 10247 }));
 
-    const accepted = await setOverlayMode(OVERLAY_MODE_POPOUT, null);
-
-    expect(accepted).toBe(false);
+    expect(await setAppPopout(true)).toBe(false);
     expect(isAppPoppedOut()).toBe(false);
   });
 
   it('does not dock a window the client already docked itself', async () => {
-    const { initializeZoomSdk, setOverlayMode, handleAppPopout, isAppPoppedOut, OVERLAY_MODE_POPOUT, OVERLAY_MODE_CARD } =
+    const { initializeZoomSdk, setOverlayMode, setAppPopout, handleAppPopout, isAppPoppedOut, OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD } =
       await loadModule();
     await initializeZoomSdk();
     stubImage();
-    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
+    await setAppPopout(true);
 
     // The user merged the window back from Zoom's own ellipsis menu.
     handleAppPopout({ action: 'dock', timestamp: 1 });
@@ -748,6 +772,26 @@ describe('stage modes (share and popout)', () => {
     await setOverlayMode(OVERLAY_MODE_CARD, null);
 
     expect(sdkMock.appPopout).not.toHaveBeenCalled();
+  });
+
+  it('follows a share stopped from Zoom\'s own toolbar', async () => {
+    const { initializeZoomSdk, setAppShare, setShareChangeCallback, handleShareApp, isAppShareActive } =
+      await loadModule();
+    await initializeZoomSdk();
+    const seen = [];
+    setShareChangeCallback((sharing) => seen.push(sharing));
+    await setAppShare(true);
+
+    // Zoom's sharing toolbar never goes near our button, so without the event the
+    // stage would keep offering "Stop sharing" for a share that already ended.
+    handleShareApp('stop');
+    expect(isAppShareActive()).toBe(false);
+
+    handleShareApp('stop'); // duplicate, no second call
+    handleShareApp({ action: 'start' }); // object form, seen on some clients
+    handleShareApp('nonsense'); // malformed payload
+
+    expect(seen).toEqual([false, true]);
   });
 
   it('notifies the popout callback when the client docks the window', async () => {
@@ -764,11 +808,11 @@ describe('stage modes (share and popout)', () => {
     expect(seen).toEqual([true, false]);
   });
 
-  it('restores the video overlay when returning from a stage mode', async () => {
-    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_SHARE, OVERLAY_MODE_CAMERA } = await loadModule();
+  it('restores the video overlay when returning from the stage', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_STAGE, OVERLAY_MODE_CAMERA } = await loadModule();
     await initializeZoomSdk();
     stubImage();
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
 
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
 
@@ -807,11 +851,12 @@ describe('leaving a stage mode is never dropped by the overlay queue', () => {
   });
 
   it('stops the share even when a newer overlay push supersedes the teardown', async () => {
-    const { initializeZoomSdk, setOverlayMode, applyOverlay, isAppShareActive, OVERLAY_MODE_SHARE, OVERLAY_MODE_CARD } =
+    const { initializeZoomSdk, setOverlayMode, setAppShare, applyOverlay, isAppShareActive, OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD } =
       await loadModule();
     await initializeZoomSdk();
     stubImage();
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
+    await setAppShare(true);
     expect(isAppShareActive()).toBe(true);
 
     // Exactly what the UI does on exit: React flips the mode, whose effect fires
@@ -827,18 +872,22 @@ describe('leaving a stage mode is never dropped by the overlay queue', () => {
     expect(isAppShareActive()).toBe(false);
   });
 
-  it('stops the share even if the active flag went stale', async () => {
-    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_SHARE, OVERLAY_MODE_CARD } = await loadModule();
+  it('does not stop a share the client already ended', async () => {
+    const { initializeZoomSdk, setOverlayMode, setAppShare, handleShareApp, OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD } =
+      await loadModule();
     await initializeZoomSdk();
     stubImage();
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
+    await setAppShare(true);
+
+    // onShareApp reports a stop from Zoom's own toolbar, so the flag is
+    // trustworthy now and a redundant stop is not needed to cover for it.
+    handleShareApp('stop');
     sdkMock.shareApp.mockClear();
 
-    // Zoom reports nothing when the user stops the share from its own toolbar,
-    // so the stop is attempted regardless of what the flag says.
     await setOverlayMode(OVERLAY_MODE_CARD, null);
 
-    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'stop' });
+    expect(sdkMock.shareApp).not.toHaveBeenCalled();
   });
 });
 
@@ -854,28 +903,28 @@ describe('entering a stage mode leaves the camera untouched', () => {
     sdkMock.appPopout.mockResolvedValue({});
   });
 
-  it('clears the virtual background when switching from camera mode to share', async () => {
-    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE } = await loadModule();
+  it('clears the virtual background when switching from camera mode to the stage', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE } = await loadModule();
     await initializeZoomSdk();
     stubImage();
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
     sdkMock.removeVirtualBackground.mockClear();
 
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
 
     // Otherwise the color stays behind the user's face while the stage is shared.
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
   });
 
   it('does not touch the virtual background when none of ours is applied', async () => {
-    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_POPOUT } = await loadModule();
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } = await loadModule();
     await initializeZoomSdk();
     stubImage();
     await setOverlayMode(OVERLAY_MODE_CARD, 'https://zoom.example/backgrounds/blue.png');
     sdkMock.deleteVideoFilter.mockClear();
     sdkMock.removeVirtualBackground.mockClear();
 
-    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
 
     // deleteVideoFilter is silent, so it is always safe to call. Its virtual
     // background counterpart raises a confirmation dialog every single time, so
@@ -886,30 +935,31 @@ describe('entering a stage mode leaves the camera untouched', () => {
   });
 
   it('stops prompting once the virtual background has been removed', async () => {
-    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } =
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD } =
       await loadModule();
     await initializeZoomSdk();
     stubImage();
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
-    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
     sdkMock.removeVirtualBackground.mockClear();
 
-    // Hopping between stage modes must not re-prompt: it is already gone.
-    await setOverlayMode(OVERLAY_MODE_POPOUT, null);
+    // Returning to the stage must not re-prompt: it is already gone.
+    await setOverlayMode(OVERLAY_MODE_CARD, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
 
     expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
   });
 
   it('still clears the camera when a newer overlay push supersedes the switch', async () => {
-    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE } =
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE } =
       await loadModule();
     await initializeZoomSdk();
     stubImage();
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
     sdkMock.removeVirtualBackground.mockClear();
 
-    const switching = setOverlayMode(OVERLAY_MODE_SHARE, null);
+    const switching = setOverlayMode(OVERLAY_MODE_STAGE, null);
     applyOverlay('https://zoom.example/backgrounds/red.png');
     await switching;
 
@@ -917,17 +967,16 @@ describe('entering a stage mode leaves the camera untouched', () => {
   });
 
   it('carries on when the client reports there was nothing to clear', async () => {
-    const { initializeZoomSdk, setOverlayMode, isAppShareActive, OVERLAY_MODE_SHARE } = await loadModule();
+    const { initializeZoomSdk, setOverlayMode, getOverlayMode, OVERLAY_MODE_STAGE } = await loadModule();
     await initializeZoomSdk();
     stubImage();
     // 10195: no overlay exists to remove. Expected, not a reason to abort.
     sdkMock.deleteVideoFilter.mockRejectedValueOnce(Object.assign(new Error('none'), { code: 10195 }));
     sdkMock.removeVirtualBackground.mockRejectedValueOnce(Object.assign(new Error('none'), { code: 10195 }));
 
-    const accepted = await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    await setOverlayMode(OVERLAY_MODE_STAGE, null);
 
-    expect(accepted).toBe(true);
-    expect(isAppShareActive()).toBe(true);
+    expect(getOverlayMode()).toBe(OVERLAY_MODE_STAGE);
   });
 });
 
@@ -982,11 +1031,18 @@ describe('the debug panel reports on every API the app uses', () => {
 
   it('lists nothing once the client offers everything', async () => {
     const { getMissingSdkApis, USED_SDK_APIS } = await loadModule();
-    USED_SDK_APIS.forEach((api) => {
-      if (typeof sdkMock[api.name] !== 'function') sdkMock[api.name] = vi.fn();
-    });
+    // Added for this test only: sdkMock is shared, and leaving methods on it
+    // would quietly change what every later test's client appears to support.
+    const added = USED_SDK_APIS.map((api) => api.name).filter(
+      (name) => typeof sdkMock[name] !== 'function'
+    );
+    added.forEach((name) => { sdkMock[name] = vi.fn(); });
 
-    expect(getMissingSdkApis()).toEqual([]);
+    try {
+      expect(getMissingSdkApis()).toEqual([]);
+    } finally {
+      added.forEach((name) => { delete sdkMock[name]; });
+    }
   });
 });
 

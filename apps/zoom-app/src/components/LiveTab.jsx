@@ -9,7 +9,7 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, isSdkAvailable, DEFAULT_OVERLAY_MODE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, DEFAULT_OVERLAY_MODE, LEGACY_OVERLAY_MODES, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
 import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
@@ -28,16 +28,17 @@ const PromptDebugControls = DEBUG_PANEL_ENABLED
 /**
  * The mode to open in: the organizer's saved choice, or Timer Card.
  *
- * Share is deliberately never restored, even though it is saved nowhere and so
- * could only arrive here from an older build: starting a screen share is an
- * outward-facing act, and nobody should have one begin on its own because of a
- * preference set last week. Timer Window is safe to restore by contrast — the
- * window is local to the organizer's machine and the meeting never sees it.
+ * An older build saved 'popout' and 'share' as modes of their own. 'popout' maps
+ * to the stage, which is where that timer now lives; 'share' is dropped, because
+ * starting a screen share is an outward-facing act and nobody should have one
+ * begin on its own because of a preference set last week. Restoring the stage is
+ * safe by contrast — on its own it shows nobody anything.
  */
 function resolveInitialMode() {
   const persisted = loadOverlayMode();
-  const known = [OVERLAY_MODE_POPOUT, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
-  return known.includes(persisted) ? persisted : DEFAULT_OVERLAY_MODE;
+  const migrated = LEGACY_OVERLAY_MODES[persisted] || persisted;
+  const known = [OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
+  return known.includes(migrated) ? migrated : DEFAULT_OVERLAY_MODE;
 }
 
 const PREVIEW_COLORS = [
@@ -76,6 +77,12 @@ export default memo(function LiveTab() {
   // Bumped by the clear button. Guarantees the overlay effect re-runs exactly
   // once afterwards, which is the run it skips — see handleClearVideo.
   const [clearGeneration, setClearGeneration] = useState(0);
+
+  // What the app itself is doing, mirrored from the SDK so Zoom's own controls
+  // move these too. Seeded from the module because it outlives this component:
+  // switching tabs unmounts the Live tab without ending a share.
+  const [isSharing, setIsSharing] = useState(isAppShareActive);
+  const [isPoppedOut, setIsPoppedOut] = useState(isAppPoppedOut);
   const [isEnablingVideo, setIsEnablingVideo] = useState(false);
   const [previewColor, setPreviewColor] = useState(null);
   // Unlike the mode itself, this preference is remembered: it is a club's stance
@@ -118,6 +125,11 @@ export default memo(function LiveTab() {
   const initializedRef = useRef(false);
   const isLocalNameEdit = useRef(false);
   const lastClearGenerationRef = useRef(0);
+
+  // Desktop only. Outside Zoom nothing is granted, so offer it anyway rather than
+  // hiding a button the whole stage layout is being developed around.
+  const canPopout =
+    !sdkStatus?.available || !sdkStatus?.missingApis?.some((api) => api.name === 'appPopout');
 
   // Nothing to report: connected, and this client offers every API we call.
   const sdkHealthy =
@@ -192,51 +204,19 @@ export default memo(function LiveTab() {
     return () => setLogCallback(null);
   }, []);
 
-  // Enter the starting mode. This is a no-op on a default launch — both the UI and
-  // the module start on Timer Card — and does real work only for an organizer who
-  // saved Timer Window, where it pops the app out so they land in the timer window
-  // rather than merely seeing it selected. A selected-but-not-entered stage mode
-  // would just be a panel covered by a stage with nothing behind it.
+  // Follow Zoom's own controls. The organizer can pop the app out from the
+  // ellipsis menu or stop a share from the sharing toolbar, neither of which goes
+  // near our buttons — so the stage reads these rather than what it last asked
+  // for. Both are just state now: docking no longer means leaving the stage, any
+  // more than stopping a share does.
   useEffect(() => {
-    if (overlayMode === getOverlayMode()) return undefined;
-    let cancelled = false;
-    (async () => {
-      const accepted = await setOverlayMode(overlayMode, null);
-      // Quietly, unlike an explicit mode switch: a saved Timer Window preference
-      // opened on a client that cannot pop out (mobile, web) would otherwise raise
-      // an error toast on every single launch. isSdkAvailable is settled by now
-      // because setOverlayMode initializes the SDK on the way through, and it
-      // keeps the stage rendering outside Zoom, where every call "fails".
-      //
-      // Pointedly not persisted: this is a fallback for the client at hand, not a
-      // change of preference. Writing it would mean one launch on a phone quietly
-      // demoted the organizer's desktop default.
-      if (!cancelled && accepted === false && isSdkAvailable()) {
-        addDebugLog('Client refused the saved Timer Window; falling back to Timer Card', 'warn');
-        setOverlayModeLocal(OVERLAY_MODE_CARD);
-        setOverlayMode(OVERLAY_MODE_CARD, null);
-      }
-    })();
-    return () => { cancelled = true; };
-    // Mount only: later changes are driven by handleModeSwitch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setPopoutChangeCallback(setIsPoppedOut);
+    setShareChangeCallback(setIsSharing);
+    return () => {
+      setPopoutChangeCallback(null);
+      setShareChangeCallback(null);
+    };
   }, []);
-
-  // Popping the app back in from Zoom's own ellipsis menu is the same intent as
-  // pressing our exit button, so leave popout mode when the client reports a dock.
-  // The window is already docked by then, so setOverlayMode only has to bring the
-  // card overlay back.
-  useEffect(() => {
-    setPopoutChangeCallback((poppedOut) => {
-      if (poppedOut || overlayMode !== OVERLAY_MODE_POPOUT) return;
-      setOverlayModeLocal(OVERLAY_MODE_CARD);
-      saveOverlayMode(OVERLAY_MODE_CARD);
-      // Only carry a color across if one belongs on the tile; otherwise docking
-      // mid-meeting would paint an idle organizer blue.
-      setOverlayMode(OVERLAY_MODE_CARD, wantsColorNow ? getBackgroundUrl(desiredStatus) : null);
-    });
-    return () => setPopoutChangeCallback(null);
-  }, [overlayMode, wantsColorNow, desiredStatus]);
 
   // Check SDK status on mount and periodically
   useEffect(() => {
@@ -550,35 +530,62 @@ export default memo(function LiveTab() {
     }));
   };
 
+  // Switching modes can no longer be refused: opening the stage asks the client
+  // for nothing, so there is no failure to roll back from. Sharing and popping
+  // out can still be refused, and they say so at the point they are pressed.
   const handleModeSwitch = async (newMode) => {
     if (newMode === overlayMode) return;
     setOverlayModeLocal(newMode);
-    // Everything but share is remembered; see resolveInitialMode for why share
-    // is the exception.
-    if (newMode !== OVERLAY_MODE_SHARE) saveOverlayMode(newMode);
+    saveOverlayMode(newMode);
     // Carry the color into the new mode only if something should be showing:
     // mid-speech, or while a preview swatch is held up. Passing it
     // unconditionally is what used to paint an idle organizer blue on arrival.
-    const imageUrl = wantsColorNow ? getBackgroundUrl(desiredStatus) : null;
-    const accepted = await setOverlayMode(newMode, imageUrl);
+    await setOverlayMode(newMode, wantsColorNow ? getBackgroundUrl(desiredStatus) : null);
+    // Leaving the stage stops its share and docks its window; reflect that.
+    if (newMode !== OVERLAY_MODE_STAGE) {
+      setIsSharing(false);
+      setIsPoppedOut(false);
+    }
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('overlay_mode_switched', { new_mode: newMode }));
+  };
 
-    // A refused stage mode would otherwise leave the panel covered by a stage
-    // that nobody can see. Only real clients are rolled back: outside Zoom the
-    // request always "fails", and the stage still needs to render for dev work.
-    if (accepted === false && sdkStatus?.available) {
+  /**
+   * Share the stage into the meeting, or stop. The one control here the whole
+   * meeting can see, so it is always a deliberate press — never a consequence of
+   * choosing a mode, and never restored from a saved preference.
+   */
+  const handleToggleShare = async () => {
+    const next = !isSharing;
+    setIsSharing(next);
+    const accepted = await setAppShare(next);
+    if (!accepted && sdkStatus?.available) {
+      setIsSharing(isAppShareActive());
       showToast(
-        newMode === OVERLAY_MODE_POPOUT
-          ? 'This Zoom client cannot open the timer in its own window.'
-          : 'Zoom would not start the timer share. Another share may be in progress.',
-        'error'
+        next
+          ? 'Zoom would not start the share. Someone else may be sharing already.'
+          : 'Zoom would not stop the share. Try the Stop Share button in Zoom.',
+        'error',
+        6000
       );
-      setOverlayModeLocal(OVERLAY_MODE_CARD);
-      saveOverlayMode(OVERLAY_MODE_CARD);
-      await setOverlayMode(OVERLAY_MODE_CARD, imageUrl);
       return;
     }
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('stage_share_toggled', { sharing: next }));
+  };
 
-    (window.requestIdleCallback || setTimeout)(() => trackEvent('overlay_mode_switched', { new_mode: newMode }));
+  /**
+   * Undock the stage into its own window, or merge it back. Local to the
+   * organizer's machine either way: the meeting sees no difference.
+   */
+  const handleTogglePopout = async () => {
+    const next = !isPoppedOut;
+    setIsPoppedOut(next);
+    const accepted = await setAppPopout(next);
+    if (!accepted && sdkStatus?.available) {
+      setIsPoppedOut(isAppPoppedOut());
+      showToast('This Zoom client cannot open the timer in its own window.', 'error');
+      return;
+    }
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('stage_popout_toggled', { poppedOut: next }));
   };
 
   const handleToggleRevealFaceWhenIdle = () => {
@@ -633,9 +640,13 @@ export default memo(function LiveTab() {
           onReset={handleReset}
           onFinish={handleFinish}
           onExit={() => handleModeSwitch(OVERLAY_MODE_CARD)}
-          exitLabel={overlayMode === OVERLAY_MODE_SHARE ? 'Stop sharing' : 'Back to the main window'}
           clockHidden={stageClockHidden}
           onToggleClock={handleToggleStageClock}
+          isSharing={isSharing}
+          onToggleShare={handleToggleShare}
+          isPoppedOut={isPoppedOut}
+          onTogglePopout={handleTogglePopout}
+          canPopout={canPopout}
         />
       )}
 

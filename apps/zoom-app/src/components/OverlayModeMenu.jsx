@@ -1,31 +1,30 @@
 import { useState, useRef, useEffect, memo } from 'react';
-import { Monitor, Camera, ScreenShare, PictureInPicture2, ChevronDown, Check } from 'lucide-react';
+import { Monitor, Camera, Maximize2, ChevronDown, Check } from 'lucide-react';
 import {
   OVERLAY_MODE_CARD,
   OVERLAY_MODE_CAMERA,
-  OVERLAY_MODE_SHARE,
-  OVERLAY_MODE_POPOUT,
+  OVERLAY_MODE_STAGE,
   isVideoOverlayMode,
 } from '../utils/zoomSdk';
 
-// Four modes on one row left each button too small to read and gave no hint what
-// any of them did. As a menu there is room for a name and a line of explanation,
+// Modes on one row left each button too small to read and gave no hint what any
+// of them did. As a menu there is room for a name and a line of explanation,
 // which these need: the difference between them is not something an icon conveys.
-// Ordered by how we expect clubs to reach for them, most first. The two stage
-// modes lead because they leave the organizer's video alone; the video modes
+//
+// Sharing and popping out used to be modes of their own, which put two nearly
+// identical entries next to each other and forced a choice up front. They are one
+// stage now, with both offered as buttons once you are in it — so they compose,
+// and a screen share is always something the organizer pressed rather than a
+// consequence of picking a mode.
+//
+// The stage leads because it leaves the organizer's video alone; the video modes
 // follow for anyone who prefers the color on their own tile.
 export const OVERLAY_MODES = [
   {
-    mode: OVERLAY_MODE_POPOUT,
-    Icon: PictureInPicture2,
-    label: 'Timer Window',
-    description: 'Own window for a second screen',
-  },
-  {
-    mode: OVERLAY_MODE_SHARE,
-    Icon: ScreenShare,
-    label: 'Share Timer',
-    description: 'Screen-share the timer, camera untouched',
+    mode: OVERLAY_MODE_STAGE,
+    Icon: Maximize2,
+    label: 'Timer Stage',
+    description: 'Full-size timer to share or pop out',
   },
   {
     mode: OVERLAY_MODE_CARD,

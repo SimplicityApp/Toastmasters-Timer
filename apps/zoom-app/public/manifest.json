@@ -32,6 +32,9 @@
     "shareApp": {
       "enabled": true
     },
+    "onShareApp": {
+      "enabled": true
+    },
     "onMyMediaChange": {
       "enabled": true
     },

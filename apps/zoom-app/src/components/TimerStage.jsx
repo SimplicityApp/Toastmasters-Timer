@@ -1,5 +1,16 @@
 import { memo } from 'react';
-import { Play, Square, RotateCcw, X, Eye, EyeOff } from 'lucide-react';
+import {
+  Play,
+  Square,
+  RotateCcw,
+  X,
+  Eye,
+  EyeOff,
+  ScreenShare,
+  ScreenShareOff,
+  PictureInPicture2,
+  Minimize2,
+} from 'lucide-react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 import { getBackgroundUrl } from '../utils/zoomSdk';
 
@@ -25,16 +36,18 @@ const SECONDARY_BUTTON = `flex-1 ${BUTTON_BASE} bg-transparent hover:bg-white/15
 const ICON_BUTTON = `${BUTTON_BASE} bg-transparent hover:bg-white/15 border-white/20 text-white/85`;
 
 /**
- * Full-panel timer display for the stage modes (share and popout).
+ * Full-panel timer display: the stage.
  *
  * Unlike card and camera mode, nothing here is pushed through the video
- * pipeline: this *is* what the audience sees, either because the app is being
- * screen-shared or because it has been popped out onto a second monitor. The
- * whole panel is covered on purpose — in share mode every pixel of the app is
+ * pipeline. This *is* what gets seen, and by whom is the organizer's choice from
+ * the two buttons in the header — share it into the meeting, pop it into its own
+ * window for a second screen, either, both, or neither.
+ *
+ * The whole panel is covered on purpose: once shared, every pixel of the app is
  * broadcast, so leaving the agenda or the debug panel visible would put them in
- * front of the meeting. For the same reason the controls live in here rather
- * than underneath: the organizer has to be able to run the timer without
- * exposing anything else.
+ * front of the meeting. For the same reason the controls live in here rather than
+ * underneath — the organizer has to be able to run the timer, and to stop
+ * sharing, without exposing anything else.
  */
 export default memo(function TimerStage({
   status,
@@ -49,9 +62,13 @@ export default memo(function TimerStage({
   onReset,
   onFinish,
   onExit,
-  exitLabel,
   clockHidden,
   onToggleClock,
+  isSharing,
+  onToggleShare,
+  isPoppedOut,
+  onTogglePopout,
+  canPopout,
 }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
@@ -107,15 +124,52 @@ export default memo(function TimerStage({
             </div>
           )}
         </div>
-        <button
-          onClick={onExit}
-          className="p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors flex-shrink-0"
-          data-tooltip={exitLabel}
-          data-tooltip-direction="down-left"
-          aria-label={exitLabel}
-        >
-          <X className="h-5 w-5 text-white" />
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Sharing reads as on rather than merely available: this is the one
+              control here with an audience, and the organizer should be able to
+              tell at a glance whether the meeting is watching. */}
+          <button
+            onClick={onToggleShare}
+            className={`p-2 rounded-lg transition-colors ${
+              isSharing ? 'bg-white text-blue-700 hover:bg-white/90' : 'bg-black/20 text-white hover:bg-black/30'
+            }`}
+            data-tooltip={isSharing ? 'Stop sharing' : 'Share to meeting'}
+            data-tooltip-direction="down-left"
+            aria-label={isSharing ? 'Stop sharing' : 'Share to meeting'}
+            aria-pressed={isSharing}
+          >
+            {isSharing ? <ScreenShareOff className="h-5 w-5" /> : <ScreenShare className="h-5 w-5" />}
+          </button>
+
+          {/* Desktop only. Hidden rather than disabled where appPopout was not
+              granted: a permanently dead button invites the same click forever. */}
+          {canPopout && (
+            <button
+              onClick={onTogglePopout}
+              className="p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors"
+              data-tooltip={isPoppedOut ? 'Merge back to the main window' : 'Open in its own window'}
+              data-tooltip-direction="down-left"
+              aria-label={isPoppedOut ? 'Merge back to the main window' : 'Open in its own window'}
+              aria-pressed={isPoppedOut}
+            >
+              {isPoppedOut ? (
+                <Minimize2 className="h-5 w-5 text-white" />
+              ) : (
+                <PictureInPicture2 className="h-5 w-5 text-white" />
+              )}
+            </button>
+          )}
+
+          <button
+            onClick={onExit}
+            className="p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors"
+            data-tooltip="Close the timer stage"
+            data-tooltip-direction="down-left"
+            aria-label="Close the timer stage"
+          >
+            <X className="h-5 w-5 text-white" />
+          </button>
+        </div>
       </div>
 
       {/* Deliberately empty: the color is the signal. A speaker watching a shared
