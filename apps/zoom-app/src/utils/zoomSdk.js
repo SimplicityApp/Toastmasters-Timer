@@ -174,7 +174,14 @@ export async function initializeZoomSdk() {
     // Check if we're in a Zoom environment
     // The SDK will be available when running in Zoom client
     log('Initializing Zoom SDK...', 'info');
-    const baseOptions = { popoutSize: { width: 400, height: 600 }, version: '1.0.0' };
+    // Landscape 16:9, matching the branded backgrounds, so Timer Window mode
+    // opens close to the asset's shape instead of the old 400x600 portrait that
+    // letterboxed it badly. The client clamps this: documented minimums are
+    // 336x342 on Windows and 320x760 on Mac, with a 75%-of-screen maximum, so a
+    // small Mac display may still force a taller window. The layered backdrop in
+    // TimerStage is what keeps those cases presentable — this only improves the
+    // starting point, and the user can always resize.
+    const baseOptions = { popoutSize: { width: 1152, height: 648 }, version: '1.0.0' };
     let configResult;
     try {
       configResult = await zoomSdk.config({
@@ -774,7 +781,11 @@ export async function setOverlayMode(mode, currentImageUrl) {
   // Remove overlay using the old mode, captured now because currentOverlayMode
   // changes before the queued operation runs.
   const previousMode = currentOverlayMode;
-  await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
+  if (isVideoOverlayMode(previousMode)) {
+    await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
+  } else {
+    await teardownStageMode(previousMode);
+  }
   currentOverlayMode = mode;
 
   // Stage modes put the app itself on screen rather than pushing pixels, so they
@@ -794,8 +805,39 @@ export async function setOverlayMode(mode, currentImageUrl) {
 }
 
 /**
- * Internal helper to remove whatever a mode had on screen.
- * @param {string} mode - Overlay mode to tear down
+ * Bring down a stage mode: stop the share, or dock the popped-out window.
+ *
+ * Deliberately NOT routed through enqueueOverlayOp. That queue drops any request
+ * a newer one has superseded, which is right for image pushes and wrong here:
+ * leaving a stage mode also flips React state, whose effects fire an applyOverlay
+ * for the incoming mode. That push bumps the request id and the queued teardown
+ * is skipped — the visible symptom being an X button that closes the stage while
+ * the meeting is still being shared.
+ *
+ * @param {string} mode - Stage mode to tear down
+ */
+async function teardownStageMode(mode) {
+  if (!sdkInitialized) {
+    await initializeZoomSdk();
+  }
+  activeOverlay = null;
+
+  if (mode === OVERLAY_MODE_SHARE) {
+    // Unconditional, unlike the popout below. Nothing tells us when the user
+    // stops the share from Zoom's own toolbar, so appShareActive can be stale;
+    // a redundant stop just logs, while a skipped one keeps the meeting shared.
+    await setAppShare(false);
+    return;
+  }
+  if (mode === OVERLAY_MODE_POPOUT) {
+    // onAppPopout does report a client-side dock, so this flag is trustworthy.
+    if (appPoppedOut) await setAppPopout(false);
+  }
+}
+
+/**
+ * Internal helper to remove a video overlay.
+ * @param {string} mode - Overlay mode to tear down ('card' or 'camera')
  */
 async function removeOverlayInternal(mode) {
   if (!sdkInitialized) {
@@ -806,17 +848,6 @@ async function removeOverlayInternal(mode) {
   // Clear this up front: once removal is requested, nothing is considered
   // applied, even if the removal itself fails because there was no overlay.
   activeOverlay = null;
-
-  // Stage modes never pushed a background, so there is nothing to clear from the
-  // video pipeline — but the share or the popped-out window has to come down.
-  if (mode === OVERLAY_MODE_SHARE) {
-    if (appShareActive) await setAppShare(false);
-    return;
-  }
-  if (mode === OVERLAY_MODE_POPOUT) {
-    if (appPoppedOut) await setAppPopout(false);
-    return;
-  }
 
   try {
     if (sdkAvailable && zoomSdk) {
@@ -1004,6 +1035,7 @@ async function applyOverlayInternal(imageUrl) {
  */
 export function removeOverlay() {
   const mode = currentOverlayMode;
+  if (!isVideoOverlayMode(mode)) return teardownStageMode(mode);
   return enqueueOverlayOp(() => removeOverlayInternal(mode));
 }
 

@@ -777,3 +777,51 @@ describe('getZoomParticipants', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('leaving a stage mode is never dropped by the overlay queue', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    sdkMock.shareApp.mockResolvedValue({});
+    sdkMock.appPopout.mockResolvedValue({});
+  });
+
+  it('stops the share even when a newer overlay push supersedes the teardown', async () => {
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, isAppShareActive, OVERLAY_MODE_SHARE, OVERLAY_MODE_CARD } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    expect(isAppShareActive()).toBe(true);
+
+    // Exactly what the UI does on exit: React flips the mode, whose effect fires
+    // an applyOverlay for the incoming card mode while the teardown is in flight.
+    // Routed through the queue, that push would bump the request id and the
+    // teardown would be skipped, leaving the meeting shared with no stage on
+    // screen and no way back to it.
+    const exiting = setOverlayMode(OVERLAY_MODE_CARD, 'https://zoom.example/backgrounds/blue.png');
+    applyOverlay('https://zoom.example/backgrounds/blue.png');
+    await exiting;
+
+    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'stop' });
+    expect(isAppShareActive()).toBe(false);
+  });
+
+  it('stops the share even if the active flag went stale', async () => {
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_SHARE, OVERLAY_MODE_CARD } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_SHARE, null);
+    sdkMock.shareApp.mockClear();
+
+    // Zoom reports nothing when the user stops the share from its own toolbar,
+    // so the stop is attempted regardless of what the flag says.
+    await setOverlayMode(OVERLAY_MODE_CARD, null);
+
+    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'stop' });
+  });
+});
