@@ -9,7 +9,7 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, isSdkAvailable, DEFAULT_OVERLAY_MODE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, getOverlayMode, setPopoutChangeCallback, isVideoOverlayMode, isSdkAvailable, DEFAULT_OVERLAY_MODE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_SHARE, OVERLAY_MODE_POPOUT } from '../utils/zoomSdk';
 import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
@@ -262,27 +262,33 @@ export default memo(function LiveTab() {
     return () => clearInterval(interval);
   }, []);
 
-  // Card mode covers the organizer's face entirely, so it only runs while a
-  // speech is actually being timed: no color before START, and none once the
-  // speech is finished or reset. That gives the organizer their face back
-  // between speakers instead of leaving a blue card up all meeting.
+  // Both video modes run only while a speech is being timed: nothing before
+  // START, nothing once it is finished or reset. The organizer gets their normal
+  // video back between speakers rather than a card, or a blue background,
+  // sitting on them for the whole meeting.
   //
   // A pause counts as active — the speech is on hold, not over — which is why
   // this tracks elapsedTime rather than isRunning alone.
   //
-  // Card mode only. Camera mode keeps its always-on background because clearing
-  // one costs the user a confirmation dialog every time (Zoom's design, see
-  // removeVirtualBackground), and the stage modes push no pixels at all.
+  // Stage modes are excluded: they push no pixels, and removeOverlay there would
+  // tear down the share or the popped-out window itself.
   const speechActive = isRunning || elapsedTime > 0;
   useEffect(() => {
-    if (overlayMode !== OVERLAY_MODE_CARD) return;
-    if (isHidden && speechActive) {
+    if (!isVideoOverlayMode(overlayMode)) return;
+    // Camera mode has no reveal-face toggle — the face shows either way — so
+    // isHidden only gates card mode, where the overlay covers the organizer.
+    const shouldShow = speechActive && (overlayMode === OVERLAY_MODE_CAMERA || isHidden);
+    if (shouldShow) {
       const imageUrl = getBackgroundUrl(currentStatus || 'blue');
       addDebugLog(`Applying overlay (speech running): ${currentStatus} -> ${imageUrl}`, 'info');
       // Usually redundant with TimerContext's own push on status change; the
       // already-showing guard in applyOverlay makes the duplicate free.
       applyOverlay(imageUrl);
-    } else {
+    } else if (isOverlayActive()) {
+      // Only when something of ours is actually up. In camera mode a removal
+      // costs the user a confirmation dialog, so it must happen when a speech
+      // ends and at no other time — not on mount, not on a speaker change, not
+      // on arriving in the mode with nothing showing.
       addDebugLog(
         speechActive ? 'Removing overlay (reveal face mode)' : 'Removing overlay (no speech in progress)',
         'info'
@@ -492,12 +498,12 @@ export default memo(function LiveTab() {
     // is the exception.
     if (newMode !== OVERLAY_MODE_SHARE) saveOverlayMode(newMode);
     const imageUrl = getBackgroundUrl(previewColor || currentStatus);
-    // Card mode carries the color across only if something should be showing —
-    // mid-speech, or while a preview swatch is held up — otherwise arriving in
-    // card mode paints a blue card over an idle organizer. Camera mode keeps its
-    // always-on behavior.
-    const shouldShow = newMode === OVERLAY_MODE_CAMERA || speechActive || previewColor;
-    const accepted = await setOverlayMode(newMode, isHidden && shouldShow ? imageUrl : null);
+    // Carry the color into the new mode only if something should be showing:
+    // mid-speech, or while a preview swatch is held up. Passing it
+    // unconditionally is what used to paint an idle organizer blue on arrival.
+    const shouldShow =
+      (speechActive || previewColor) && (newMode === OVERLAY_MODE_CAMERA || isHidden);
+    const accepted = await setOverlayMode(newMode, shouldShow ? imageUrl : null);
     if (newMode === OVERLAY_MODE_CAMERA) setIsHidden(true);
 
     // A refused stage mode would otherwise leave the panel covered by a stage

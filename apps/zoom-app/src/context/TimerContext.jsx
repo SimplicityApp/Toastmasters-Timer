@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports } from '@toastmaster-timer/shared';
-import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
+import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { recordSpeechFinished } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
@@ -172,18 +172,15 @@ export function TimerProvider({ children }) {
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
-    // Card mode hides the organizer's face completely, so a finished or reset
-    // speech clears it rather than parking a blue card over them until the next
-    // speaker starts. Camera mode instead returns to blue: removing a virtual
-    // background costs the user a confirmation dialog every time, and one prompt
-    // per speech is a worse deal than a blue background between them.
-    if (getOverlayMode() === OVERLAY_MODE_CARD) {
+    // A finished or reset speech hands the organizer their video back, in both
+    // video modes. Stage modes are skipped: removeOverlay there would stop the
+    // share or dock the timer window.
+    //
+    // Gated on something actually being applied, because resetTimer also runs on
+    // every speaker and role change. Without that, camera mode would raise its
+    // removal confirmation dialog each time a speaker was picked.
+    if (isVideoOverlayMode(getOverlayMode()) && isOverlayActive()) {
       removeOverlay();
-    } else if (isOverlayActive()) {
-      // Only push blue back if a background is actually showing. resetTimer also
-      // runs on every speaker/role change, and pushing an overlay that nothing is
-      // displaying costs a multi-MB bridge transfer for no visible effect.
-      applyOverlay(getBackgroundUrl('blue'));
     }
   }, []);
 
