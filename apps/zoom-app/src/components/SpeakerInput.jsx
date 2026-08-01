@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { getZoomParticipants } from '../utils/zoomSdk';
-import { ChevronDown, CornerDownLeft } from 'lucide-react';
+import { ChevronDown, CornerDownLeft, Users } from 'lucide-react';
 
 /**
  * @param {'panel'|'stage'} [variant] - 'stage' is the compact form the timer
@@ -20,11 +20,20 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [participants, setParticipants] = useState([]);
+  // True only when the participant list was withheld because the organizer is
+  // not host or co-host — the one cause they can actually do something about.
+  const [participantsRestricted, setParticipantsRestricted] = useState(false);
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
-    getZoomParticipants().then(setParticipants);
+    let cancelled = false;
+    getZoomParticipants().then((result) => {
+      if (cancelled) return;
+      setParticipants(result?.participants || []);
+      setParticipantsRestricted(Boolean(result?.restricted));
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // Filter agenda items (non-completed, with names, not already in participants)
@@ -187,7 +196,7 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
               : 'w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
           }
         />
-        {showSuggestions && (suggestions.length > 0 || isCustomName || pendingRename) && (
+        {showSuggestions && (suggestions.length > 0 || isCustomName || pendingRename || participantsRestricted) && (
           <ul
             ref={suggestionsRef}
             className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
@@ -258,6 +267,16 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
             ) : isCustomName && (
               <li className="px-3 py-2 text-sm text-gray-500 border-t border-gray-100">
                 New Speaker: "{value.trim()}"
+              </li>
+            )}
+            {/* Only when the list was withheld for a reason the organizer can
+                act on, and only at the foot of a list they already opened —
+                nothing pops up, nothing blocks typing, and a host never sees it
+                at all. Names are still typed by hand meanwhile. */}
+            {participantsRestricted && (
+              <li className="flex items-start gap-1.5 px-3 py-2 text-xs text-gray-500 border-t border-gray-100 bg-gray-50">
+                <Users className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span>Ask to be made host or co-host to pick speakers from the participant list.</span>
               </li>
             )}
           </ul>

@@ -834,9 +834,97 @@ describe('getZoomParticipants', () => {
     const { getZoomParticipants } = await loadModule();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(getZoomParticipants()).resolves.toEqual([]);
+    await expect(getZoomParticipants()).resolves.toEqual({
+      participants: [],
+      role: '',
+      restricted: false,
+    });
 
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  // getUserContext is grantable in the Marketplace but reaches the client
+  // through the SDK's proxy, so it is added to the mock per-test rather than to
+  // the shared one — which stays a picture of what the SDK itself defines.
+  function withUserContext(context) {
+    sdkMock.getUserContext = vi.fn().mockResolvedValue(context);
+    return sdkMock.getUserContext;
+  }
+
+  async function initialized() {
+    sdkMock.config.mockResolvedValue({});
+    const module = await loadModule();
+    await module.initializeZoomSdk();
+    return module;
+  }
+
+  afterEach(() => {
+    delete sdkMock.getUserContext;
+    delete sdkMock.getMeetingParticipants;
+  });
+
+  it('puts the organizer in their own speaker list', async () => {
+    // getMeetingParticipants returns everybody except the caller, so on its own
+    // it never offers the organizer the one name they most often have to time.
+    withUserContext({ screenName: 'Priya', role: 'host', participantUUID: 'me' });
+    sdkMock.getMeetingParticipants = vi.fn().mockResolvedValue({
+      participants: [{ screenName: 'Sam', participantUUID: 'p2' }],
+    });
+    const { getZoomParticipants } = await initialized();
+
+    const result = await getZoomParticipants();
+
+    // Self leads: it is the name most likely to be wanted.
+    expect(result.participants).toEqual([
+      { id: 'me', name: 'Priya' },
+      { id: 'p2', name: 'Sam' },
+    ]);
+    expect(result.restricted).toBe(false);
+  });
+
+  it('does not list the organizer twice if the client already included them', async () => {
+    withUserContext({ screenName: 'Priya', role: 'coHost', participantUUID: 'me' });
+    sdkMock.getMeetingParticipants = vi.fn().mockResolvedValue({
+      participants: [
+        { screenName: 'Priya', participantUUID: 'me' },
+        { screenName: 'Sam', participantUUID: 'p2' },
+      ],
+    });
+    const { getZoomParticipants } = await initialized();
+
+    expect((await getZoomParticipants()).participants).toEqual([
+      { id: 'me', name: 'Priya' },
+      { id: 'p2', name: 'Sam' },
+    ]);
+  });
+
+  it('still offers the organizer their own name when they are not hosting', async () => {
+    // getMeetingParticipants is host and co-host only. An attendee running the
+    // timer used to get an empty list and no reason for it.
+    withUserContext({ screenName: 'Priya', role: 'attendee', participantUUID: 'me' });
+    sdkMock.getMeetingParticipants = vi.fn().mockRejectedValue(
+      Object.assign(new Error('not allowed'), { code: 10102 })
+    );
+    const { getZoomParticipants } = await initialized();
+
+    const result = await getZoomParticipants();
+
+    expect(result.participants).toEqual([{ id: 'me', name: 'Priya' }]);
+    // The one cause the organizer can act on, and the only one worth telling
+    // them about.
+    expect(result.restricted).toBe(true);
+  });
+
+  it('does not blame the role when a host\'s list fails for another reason', async () => {
+    withUserContext({ screenName: 'Priya', role: 'host', participantUUID: 'me' });
+    sdkMock.getMeetingParticipants = vi.fn().mockRejectedValue(new Error('bridge timeout'));
+    const { getZoomParticipants } = await initialized();
+
+    const result = await getZoomParticipants();
+
+    // Telling a host to ask for co-host would be nonsense advice.
+    expect(result.restricted).toBe(false);
+    expect(result.participants).toEqual([{ id: 'me', name: 'Priya' }]);
   });
 });
 

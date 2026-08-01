@@ -709,20 +709,27 @@ export default memo(function LiveTab() {
         />
       )}
 
-      {/* Clear-video escape hatch + overlay mode menu in top right */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+      {/* Clear-video escape hatch + overlay mode menu.
+          In the flow rather than floating: these carry their labels now, and two
+          labelled buttons pinned over the top-right corner sit on whatever the
+          panel is showing underneath. Invisible in the stage modes regardless,
+          since TimerStage is fixed inset-0 above this. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {/* Always available, in every mode: the point of it is to work when
             something of ours is stuck, which is exactly when the mode-specific
-            paths have already failed. */}
+            paths have already failed.
+
+            Labelled rather than left to a tooltip. An eraser icon says an
+            action is destructive but not what it destroys, and someone whose
+            video is stuck is looking for a way out, not hovering to find one. */}
         <button
           onClick={handleClearVideo}
           disabled={isClearingVideo}
-          className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition-colors"
-          data-tooltip="Clear the timer from my video"
-          data-tooltip-direction="down"
+          className="flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-sm font-medium transition-colors"
           aria-label="Clear the timer from my video"
         >
-          <Eraser className="h-5 w-5 text-gray-700" />
+          <Eraser className="h-4 w-4 flex-shrink-0" />
+          {isClearingVideo ? 'Clearing…' : 'Clear video'}
         </button>
         <OverlayModeMenu
           value={overlayMode}

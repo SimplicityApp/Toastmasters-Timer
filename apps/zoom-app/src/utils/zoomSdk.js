@@ -90,6 +90,7 @@ export const USED_SDK_APIS = [
   { name: 'getVideoState', capability: 'getVideoState', required: false, purpose: 'Video-off warning' },
   { name: 'setVideoState', capability: 'setVideoState', required: false, purpose: 'Turn my video on' },
   { name: 'getMeetingParticipants', capability: 'getMeetingParticipants', required: false, purpose: 'Speaker suggestions' },
+  { name: 'getUserContext', capability: 'getUserContext', required: false, purpose: 'Putting yourself in the speaker list' },
   { name: 'shareApp', capability: 'shareApp', required: false, purpose: 'Sharing the stage to the meeting' },
   { name: 'onShareApp', capability: 'onShareApp', required: false, purpose: 'Following Zoom\'s own sharing toolbar' },
   { name: 'appPopout', capability: 'appPopout', required: false, purpose: 'Opening the stage in its own window' },
@@ -1815,41 +1816,91 @@ export async function setVideoState(enabled) {
   }
 }
 
+// Roles Zoom lets call getMeetingParticipants. The SDK documents role as
+// 'host' | 'coHost' | 'attendee' | 'panelist'; compared case- and
+// punctuation-insensitively because clients have spelled co-host both ways.
+const ROLES_THAT_CAN_LIST_PARTICIPANTS = ['host', 'cohost'];
+
+const normalizeRole = (role) =>
+  typeof role === 'string' ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
+
+/** One participant, from either API's field names. */
+const toParticipant = (p, index) => ({
+  id: p.participantUUID || p.participantId || p.userId || p.id || `user-${index}`,
+  name: p.screenName || p.displayName || p.userName || p.name || 'Unknown',
+});
+
 /**
- * Get list of Zoom participants
- * @returns {Array} Array of participant objects
+ * Everyone in the meeting, the app's own user included.
+ *
+ * Two APIs, because neither covers the room on its own: getMeetingParticipants
+ * returns everybody *except* the caller, and getUserContext returns only the
+ * caller. Merging them is what puts the organizer in their own speaker list,
+ * which is where the name they most often need to time actually lives.
+ *
+ * They also differ in who may call them, and that is what `restricted` reports.
+ * getUserContext works for every role; getMeetingParticipants is documented
+ * host and co-host only. A timer run by someone who is neither used to get an
+ * empty list and no reason for it.
+ *
+ * @returns {Promise<{participants: Array<{id: string, name: string}>, role: string, restricted: boolean}>}
+ *   restricted is true when the full list was withheld because of the caller's
+ *   role, which is the one cause the organizer can do something about.
  */
 export async function getZoomParticipants() {
+  if (!sdkAvailable) {
+    log('[MOCK] SDK is not available; no participants to report.', 'warn');
+    return { participants: [], role: '', restricted: false };
+  }
+
+  // Self first: it works for every role, so the list is never empty just
+  // because the organizer is not hosting.
+  let self = null;
+  let role = '';
+  if (isApiAvailable('getUserContext')) {
+    try {
+      const context = await zoomSdk.getUserContext();
+      role = normalizeRole(context?.role);
+      if (context?.screenName) self = toParticipant(context, 0);
+    } catch (error) {
+      log(`Could not read your own user context: ${error.message || error.name}`, 'warn');
+    }
+  }
+
+  // getMeetingParticipants, not getParticipants: the latter is not an API the
+  // SDK has, so this call threw every time and the suggestions were always
+  // empty.
+  let others = [];
+  let listFailed = false;
   try {
-    if (sdkAvailable) {
-      // Try to get participants from Zoom SDK
-      // Note: This API may require specific scopes/permissions
-      try {
-        // getMeetingParticipants, not getParticipants: the latter is not an API
-        // the SDK has, so this call threw every time and the suggestions were
-        // always empty.
-        const response = await zoomSdk.getMeetingParticipants();
-        const participants = response?.participants;
-        if (participants && Array.isArray(participants)) {
-          // The SDK's own field names, with the older guesses kept as fallbacks.
-          return participants.map((p, index) => ({
-            id: p.participantUUID || p.participantId || p.userId || p.id || `user-${index}`,
-            name: p.screenName || p.displayName || p.userName || p.name || 'Unknown'
-          }));
-        }
-      } catch (sdkError) {
-        // Participants API might not be available or require additional permissions
-        console.log('Participants API not available:', sdkError.message);
-      }
-      return [];
-    } else {
-      // Mock participants for local development
-      log(`[MOCK] SDK is not available; no participants to report.`, 'warn');
-      return [];
+    const response = await zoomSdk.getMeetingParticipants();
+    if (Array.isArray(response?.participants)) {
+      others = response.participants.map(toParticipant);
     }
   } catch (error) {
-    console.error('Failed to get Zoom participants:', error);
-    // Return mock data as fallback
-    return [];
+    listFailed = true;
+    log(`Could not list meeting participants: ${error.message || error.name} (code ${error.code ?? 'none'})`, 'warn');
   }
+
+  // Attempted regardless of role rather than skipped on one: the role string is
+  // the client's to spell, and a refusal we can see beats a list we withheld on
+  // a guess. The role only decides what the organizer is told afterwards.
+  const restricted =
+    listFailed && Boolean(role) && !ROLES_THAT_CAN_LIST_PARTICIPANTS.includes(role);
+  if (restricted) {
+    log(`Participant list needs host or co-host; this account is "${role}"`, 'warn');
+  }
+
+  // Self first so the organizer's own name leads the list, then dedupe: a
+  // client that does include the caller in getMeetingParticipants must not
+  // produce them twice.
+  const seen = new Set();
+  const participants = [self, ...others].filter(Boolean).filter((person) => {
+    const key = person.id || person.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return { participants, role, restricted };
 }

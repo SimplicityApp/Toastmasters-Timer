@@ -3,10 +3,18 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import SpeakerInput from './SpeakerInput';
+import { getZoomParticipants } from '../utils/zoomSdk';
 
 // Stubbed rather than imported: the real module pulls in @zoom/appssdk, which
 // hangs vitest under jsdom.
-vi.mock('../utils/zoomSdk', () => ({ getZoomParticipants: vi.fn(() => Promise.resolve([])) }));
+vi.mock('../utils/zoomSdk', () => ({ getZoomParticipants: vi.fn() }));
+
+// Default to the shape a host sees. Kept faithful to the real return value: a
+// stub that answers with a bare array would let the component read `.participants`
+// off it as undefined and still pass.
+beforeEach(() => {
+  getZoomParticipants.mockResolvedValue({ participants: [], role: 'host', restricted: false });
+});
 
 const ROLES = ['Standard Speech', 'Table Topics'];
 
@@ -117,5 +125,57 @@ describe('SpeakerInput', () => {
     await user.click(await screen.findByText('Enter to add "Priya" to the agenda'));
 
     expect(onAddSpeaker).toHaveBeenCalledWith('Priya');
+  });
+});
+
+describe('SpeakerInput participant list', () => {
+  it('offers everyone in the meeting, the organizer included', async () => {
+    const user = userEvent.setup();
+    getZoomParticipants.mockResolvedValue({
+      participants: [{ id: 'me', name: 'Priya' }, { id: 'p2', name: 'Sam' }],
+      role: 'host',
+      restricted: false,
+    });
+    renderInput();
+
+    await user.click(field());
+
+    expect(await screen.findByText('Priya')).toBeInTheDocument();
+    expect(screen.getByText('Sam')).toBeInTheDocument();
+    // A host has nothing to act on, so the note stays out of their way.
+    expect(screen.queryByText(/host or co-host/i)).not.toBeInTheDocument();
+  });
+
+  it('tells a non-host why the list is short', async () => {
+    const user = userEvent.setup();
+    getZoomParticipants.mockResolvedValue({
+      participants: [{ id: 'me', name: 'Priya' }],
+      role: 'attendee',
+      restricted: true,
+    });
+    renderInput();
+
+    await user.click(field());
+
+    // Their own name still comes through, so the list is never simply empty.
+    expect(await screen.findByText('Priya')).toBeInTheDocument();
+    expect(screen.getByText(/Ask to be made host or co-host/i)).toBeInTheDocument();
+  });
+
+  it('leaves a non-host free to type names as usual', async () => {
+    // Non-intrusive has to mean non-blocking: the note sits at the foot of the
+    // list and changes nothing about entering a name by hand.
+    const user = userEvent.setup();
+    getZoomParticipants.mockResolvedValue({
+      participants: [{ id: 'me', name: 'Priya' }],
+      role: 'attendee',
+      restricted: true,
+    });
+    const { onAddSpeaker } = renderInput();
+
+    await user.type(field(), 'Dana');
+    await user.keyboard('{Enter}');
+
+    expect(onAddSpeaker).toHaveBeenCalledWith('Dana');
   });
 });
