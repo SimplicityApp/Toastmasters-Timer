@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, memo } from 'react';
-import { ChevronDown, Check, CornerDownLeft } from 'lucide-react';
+import { ChevronDown, Check, CornerDownLeft, Users } from 'lucide-react';
+import useZoomParticipants, { participantsNotOnAgenda } from '../hooks/useZoomParticipants';
 
 /**
  * The speaker control on the timer stage.
@@ -12,12 +13,18 @@ import { ChevronDown, Check, CornerDownLeft } from 'lucide-react';
  * The panel's field does none of those — it names the current speaker and offers
  * suggestions, which is right for setting up before the meeting starts.
  *
+ * The two lists it picks from are the panel's, though: the agenda and everyone
+ * in the meeting. A club that runs Table Topics off no agenda at all was
+ * otherwise left typing names by hand on the one screen where typing is hardest,
+ * while Zoom already knew every one of them.
+ *
  * Deliberately not full width: it sits over the timer color, so it takes the
  * space it needs and leaves the rest of the stage to the signal.
  */
 export default memo(function StageSpeakerPicker({
   value,
   onChange,
+  role,
   agendaItems,
   activeSpeakerId,
   onSelectSpeaker,
@@ -28,10 +35,21 @@ export default memo(function StageSpeakerPicker({
   const inputRef = useRef(null);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
+  const { participants, restricted: participantsRestricted } = useZoomParticipants();
 
   const upNext = (agendaItems || []).filter((item) => !item.completed || item.id === activeSpeakerId);
   const activeItem = (agendaItems || []).find((item) => item.id === activeSpeakerId);
   const typed = (value || '').trim();
+
+  // The other half of the list, and the reason this is a dropdown at all when
+  // nothing was imported: a club that never pastes an agenda in still has
+  // everyone's name sitting in the meeting. Same two groups the panel field
+  // offers, so the two places a speaker gets named agree on who is available.
+  const guests = participantsNotOnAgenda(participants, upNext);
+
+  // Worth a dropdown as soon as there is anywhere to go: another agenda entry,
+  // or anyone in the meeting who is not on it yet.
+  const hasChoices = upNext.length > 1 || guests.length > 0;
 
   // What Enter will do, which is also what the hint promises. Renaming wins when
   // an agenda speaker is up: correcting "Jon" to "John" mid-speech should fix the
@@ -73,6 +91,18 @@ export default memo(function StageSpeakerPicker({
     onSelectSpeaker(item.id);
   };
 
+  /**
+   * Picking someone who is in the meeting but not on the agenda. Adding them is
+   * what Enter already does with a name typed by hand, and it is the only outcome
+   * that leaves the meeting on a running order: merely copying the name into the
+   * field would record nothing, so finishing could not advance and the speech
+   * would never reach the report.
+   */
+  const pickGuest = (person) => {
+    setOpen(false);
+    onAddSpeaker(person.name);
+  };
+
   return (
     <div className="relative w-56 max-w-full">
       <div className="flex items-stretch rounded-md border border-white/30 bg-black/25 focus-within:ring-2 focus-within:ring-white/60">
@@ -86,8 +116,7 @@ export default memo(function StageSpeakerPicker({
           aria-label="Speaker name"
           className="min-w-0 flex-1 bg-transparent py-1.5 px-2.5 text-lg font-semibold text-white placeholder-white/50 focus:outline-none"
         />
-        {/* Only worth a dropdown when there is a running order to move around in. */}
-        {upNext.length > 1 && (
+        {hasChoices && (
           <button
             ref={buttonRef}
             type="button"
@@ -95,7 +124,7 @@ export default memo(function StageSpeakerPicker({
             className="px-1.5 text-white/70 hover:text-white transition-colors flex-shrink-0"
             aria-haspopup="listbox"
             aria-expanded={open}
-            aria-label="Choose a speaker from the agenda"
+            aria-label="Choose a speaker from the agenda or the meeting"
           >
             <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
           </button>
@@ -117,6 +146,15 @@ export default memo(function StageSpeakerPicker({
           role="listbox"
           className="absolute left-0 top-full z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-56 overflow-y-auto"
         >
+          {/* Labelled whenever the group has anyone in it, even when it is the
+              only group: picking from the agenda moves the timer along a running
+              order, picking from the meeting puts someone on it. Same two labels
+              as the panel field, so neither list has to be learned twice. */}
+          {upNext.length > 0 && (
+            <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50" role="presentation">
+              Agenda
+            </li>
+          )}
           {upNext.map((item) => {
             const isActive = item.id === activeSpeakerId;
             return (
@@ -141,6 +179,40 @@ export default memo(function StageSpeakerPicker({
               </li>
             );
           })}
+
+          {guests.length > 0 && (
+            <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50" role="presentation">
+              Zoom Participants
+            </li>
+          )}
+          {guests.map((person) => (
+            <li key={`guest-${person.id || person.name}`}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                onClick={() => pickGuest(person)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-gray-900">{person.name}</span>
+                  {/* The role they will be added under, which is the one the
+                      panel currently has selected — worth saying, since it is
+                      the one thing picking a participant decides for them. */}
+                  {role && <span className="block truncate text-xs text-gray-500">Add as {role}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+
+          {/* Only where the organizer can act on it, and only at the foot of a
+              list they opened themselves. A host never sees it. */}
+          {participantsRestricted && (
+            <li className="flex items-start gap-1.5 px-3 py-2 text-xs text-gray-500 border-t border-gray-100 bg-gray-50">
+              <Users className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+              <span>Ask to be made host or co-host to pick speakers from the participant list.</span>
+            </li>
+          )}
         </ul>
       )}
     </div>

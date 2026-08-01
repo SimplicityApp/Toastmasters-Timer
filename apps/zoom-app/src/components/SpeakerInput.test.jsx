@@ -146,6 +146,60 @@ describe('SpeakerInput participant list', () => {
     expect(screen.queryByText(/host or co-host/i)).not.toBeInTheDocument();
   });
 
+  it('labels the group even when it is the only one', async () => {
+    const user = userEvent.setup();
+    // Where a name came from decides what picking it does, so a single unlabelled
+    // list of names left the organizer guessing at that — and the common case is
+    // exactly one group: a club with no agenda imported, or one running from an
+    // agenda before anyone has joined.
+    getZoomParticipants.mockResolvedValue({
+      participants: [{ id: 'p2', name: 'Sam' }],
+      role: 'host',
+      restricted: false,
+    });
+    renderInput();
+
+    await user.click(field());
+
+    expect(await screen.findByText('Zoom Participants')).toBeInTheDocument();
+    expect(screen.queryByText('Agenda')).not.toBeInTheDocument();
+  });
+
+  it('labels an agenda-only list too', async () => {
+    const user = userEvent.setup();
+    renderInput({ agendaItems: [{ id: 'a1', name: 'Priya', role: 'Standard Speech' }] });
+
+    await user.click(field());
+
+    expect(await screen.findByText('Agenda')).toBeInTheDocument();
+    expect(screen.queryByText('Zoom Participants')).not.toBeInTheDocument();
+  });
+
+  it('offers someone on both lists as their agenda entry', async () => {
+    const user = userEvent.setup();
+    // The agenda entry carries a role and a place in the running order; the
+    // participant is a bare name. Offering the name instead used to drop the
+    // link to the agenda, so finishing could not advance and the item was never
+    // ticked off.
+    getZoomParticipants.mockResolvedValue({
+      participants: [{ id: 'p1', name: 'priya' }, { id: 'p2', name: 'Sam' }],
+      role: 'host',
+      restricted: false,
+    });
+    const { onSelectSuggestion } = renderInput({
+      agendaItems: [{ id: 'a1', name: 'Priya', role: 'Table Topics' }],
+    });
+
+    await user.click(field());
+
+    expect(await screen.findByText('Agenda')).toBeInTheDocument();
+    // Once, under Agenda — not a second time as a name off the meeting.
+    expect(screen.getAllByText(/priya/i)).toHaveLength(1);
+
+    await user.click(screen.getByText('Priya'));
+    expect(onSelectSuggestion).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
+  });
+
   it('tells a non-host why the list is short', async () => {
     const user = userEvent.setup();
     getZoomParticipants.mockResolvedValue({

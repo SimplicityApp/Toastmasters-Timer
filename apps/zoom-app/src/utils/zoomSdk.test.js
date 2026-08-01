@@ -16,6 +16,9 @@ const { sdkMock } = vi.hoisted(() => ({
     shareApp: vi.fn(),
     appPopout: vi.fn(),
     onAppPopout: vi.fn(),
+    onShareScreen: vi.fn(),
+    getMeetingView: vi.fn(),
+    onMeetingViewChange: vi.fn(),
   },
 }));
 
@@ -122,6 +125,9 @@ afterEach(() => {
   sdkMock.shareApp.mockReset();
   sdkMock.appPopout.mockReset();
   sdkMock.onAppPopout.mockReset();
+  sdkMock.onShareScreen.mockReset();
+  sdkMock.getMeetingView.mockReset();
+  sdkMock.onMeetingViewChange.mockReset();
 });
 
 describe('getBackgroundUrl', () => {
@@ -664,6 +670,16 @@ describe('stage modes (share and popout)', () => {
     sdkMock.appPopout.mockResolvedValue({});
   });
 
+  // Added per-test rather than to the shared mock, which stays a picture of what
+  // the SDK itself defines — getUserContext reaches the client through its proxy.
+  const withUserContext = (context) => {
+    sdkMock.getUserContext = vi.fn().mockResolvedValue(context);
+  };
+
+  afterEach(() => {
+    delete sdkMock.getUserContext;
+  });
+
   it('starts nothing on its own when the stage opens', async () => {
     const { initializeZoomSdk, setOverlayMode, isAppShareActive, isAppPoppedOut, OVERLAY_MODE_STAGE } =
       await loadModule();
@@ -794,6 +810,171 @@ describe('stage modes (share and popout)', () => {
     handleShareApp('nonsense'); // malformed payload
 
     expect(seen).toEqual([false, true]);
+  });
+
+  it('follows Zoom\'s own Stop Share through onShareScreen', async () => {
+    const { initializeZoomSdk, setAppShare, setShareChangeCallback, handleShareScreen, isAppShareActive } =
+      await loadModule();
+    // An app share is a screen share as far as the meeting is concerned, and this
+    // event reaches clients that deliver neither onShareApp nor the meeting view.
+    // It is what lets the stage follow Zoom's toolbar without polling for it.
+    withUserContext({ participantUUID: 'me', screenName: 'Priya', role: 'host' });
+    await initializeZoomSdk();
+    const seen = [];
+    setShareChangeCallback((sharing) => seen.push(sharing));
+    await setAppShare(true);
+
+    handleShareScreen({ participantUUID: 'me', action: 'stop', withSound: false, timestamp: 1 });
+
+    expect(isAppShareActive()).toBe(false);
+    expect(seen).toEqual([false]);
+  });
+
+  it('ignores a share of someone else\'s that stopped', async () => {
+    const { initializeZoomSdk, setAppShare, handleShareScreen, isAppShareActive } = await loadModule();
+    withUserContext({ participantUUID: 'me', screenName: 'Priya', role: 'host' });
+    await initializeZoomSdk();
+    await setAppShare(true);
+
+    // The event is meeting-wide: it fires for everybody. Reading someone else's
+    // share ending as ours would offer "Screenshare" over a stage the meeting is
+    // still watching, and pressing it would ask Zoom for a second share.
+    handleShareScreen({ participantUUID: 'someone-else', action: 'stop', timestamp: 1 });
+    handleShareScreen({ participantUUID: 'me', action: 'start', timestamp: 2 });
+
+    expect(isAppShareActive()).toBe(true);
+  });
+
+  it('leaves the share alone when it cannot tell whose it is', async () => {
+    const { initializeZoomSdk, setAppShare, handleShareScreen, isAppShareActive } = await loadModule();
+    // getUserContext refused — not defined on this client at all — so there is no
+    // UUID to match against. Guessing is worse than the stale label: the other two
+    // events and the check made before each stop still cover this client.
+    await initializeZoomSdk();
+    await setAppShare(true);
+
+    handleShareScreen({ participantUUID: 'me', action: 'stop', timestamp: 1 });
+
+    expect(isAppShareActive()).toBe(true);
+  });
+
+  it('follows a share stopped from Zoom\'s own toolbar through the meeting view', async () => {
+    const { initializeZoomSdk, setAppShare, setShareChangeCallback, handleMeetingViewChange, isAppShareActive } =
+      await loadModule();
+    await initializeZoomSdk();
+    const seen = [];
+    setShareChangeCallback((sharing) => seen.push(sharing));
+    await setAppShare(true);
+
+    // onShareApp is the event for this, but it is not delivered by every client.
+    handleMeetingViewChange({ presenting: false, timestamp: 1 });
+
+    expect(isAppShareActive()).toBe(false);
+    expect(seen).toEqual([false]);
+  });
+
+  it('reads nothing into a presenting flag that is on or absent', async () => {
+    const { initializeZoomSdk, setAppShare, handleMeetingViewChange, isAppShareActive } = await loadModule();
+    await initializeZoomSdk();
+    await setAppShare(true);
+
+    // Only the parameters that changed are present, so an event about the view
+    // switching to gallery says nothing about sharing. And `presenting: true`
+    // covers any share, ours or the user's own screen — never a reason to claim
+    // the app is the thing on screen.
+    handleMeetingViewChange({ view: 'gallery', timestamp: 1 });
+    handleMeetingViewChange({ presenting: true, timestamp: 2 });
+
+    expect(isAppShareActive()).toBe(true);
+  });
+
+  it('treats stopping an already-ended share as done, not as a failure', async () => {
+    const { initializeZoomSdk, setAppShare, setShareChangeCallback, isAppShareActive } = await loadModule();
+    await initializeZoomSdk();
+    const seen = [];
+    setShareChangeCallback((sharing) => seen.push(sharing));
+    await setAppShare(true);
+    sdkMock.shareApp.mockClear();
+    // The organizer pressed Zoom's own Stop Share, and this client reported it
+    // through neither onShareApp nor onMeetingViewChange. Whatever code the
+    // refusal carries — clients word this differently — it is not a failure.
+    sdkMock.getMeetingView.mockResolvedValue({ view: 'speaker', presenting: false });
+    sdkMock.shareApp.mockRejectedValueOnce(Object.assign(new Error('failed to share'), { code: 10018 }));
+
+    // The share they wanted gone is gone, so the button must not report failure.
+    expect(await setAppShare(false)).toBe(true);
+    expect(isAppShareActive()).toBe(false);
+    expect(seen).toEqual([false]);
+  });
+
+  it('still asks Zoom to stop, in case the read had gone stale', async () => {
+    const { initializeZoomSdk, setAppShare, isAppShareActive } = await loadModule();
+    await initializeZoomSdk();
+    await setAppShare(true);
+    sdkMock.shareApp.mockClear();
+    // A "nobody is presenting" read is never grounds for skipping the stop: if it
+    // is wrong, skipping leaves the meeting watching a share we declared over.
+    sdkMock.getMeetingView.mockResolvedValue({ view: 'speaker', presenting: false });
+
+    expect(await setAppShare(false)).toBe(true);
+
+    expect(sdkMock.shareApp).toHaveBeenCalledWith({ action: 'stop' });
+    expect(isAppShareActive()).toBe(false);
+  });
+
+  it('accepts Zoom saying there was no share to stop', async () => {
+    const { initializeZoomSdk, setAppShare, isAppShareActive } = await loadModule();
+    await initializeZoomSdk();
+    await setAppShare(true);
+    // A client that cannot answer getMeetingView, so the truth only arrives as a
+    // rejection from the stop itself. 10189: no ongoing screen share by this user.
+    sdkMock.getMeetingView.mockRejectedValue(Object.assign(new Error('unsupported'), { code: 10116 }));
+    sdkMock.shareApp.mockRejectedValueOnce(Object.assign(new Error('no share'), { code: 10189 }));
+
+    expect(await setAppShare(false)).toBe(true);
+    expect(isAppShareActive()).toBe(false);
+  });
+
+  it('still reports a stop the client genuinely refused', async () => {
+    const { initializeZoomSdk, setAppShare } = await loadModule();
+    await initializeZoomSdk();
+    await setAppShare(true);
+    sdkMock.getMeetingView.mockResolvedValue({ view: 'standard', presenting: true });
+    sdkMock.shareApp.mockRejectedValueOnce(Object.assign(new Error('failed'), { code: 10018 }));
+
+    // A share that is up and would not come down is exactly what the toast is
+    // for; swallowing it would leave the meeting watching the stage.
+    expect(await setAppShare(false)).toBe(false);
+  });
+
+  it('reconciles the share when the app comes back to the front', async () => {
+    const { initializeZoomSdk, setAppShare, handleAppVisibilityChange, syncAppShareState, isAppShareActive } =
+      await loadModule();
+    await initializeZoomSdk();
+    await setAppShare(true);
+    sdkMock.getMeetingView.mockResolvedValue({ view: 'speaker', presenting: false });
+    // Well past the settle window below, so this is the steady-state answer.
+    vi.spyOn(performance, 'now').mockReturnValue(60_000);
+
+    handleAppVisibilityChange({ visible: true, timestamp: 1 });
+    // The handler cannot await; the state settles on the same check.
+    await syncAppShareState();
+
+    expect(isAppShareActive()).toBe(false);
+  });
+
+  it('ignores a poll that lands in the moments just after a share starts', async () => {
+    const { initializeZoomSdk, setAppShare, syncAppShareState, isAppShareActive } = await loadModule();
+    await initializeZoomSdk();
+    await setAppShare(true);
+    // The client's view state does not update in the same instant the share
+    // begins. Believing this read would flip the button back to "Screenshare"
+    // mid-share, and pressing it would then ask Zoom to start a second one.
+    sdkMock.getMeetingView.mockResolvedValue({ view: 'speaker', presenting: false });
+
+    expect(await syncAppShareState()).toBe(true);
+    expect(sdkMock.getMeetingView).not.toHaveBeenCalled();
+    expect(isAppShareActive()).toBe(true);
   });
 
   it('notifies the popout callback when the client docks the window', async () => {
