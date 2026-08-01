@@ -128,6 +128,7 @@ export default memo(function TimerStage({
             <StageSpeakerPicker
               value={speakerName}
               onChange={onSpeakerNameChange}
+              role={role}
               agendaItems={agendaItems}
               activeSpeakerId={activeSpeakerId}
               onSelectSpeaker={onSelectSpeaker}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
-import { getZoomParticipants } from '../utils/zoomSdk';
+import useZoomParticipants, { participantsNotOnAgenda } from '../hooks/useZoomParticipants';
 import { ChevronDown, CornerDownLeft, Users } from 'lucide-react';
 
 /**
@@ -19,36 +19,25 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
   const isStage = variant === 'stage';
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
-  const [participants, setParticipants] = useState([]);
-  // True only when the participant list was withheld because the organizer is
-  // not host or co-host — the one cause they can actually do something about.
-  const [participantsRestricted, setParticipantsRestricted] = useState(false);
+  const { participants, restricted: participantsRestricted } = useZoomParticipants();
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    getZoomParticipants().then((result) => {
-      if (cancelled) return;
-      setParticipants(result?.participants || []);
-      setParticipantsRestricted(Boolean(result?.restricted));
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Filter agenda items (non-completed, with names, not already in participants)
+  // Filter agenda items (non-completed, with names)
   const filteredAgendaItems = useMemo(() => (agendaItems || []).filter(item =>
     !item.completed && item.name &&
-    item.name.toLowerCase().includes((value || '').toLowerCase()) &&
-    !participants.some(p => p.name.toLowerCase() === item.name.toLowerCase())
-  ), [agendaItems, value, participants]);
+    item.name.toLowerCase().includes((value || '').toLowerCase())
+  ), [agendaItems, value]);
 
-  // Filter participants based on current value
-  const filteredParticipants = useMemo(() => (value || '') === ''
-    ? participants
-    : participants.filter((person) =>
-        person.name.toLowerCase().includes(value.toLowerCase())
-      ), [participants, value]);
+  // Filter participants based on current value, minus anyone the agenda is
+  // already offering: picking them there keeps their role and their place in the
+  // running order, which the bare name from Zoom cannot.
+  const filteredParticipants = useMemo(() => {
+    const offAgenda = participantsNotOnAgenda(participants, filteredAgendaItems);
+    return (value || '') === ''
+      ? offAgenda
+      : offAgenda.filter((person) => person.name.toLowerCase().includes(value.toLowerCase()));
+  }, [participants, filteredAgendaItems, value]);
 
   const suggestions = useMemo(() => [
     ...filteredAgendaItems.map(item => ({ ...item, _fromAgenda: true })),
@@ -133,10 +122,13 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
     item.name.toLowerCase() === value.trim().toLowerCase()
   );
 
-  // Check if we need section headers (both agenda and participants have items)
+  // Each group carries its own label whenever it has anything in it, not only
+  // when both do. Where a name came from decides what picking it does — an
+  // agenda entry brings a role and a place in the running order, a participant
+  // is a name off the meeting — so an unlabelled list of names left the
+  // organizer guessing at that in the far more common single-group case.
   const hasAgenda = filteredAgendaItems.length > 0;
   const hasParticipants = filteredParticipants.length > 0;
-  const showHeaders = hasAgenda && hasParticipants;
 
   return (
     <div className={isStage ? '' : 'space-y-3'}>
@@ -203,11 +195,9 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
           >
             {hasAgenda && (
               <>
-                {showHeaders && (
-                  <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">
-                    Agenda
-                  </li>
-                )}
+                <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">
+                  Agenda
+                </li>
                 {filteredAgendaItems.map((item, i) => {
                   const index = i;
                   return (
@@ -228,11 +218,9 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
             )}
             {hasParticipants && (
               <>
-                {showHeaders && (
-                  <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">
-                    Zoom Participants
-                  </li>
-                )}
+                <li className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">
+                  Zoom Participants
+                </li>
                 {filteredParticipants.map((person, i) => {
                   const index = filteredAgendaItems.length + i;
                   return (
