@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { trackEvent } from '../utils/posthog'
 import YouTubePlayer from '../components/YouTubePlayer'
 
@@ -13,7 +14,7 @@ const ZOOM_APP_URL = 'https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg
  * way the page never shows a broken image icon, and adding a screenshot is just
  * copying a file into place with no code change.
  */
-function Shot({ src, alt, hint }) {
+function Shot({ src, alt, hint, onZoom }) {
   const [missing, setMissing] = useState(false)
 
   if (missing) {
@@ -26,16 +27,77 @@ function Shot({ src, alt, hint }) {
     )
   }
 
+  // A button, not an img with a click handler: these shots carry the detail the
+  // text is describing, and at half the page width that detail is too small to
+  // read. Enlarging has to be reachable by keyboard for the same reason it is
+  // worth offering at all.
   return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      onError={() => setMissing(true)}
-      // Same box as the placeholder, so nothing shifts when a screenshot lands
-      // and a shot that is not quite 16:9 is letterboxed rather than cropped.
-      className="w-full aspect-video object-contain rounded-xl border border-white/15 bg-white/5 shadow-lg shadow-black/30"
-    />
+    <button
+      type="button"
+      onClick={() => onZoom({ src, alt })}
+      className="group relative block w-full cursor-zoom-in rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+      aria-label={`Enlarge screenshot: ${alt}`}
+    >
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onError={() => setMissing(true)}
+        // Same box as the placeholder, so nothing shifts when a screenshot lands
+        // and a shot that is not quite 16:9 is letterboxed rather than cropped.
+        className="w-full aspect-video object-contain rounded-xl border border-white/15 bg-white/5 shadow-lg shadow-black/30 transition-transform duration-200 group-hover:scale-[1.02]"
+      />
+    </button>
+  )
+}
+
+/**
+ * The enlarged screenshot.
+ *
+ * Closes on Escape, on the backdrop and on the button, because someone who
+ * opened this by accident should not have to hunt for the way out. Body scroll
+ * is frozen while it is open so dismissing it returns them to the same place on
+ * the page they left.
+ */
+function Lightbox({ shot, onClose }) {
+  useEffect(() => {
+    if (!shot) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [shot, onClose])
+
+  if (!shot) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={shot.alt}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 cursor-zoom-out"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 rounded-lg bg-white/10 hover:bg-white/20 p-2 text-white transition-colors"
+        aria-label="Close"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      {/* Stops a click on the picture itself from closing what it just opened. */}
+      <img
+        src={shot.src}
+        alt={shot.alt}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-full max-w-full object-contain rounded-lg shadow-2xl cursor-default"
+      />
+    </div>
   )
 }
 
@@ -55,20 +117,26 @@ const TUTORIAL_STEPS = [
   },
   {
     title: 'Pick how the timer shows up',
-    body: 'Open the mode menu at the top of the Live tab. There are three modes, explained below. You can switch at any point, even in the middle of a meeting.',
+    body: 'Open the mode menu at the top of the Live tab. It names the mode you are in, and holds the three above. You can switch at any point, even in the middle of a meeting.',
     src: '/zoom/tutorial/03-mode-menu.jpg',
     hint: 'Live tab with the display mode menu open, showing all three modes',
   },
   {
+    title: 'Name the speaker',
+    body: 'Pick whoever is up next from your agenda, or straight from the people in the meeting. Someone who is not on the list? Type their name and press Enter to add them. Type over a name and press Enter to fix a spelling, and they keep their place in the running order.',
+    src: '/zoom/tutorial/04-speaker-name.jpg',
+    hint: 'Speaker name field with the suggestion list open, showing agenda names and people in the meeting',
+  },
+  {
     title: 'Run the timer',
     body: 'Press START when the speaker begins. Green, yellow and red come up on their own at your club times. Press FINISH to save the time and load the next speaker.',
-    src: '/zoom/tutorial/04-live-controls.jpg',
+    src: '/zoom/tutorial/05-live-controls.jpg',
     hint: 'Live tab mid speech, timer running with the green signal up',
   },
   {
     title: 'Share the report',
     body: 'The Report tab lists every speaker with their time and whether they were inside the limits. One click copies it, ready to paste into the meeting chat.',
-    src: '/zoom/tutorial/05-report.jpg',
+    src: '/zoom/tutorial/06-report.jpg',
     hint: 'Report tab with a few finished speeches and the copy button',
   },
 ]
@@ -123,6 +191,9 @@ const TIPS = [
 
 export default function Landing() {
   const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT
+  // The screenshot being viewed full size, or null. One at a time, so it lives
+  // here rather than in each Shot.
+  const [zoomedShot, setZoomedShot] = useState(null)
   return (
     <div
       className="min-h-screen relative bg-gray-900"
@@ -222,9 +293,32 @@ export default function Landing() {
           </ul>
         </section>
 
+        {/* Ahead of the step-by-step on purpose. This section answers "what will
+            this look like in my meeting?", which is the question a club has
+            before installing anything; the steps answer "how do I drive it?",
+            which only matters once they have decided. Three cards also scan in
+            a fraction of the space six steps take. */}
+        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Three Ways to Show the Timer</h2>
+          <p className="text-gray-300 mb-6">
+            Pick the one that fits your club. Switching modes takes one click, and the app remembers your choice for next time.
+          </p>
+
+          <div className="grid gap-6 sm:grid-cols-3">
+            {DISPLAY_MODES.map((mode) => (
+              <div key={mode.name}>
+                <Shot src={mode.src} alt={`${mode.name} mode in Zoom`} hint={mode.hint} onZoom={setZoomedShot} />
+                <h3 className="mt-3 text-base font-semibold text-white">{mode.name}</h3>
+                <p className="mt-1 text-sm text-gray-300 leading-relaxed">{mode.body}</p>
+                <p className="mt-2 text-sm text-blue-300">{mode.bestFor}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h2 className="text-lg font-semibold text-white mb-2">How to Use the Timer in Zoom</h2>
-          <p className="text-gray-300 mb-6">Five steps from joining the meeting to sharing the report.</p>
+          <p className="text-gray-300 mb-6">Six steps from joining the meeting to sharing the report.</p>
 
           <ol className="space-y-8">
             {TUTORIAL_STEPS.map((step, index) => (
@@ -238,28 +332,10 @@ export default function Landing() {
                   </div>
                   <p className="mt-2 text-gray-300 text-sm leading-relaxed">{step.body}</p>
                 </div>
-                <Shot src={step.src} alt={`Step ${index + 1}: ${step.title}`} hint={step.hint} />
+                <Shot src={step.src} alt={`Step ${index + 1}: ${step.title}`} hint={step.hint} onZoom={setZoomedShot} />
               </li>
             ))}
           </ol>
-        </section>
-
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
-          <h2 className="text-lg font-semibold text-white mb-2">Three Ways to Show the Timer</h2>
-          <p className="text-gray-300 mb-6">
-            Pick the one that fits your club. Switching modes takes one click, and the app remembers your choice for next time.
-          </p>
-
-          <div className="grid gap-6 sm:grid-cols-3">
-            {DISPLAY_MODES.map((mode) => (
-              <div key={mode.name}>
-                <Shot src={mode.src} alt={`${mode.name} mode in Zoom`} hint={mode.hint} />
-                <h3 className="mt-3 text-base font-semibold text-white">{mode.name}</h3>
-                <p className="mt-1 text-sm text-gray-300 leading-relaxed">{mode.body}</p>
-                <p className="mt-2 text-sm text-blue-300">{mode.bestFor}</p>
-              </div>
-            ))}
-          </div>
         </section>
 
         <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
@@ -269,7 +345,7 @@ export default function Landing() {
           <div className="grid gap-6 sm:grid-cols-3">
             {TIPS.map((tip) => (
               <div key={tip.title}>
-                <Shot src={tip.src} alt={tip.title} hint={tip.hint} />
+                <Shot src={tip.src} alt={tip.title} hint={tip.hint} onZoom={setZoomedShot} />
                 <h3 className="mt-3 text-base font-semibold text-white">{tip.title}</h3>
                 <p className="mt-1 text-sm text-gray-300 leading-relaxed">{tip.body}</p>
               </div>
@@ -371,6 +447,8 @@ export default function Landing() {
         </div>
         <p className="text-xs text-gray-500 mt-8 text-center">&copy; 2026 Toastmasters Timer. Not affiliated with Toastmasters International.</p>
       </footer>
+
+      <Lightbox shot={zoomedShot} onClose={() => setZoomedShot(null)} />
     </div>
   )
 }
