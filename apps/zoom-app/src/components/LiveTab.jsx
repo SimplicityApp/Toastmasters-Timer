@@ -546,9 +546,18 @@ export default memo(function LiveTab() {
     setClearGeneration((n) => n + 1);
     try {
       addDebugLog('Clearing all filters and backgrounds', 'info');
-      const { ok, declined } = await clearVideoPipelines();
+      const { ok, declined, ungranted } = await clearVideoPipelines();
       if (!sdkStatus?.available) {
         // Outside Zoom every SDK call is a no-op, so there is nothing to report.
+      } else if (ungranted?.length) {
+        // No retry will ever work: this Zoom client never granted the removal
+        // API, so the only way out is Zoom's own panel. Saying "check your
+        // settings" for this used to read as "you configured something wrong".
+        showToast(
+          `This Zoom client won't let the app remove your ${ungranted.join(' or ')}. Clear it from Zoom's Background & Effects panel.`,
+          'error',
+          8000
+        );
       } else if (declined) {
         showToast('Zoom needs your confirmation to remove the background — nothing was changed.', 'info', 5000);
       } else if (!ok) {

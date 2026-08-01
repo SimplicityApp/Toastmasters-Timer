@@ -105,6 +105,32 @@ const capabilitiesWhere = (required) =>
 const REQUIRED_CAPABILITIES = capabilitiesWhere(true);
 const OPTIONAL_CAPABILITIES = capabilitiesWhere(false);
 
+// APIs this client refused, as reported by config(). Empty until config resolves.
+//
+// This is the only truthful answer to "can I call this?". `typeof zoomSdk.foo ===
+// 'function'` is not: the npm SDK defines every documented method on its
+// prototype, granted or not, so that check passes on every client and every
+// guard written against it is dead code. config() does not reject when a
+// capability is refused either — it resolves and names the refusals here.
+//
+// Calling a refused API rejects at the bridge, which is what made "clear my
+// video" report a hard failure on clients that never granted
+// removeVirtualBackground in the first place.
+let unsupportedApis = new Set();
+
+/**
+ * Whether this client actually granted an API, as opposed to the SDK merely
+ * defining it. Optimistic before config() resolves, which only affects calls
+ * made during initialization.
+ *
+ * @param {string} name - SDK method name, e.g. 'removeVirtualBackground'
+ * @returns {boolean}
+ */
+export function isApiAvailable(name) {
+  if (!zoomSdk || typeof zoomSdk[name] !== 'function') return false;
+  return !unsupportedApis.has(name);
+}
+
 // Overlay mode constants.
 //
 // Two families, and the difference matters at every call site below:
@@ -204,6 +230,41 @@ function markVirtualBackgroundApplied(applied) {
   }
 }
 
+// Whether a video filter of ours is currently on the user's video.
+//
+// Persisted for the same reason as the background flag, and tracked separately
+// from activeOverlay because the two answer different questions. activeOverlay
+// answers "would this push be redundant?", and is deliberately dropped whenever
+// the app comes back to the front — the user may have been in Background &
+// Effects. Reading it as "is a filter of ours up?" made the clear button treat a
+// genuine deleteVideoFilter failure as "there was nothing there anyway" and
+// report success over a card that was still on the tile.
+const VIDEO_FILTER_APPLIED_KEY = 'toastmaster_zoom_video_filter_applied';
+
+function readVideoFilterApplied() {
+  try {
+    return localStorage.getItem(VIDEO_FILTER_APPLIED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+let videoFilterApplied = readVideoFilterApplied();
+
+/**
+ * Record whether one of our video filters is on the user's video.
+ * @param {boolean} applied
+ */
+function markVideoFilterApplied(applied) {
+  videoFilterApplied = applied;
+  try {
+    if (applied) localStorage.setItem(VIDEO_FILTER_APPLIED_KEY, 'true');
+    else localStorage.removeItem(VIDEO_FILTER_APPLIED_KEY);
+  } catch {
+    // See markVirtualBackgroundApplied.
+  }
+}
+
 // What the app itself is doing, as opposed to what it has put on the video.
 // Neither is an overlay, so neither is tracked by activeOverlay: appShareActive
 // means the app is screen-shared into the meeting, appPoppedOut means it is
@@ -290,8 +351,14 @@ export async function initializeZoomSdk() {
     }
 
     sdkAvailable = true;
+    // config() resolves whether or not every capability was granted; the
+    // refusals arrive here rather than as a rejection.
+    unsupportedApis = new Set(configResult?.unsupportedApis || []);
     log(`Zoom SDK initialized successfully. Config: ${JSON.stringify(configResult)}`, 'info');
-    log('Video filter capability is available', 'info');
+    const refused = USED_SDK_APIS.filter((api) => unsupportedApis.has(api.name));
+    if (refused.length) {
+      log(`Client refused: ${refused.map((api) => `${api.name} (${api.purpose})`).join(', ')}`, 'warn');
+    }
     subscribeToCameraResolution();
     subscribeToAppPopout();
     subscribeToAppVisibility();
@@ -620,11 +687,16 @@ export function isSdkAvailable() {
 
 /**
  * Which of the APIs the app uses this client does not offer.
+ *
+ * Answered from config()'s refusal list, not from the presence of the method:
+ * the npm SDK defines all of them on every client, so a presence check reported
+ * a limited client as all-green.
+ *
  * @returns {Array<{name: string, required: boolean, purpose: string}>}
  */
 export function getMissingSdkApis() {
   if (!zoomSdk) return USED_SDK_APIS;
-  return USED_SDK_APIS.filter((api) => typeof zoomSdk[api.name] !== 'function');
+  return USED_SDK_APIS.filter((api) => !isApiAvailable(api.name));
 }
 
 /**
@@ -1016,32 +1088,52 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *   failure, whatever code it carries. "Remove the thing that was not there"
  *   failing is the expected answer, and different clients word it differently;
  *   treating it as an error is what made the button report failure in card mode.
+ * - A pipeline this client never granted us is reported as such rather than
+ *   attempted. Calling a refused API rejects at the bridge with a code that
+ *   looks like any other failure, and the advice that follows from it is
+ *   completely different: no retry will ever work, and the only way out is
+ *   Zoom's own Background & Effects panel.
  *
  * Bypasses the overlay queue for the same reason leaveStage does.
  *
- * @returns {Promise<{ok: boolean, declined: boolean}>} ok is false only when
- *   something we believed was applied would not come off; declined is true when
- *   the user dismissed Zoom's removal confirmation, which changed nothing.
+ * @returns {Promise<{ok: boolean, declined: boolean, ungranted: string[]}>} ok is
+ *   false only when something we believed was applied would not come off;
+ *   declined is true when the user dismissed Zoom's removal confirmation, which
+ *   changed nothing; ungranted names the pipelines this client refuses to let the
+ *   app touch while something of ours is believed to be on them.
  */
 export async function clearVideoPipelines() {
   if (!sdkInitialized) {
     await initializeZoomSdk();
   }
 
-  // What we believe is on each pipeline, captured before activeOverlay is reset.
-  const hadFilter = activeOverlay?.mode === OVERLAY_MODE_CARD;
+  // What we believe is on each pipeline. Both records are persisted, because
+  // Zoom reloads the webview whenever the panel is reopened — which is exactly
+  // when an organizer reaches for this button.
+  const hadFilter = videoFilterApplied;
   const hadBackground = virtualBackgroundApplied;
   activeOverlay = null;
 
   if (!sdkAvailable || !zoomSdk) {
     log('[MOCK] Would clear video filter and virtual background', 'warn');
     markVirtualBackgroundApplied(false);
-    return { ok: false, declined: false };
+    markVideoFilterApplied(false);
+    return { ok: false, declined: false, ungranted: [] };
   }
 
   // Independently attempted: one failing must not leave the other applied.
   const attempts = [
-    ['video filter', hadFilter, () => zoomSdk.deleteVideoFilter?.() ?? zoomSdk.setVideoFilter?.({ fileUrl: null })],
+    {
+      what: 'video filter',
+      expected: hadFilter,
+      // deleteVideoFilter is the documented removal. setVideoFilter(null) is the
+      // fallback for clients that granted the setter but not the deleter.
+      api: isApiAvailable('deleteVideoFilter') ? 'deleteVideoFilter' : 'setVideoFilter',
+      run: () =>
+        isApiAvailable('deleteVideoFilter')
+          ? zoomSdk.deleteVideoFilter()
+          : zoomSdk.setVideoFilter({ fileUrl: null }),
+    },
   ];
   // Strictly on the record, never speculatively. Zoom offers no way to read the
   // current virtual background — there is no getVirtualBackground, and
@@ -1050,16 +1142,38 @@ export async function clearVideoPipelines() {
   // means the client puts a "remove your virtual background?" dialog in front of
   // someone who has no virtual background at all.
   if (hadBackground) {
-    attempts.push(['virtual background', hadBackground, () => zoomSdk.removeVirtualBackground?.()]);
+    attempts.push({
+      what: 'virtual background',
+      expected: true,
+      api: 'removeVirtualBackground',
+      run: () => zoomSdk.removeVirtualBackground(),
+    });
   }
 
   let ok = true;
   let declined = false;
-  // Only forget the background once it is genuinely gone: a declined or failed
-  // removal leaves it up, and the next attempt still needs to know that.
+  const ungranted = [];
+  // Only forget a pipeline once it is genuinely clear: a declined, refused or
+  // failed removal leaves it up, and the next attempt still needs to know that.
   let backgroundGone = true;
+  let filterGone = true;
 
-  for (const [what, expected, run] of attempts) {
+  const stillThere = (what) => {
+    if (what === 'virtual background') backgroundGone = false;
+    else filterGone = false;
+  };
+
+  for (const { what, expected, api, run } of attempts) {
+    if (!isApiAvailable(api)) {
+      // Nothing to retry and nothing to apologise for when the pipeline was
+      // empty anyway — this only matters when something of ours is on it.
+      log(`Client did not grant ${api}; cannot clear the ${what}`, expected ? 'warn' : 'info');
+      if (expected) {
+        ungranted.push(what);
+        stillThere(what);
+      }
+      continue;
+    }
     try {
       const result = run();
       if (result) await result;
@@ -1069,19 +1183,20 @@ export async function clearVideoPipelines() {
       if (error.code === ERROR_REMOVAL_DECLINED) {
         log(`User declined to remove the ${what}`, 'info');
         declined = true;
-        if (what === 'virtual background') backgroundGone = false;
+        stillThere(what);
       } else if (error.code === ERROR_NOTHING_APPLIED || !expected) {
         log(`No ${what} to clear (code ${code})`, 'info');
       } else {
         log(`Could not clear ${what} (code ${code}): ${error.message || error.name}`, 'warn');
         ok = false;
-        if (what === 'virtual background') backgroundGone = false;
+        stillThere(what);
       }
     }
   }
 
   if (backgroundGone) markVirtualBackgroundApplied(false);
-  return { ok, declined };
+  if (filterGone) markVideoFilterApplied(false);
+  return { ok, declined, ungranted };
 }
 
 /**
@@ -1124,25 +1239,27 @@ async function removeOverlayInternal(mode) {
   try {
     if (sdkAvailable && zoomSdk) {
       if (mode === OVERLAY_MODE_CAMERA) {
-        if (typeof zoomSdk.removeVirtualBackground === 'function') {
+        if (isApiAvailable('removeVirtualBackground')) {
           log('Removing virtual background', 'info');
           await zoomSdk.removeVirtualBackground();
           markVirtualBackgroundApplied(false);
           log('Successfully removed virtual background', 'info');
         } else {
-          log('[MOCK] Would remove virtual background', 'warn');
+          log('Client did not grant removeVirtualBackground; leaving the background in place', 'warn');
         }
       } else {
-        if (typeof zoomSdk.deleteVideoFilter === 'function') {
+        if (isApiAvailable('deleteVideoFilter')) {
           log('Deleting video filter', 'info');
           await zoomSdk.deleteVideoFilter();
+          markVideoFilterApplied(false);
           log('Successfully deleted video filter', 'info');
-        } else if (typeof zoomSdk.setVideoFilter === 'function') {
+        } else if (isApiAvailable('setVideoFilter')) {
           log('Removing video filter via setVideoFilter(null)', 'info');
           await zoomSdk.setVideoFilter({ fileUrl: null });
+          markVideoFilterApplied(false);
           log('Successfully removed video filter', 'info');
         } else {
-          log('[MOCK] Would remove video filter', 'warn');
+          log('Client did not grant deleteVideoFilter; leaving the filter in place', 'warn');
         }
       }
     } else {
@@ -1158,6 +1275,7 @@ async function removeOverlayInternal(mode) {
         // a background the user cleared themselves would ask Zoom to remove it —
         // and prompt them for it — on every idle moment from here on.
         if (mode === OVERLAY_MODE_CAMERA) markVirtualBackgroundApplied(false);
+        else markVideoFilterApplied(false);
       }
     }
   }
@@ -1236,7 +1354,7 @@ async function applyOverlayInternal(imageUrl) {
     if (sdkAvailable && zoomSdk) {
       if (currentOverlayMode === OVERLAY_MODE_CAMERA) {
         // Camera mode: use setVirtualBackground so user's face shows on top
-        if (typeof zoomSdk.setVirtualBackground === 'function') {
+        if (isApiAvailable('setVirtualBackground')) {
           // setVirtualBackground accepts a fileUrl, which lets the Zoom client
           // fetch the image itself. That skips both the decode and the multi-MB
           // ImageData transfer across the bridge. setVideoFilter has no such
@@ -1269,7 +1387,7 @@ async function applyOverlayInternal(imageUrl) {
         }
       } else {
         // Card mode: use setVideoFilter (covers entire video)
-        if (typeof zoomSdk.setVideoFilter === 'function') {
+        if (isApiAvailable('setVideoFilter')) {
           log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
           const budget = getOverlayBudget();
           const imageData = await loadImageAsImageData(imageUrl);
@@ -1277,6 +1395,7 @@ async function applyOverlayInternal(imageUrl) {
           const result = await zoomSdk.setVideoFilter({ imageData });
           log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
           activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
+          markVideoFilterApplied(true);
           lastError = null;
           if (result && result.status) {
             log(`Filter set status: ${result.status}`, 'info');

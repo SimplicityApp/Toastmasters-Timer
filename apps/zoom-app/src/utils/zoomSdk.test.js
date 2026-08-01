@@ -1166,7 +1166,7 @@ describe('clearing the video on request', () => {
     // never applied costs the user a confirmation dialog and then fails.
     expect(sdkMock.deleteVideoFilter).toHaveBeenCalled();
     expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true, declined: false });
+    expect(result).toEqual({ ok: true, declined: false, ungranted: [] });
   });
 
   it('does not ask about a virtual background in camera mode when none is ours', async () => {
@@ -1183,7 +1183,7 @@ describe('clearing the video on request', () => {
     // puts a "remove your virtual background?" dialog in front of someone who
     // does not have one.
     expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true, declined: false });
+    expect(result).toEqual({ ok: true, declined: false, ungranted: [] });
   });
 
   it('reports success when a pipeline we never touched refuses to clear', async () => {
@@ -1195,7 +1195,7 @@ describe('clearing the video on request', () => {
       Object.assign(new Error('no filter'), { code: 99999 })
     );
 
-    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false, ungranted: [] });
   });
 
   it('reports failure when something we did apply will not come off', async () => {
@@ -1207,7 +1207,7 @@ describe('clearing the video on request', () => {
       Object.assign(new Error('busy'), { code: 99999 })
     );
 
-    expect(await clearVideoPipelines()).toEqual({ ok: false, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: false, declined: false, ungranted: [] });
   });
 
   it('removes a background applied in camera mode, and only asks once', async () => {
@@ -1218,7 +1218,7 @@ describe('clearing the video on request', () => {
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
     sdkMock.removeVirtualBackground.mockClear();
 
-    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false, ungranted: [] });
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalledTimes(1);
 
     // Already gone: clearing again must not re-prompt.
@@ -1238,7 +1238,7 @@ describe('clearing the video on request', () => {
       Object.assign(new Error('declined'), { code: 10017 })
     );
 
-    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: true });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: true, ungranted: [] });
 
     // Still up, so a second press must try again rather than assume it is gone.
     sdkMock.removeVirtualBackground.mockClear();
@@ -1254,8 +1254,85 @@ describe('clearing the video on request', () => {
     const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
     await initializeZoomSdk();
 
-    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false });
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false, ungranted: [] });
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
     expect(localStorage.getItem('toastmaster_zoom_virtual_background_applied')).toBeNull();
+  });
+
+  it('still finds a filter left behind by an earlier session', async () => {
+    // Same reload, the other pipeline. Reading activeOverlay for this made a
+    // failed delete look like "there was nothing there", so the button reported
+    // success over a card that was still on the tile.
+    localStorage.setItem('toastmaster_zoom_video_filter_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    sdkMock.deleteVideoFilter.mockRejectedValueOnce(
+      Object.assign(new Error('busy'), { code: 99999 })
+    );
+
+    expect(await clearVideoPipelines()).toEqual({ ok: false, declined: false, ungranted: [] });
+    // Still up, so the record must survive for the next attempt.
+    expect(localStorage.getItem('toastmaster_zoom_video_filter_applied')).toBe('true');
+  });
+
+  it('names a pipeline the client refuses to let the app touch', async () => {
+    // config() resolves even when a capability is refused; the refusal arrives
+    // in unsupportedApis. Calling the API anyway rejects at the bridge, which
+    // read as an ordinary failure and sent the organizer to check settings that
+    // were never the problem.
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['removeVirtualBackground'] });
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+
+    expect(await clearVideoPipelines()).toEqual({
+      ok: true,
+      declined: false,
+      ungranted: ['virtual background'],
+    });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    // Nothing was removed, so the record must not claim otherwise.
+    expect(localStorage.getItem('toastmaster_zoom_virtual_background_applied')).toBe('true');
+  });
+
+  it('says nothing about a refused pipeline that was holding nothing', async () => {
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['deleteVideoFilter', 'setVideoFilter'] });
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+
+    // No filter of ours is up, so a missing removal API costs the organizer
+    // nothing and is not worth a red toast.
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false, ungranted: [] });
+  });
+
+  it('falls back to setVideoFilter(null) when only the deleter is refused', async () => {
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['deleteVideoFilter'] });
+    localStorage.setItem('toastmaster_zoom_video_filter_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+
+    expect(await clearVideoPipelines()).toEqual({ ok: true, declined: false, ungranted: [] });
+    expect(sdkMock.deleteVideoFilter).not.toHaveBeenCalled();
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledWith({ fileUrl: null });
+  });
+});
+
+describe('capability reporting', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+  });
+
+  it('reports a refused API as missing, not as present', async () => {
+    // The npm SDK defines every documented method on its prototype whether or
+    // not the client granted it, so a typeof check reported a limited client as
+    // all-green. unsupportedApis is the only truthful signal.
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['setVirtualBackground'] });
+    const { initializeZoomSdk, getMissingSdkApis, isApiAvailable } = await loadModule();
+    await initializeZoomSdk();
+
+    expect(isApiAvailable('setVirtualBackground')).toBe(false);
+    expect(isApiAvailable('setVideoFilter')).toBe(true);
+    expect(getMissingSdkApis().map((api) => api.name)).toContain('setVirtualBackground');
   });
 });
