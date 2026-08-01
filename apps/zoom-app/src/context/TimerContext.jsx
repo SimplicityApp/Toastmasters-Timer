@@ -190,12 +190,13 @@ export function TimerProvider({ children }) {
       return;
     }
 
-    // A finished or reset speech hands the organizer their video back. Card mode
-    // clears unconditionally because deleting a video filter is silent; camera
-    // mode asks only when a background of ours is up, since each removal costs
-    // the user a confirmation dialog and resetTimer also runs on every speaker
-    // and role change.
-    if (mode === OVERLAY_MODE_CARD || isOverlayActive()) {
+    // A finished or reset speech hands the organizer their video back —
+    // whichever pipeline is holding the card, since to the organizer there is no
+    // difference between the two. Gated on something of ours actually being up:
+    // resetTimer also runs on every speaker and role change, and a removal aimed
+    // at an empty pipeline costs a confirmation dialog in camera mode and reaches
+    // into the user's own Video Filters setting in card mode.
+    if (isOverlayActive()) {
       removeOverlay();
     }
   }, []);
@@ -216,13 +217,27 @@ export function TimerProvider({ children }) {
     resetTimer();
   }, [roleRules, resetTimer]);
 
-  const addToAgenda = useCallback((speaker) => {
+  /**
+   * @param {Object} speaker
+   * @param {{activate?: boolean}} [options] - activate makes the new item the
+   *   speaker the timer is on. It belongs here rather than in a follow-up
+   *   loadSpeakerFromAgenda call: that reads the agenda from the render it was
+   *   created in, which cannot contain an item added moments earlier in the same
+   *   tick, so it silently did nothing. The speaker was then on the agenda but
+   *   not active — finishing could not advance to the next one, and editing the
+   *   name added a second copy instead of correcting the first.
+   */
+  const addToAgenda = useCallback((speaker, { activate = false } = {}) => {
     const id = Date.now().toString();
     const rules = speaker.rules || roleRules[speaker.role] || DEFAULT_ROLE_RULES['Standard Speech'];
     setAgenda(prev => [...prev, { id, name: speaker.name, role: speaker.role, rules, completed: false }]);
+    if (activate) {
+      setCurrentSpeakerAction({ name: speaker.name, role: speaker.role, rules });
+      setActiveSpeakerId(id);
+    }
     trackEvent('speaker_added', { speaker_name: speaker.name || 'Unnamed', role: speaker.role });
     return id;
-  }, [roleRules]);
+  }, [roleRules, setCurrentSpeakerAction]);
 
   const removeFromAgenda = useCallback((id) => {
     const itemToRemove = agenda.find(item => item.id === id);

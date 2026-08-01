@@ -20,6 +20,12 @@
     "removeVirtualBackground": {
       "enabled": true
     },
+    "getCurrentVirtualBackground": {
+      "enabled": true
+    },
+    "getVirtualBackgrounds": {
+      "enabled": true
+    },
     "getVideoState": {
       "enabled": true
     },
@@ -27,6 +33,9 @@
       "enabled": true
     },
     "getMeetingParticipants": {
+      "enabled": true
+    },
+    "getUserContext": {
       "enabled": true
     },
     "shareApp": {

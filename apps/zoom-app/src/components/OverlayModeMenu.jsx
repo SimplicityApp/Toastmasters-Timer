@@ -88,17 +88,21 @@ export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenId
 
   return (
     <div className="relative">
+      {/* Names the mode it is in rather than hiding it behind a hover. Which
+          mode is running decides where the color goes — over your face, behind
+          it, or nowhere near your camera — so it is the one thing worth reading
+          at a glance, and the chevron is what says it can be changed. */}
       <button
         ref={buttonRef}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
-        className="flex items-center gap-1.5 pl-2 pr-1.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+        className="flex items-center gap-1.5 pl-2 pr-1.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
-        data-tooltip={`Display mode: ${active.label}`}
-        data-tooltip-direction="down-left"
+        aria-label={`Display mode: ${active.label}. Change`}
       >
-        <ActiveIcon className="h-4 w-4 text-blue-600" />
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ActiveIcon className="h-4 w-4 flex-shrink-0 text-blue-600" />
+        {active.label}
+        <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
