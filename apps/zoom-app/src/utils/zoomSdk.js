@@ -85,6 +85,8 @@ export const USED_SDK_APIS = [
   { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Card' },
   { name: 'setVirtualBackground', capability: 'setVirtualBackground', required: false, purpose: 'Timer + Camera' },
   { name: 'removeVirtualBackground', capability: 'removeVirtualBackground', required: false, purpose: 'Clearing Timer + Camera' },
+  { name: 'getCurrentVirtualBackground', capability: 'getCurrentVirtualBackground', required: false, purpose: 'Leaving the user\'s own background alone' },
+  { name: 'getVirtualBackgrounds', capability: 'getVirtualBackgrounds', required: false, purpose: 'Naming the background being restored' },
   { name: 'getVideoState', capability: 'getVideoState', required: false, purpose: 'Video-off warning' },
   { name: 'setVideoState', capability: 'setVideoState', required: false, purpose: 'Turn my video on' },
   { name: 'getMeetingParticipants', capability: 'getMeetingParticipants', required: false, purpose: 'Speaker suggestions' },
@@ -228,6 +230,131 @@ function markVirtualBackgroundApplied(applied) {
     // Storage unavailable (private mode). The in-memory flag still holds for
     // this session, which is the pre-existing behaviour.
   }
+}
+
+// What the user had on their video before ours replaced it, so that clearing
+// puts them back where they were instead of stripping them to a bare camera.
+//
+// Shape: { type: 'none' | 'blur' | 'image', id?: string, name?: string }, or
+// null when the client could not say — in which case nothing here applies and
+// the old remove-and-hope path runs unchanged.
+const PREVIOUS_BACKGROUND_KEY = 'toastmaster_zoom_previous_background';
+
+function readPreviousBackground() {
+  try {
+    const raw = localStorage.getItem(PREVIOUS_BACKGROUND_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePreviousBackground(background) {
+  try {
+    if (background) localStorage.setItem(PREVIOUS_BACKGROUND_KEY, JSON.stringify(background));
+    else localStorage.removeItem(PREVIOUS_BACKGROUND_KEY);
+  } catch {
+    // See markVirtualBackgroundApplied.
+  }
+}
+
+/**
+ * Reduce whatever the client reports to { type, id, name }.
+ *
+ * Deliberately tolerant, and deliberately gives up rather than guesses. These
+ * two APIs are grantable in the Marketplace but absent from @zoom/appssdk
+ * 0.16.36, 0.16.40 and the CDN bundle, so their exact response shape cannot be
+ * pinned down here — checked, not assumed. Returning null means "the client did
+ * not tell us", which every caller treats as the old behaviour rather than as
+ * an answer. A wrong guess would be worse than no guess: it decides whether the
+ * user gets a confirmation dialog they did not need.
+ *
+ * @param {any} raw
+ * @returns {{type: string, id?: string, name?: string}|null}
+ */
+export function normalizeVirtualBackground(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  // getVirtualBackgrounds returns the list plus the applied one; the single
+  // getter returns the applied one alone. Accept either, under any of the names
+  // the response might carry it as.
+  const current = raw.currentVirtualBackground || raw.current || raw.virtualBackground || raw;
+  if (!current || typeof current !== 'object') return null;
+
+  const label = [current.type, current.id, current.name]
+    .find((value) => typeof value === 'string' && value.trim());
+  if (!label) return null;
+
+  const lowered = label.trim().toLowerCase();
+  if (lowered === 'none') return { type: 'none' };
+  if (lowered === 'blur') return { type: 'blur' };
+  // Anything else names an actual image: the id identifies it, the name is for
+  // telling the user which one we could not put back.
+  const id = typeof current.id === 'string' ? current.id : undefined;
+  const name = typeof current.name === 'string' ? current.name : undefined;
+  if (!id && !name) return null;
+  return { type: 'image', ...(id && { id }), ...(name && { name }) };
+}
+
+/** Whether two reads describe the same background. */
+function sameBackground(a, b) {
+  if (!a || !b || a.type !== b.type) return false;
+  if (a.type !== 'image') return true;
+  return a.id ? a.id === b.id : a.name === b.name;
+}
+
+/**
+ * What is on the user's video right now, or null when the client cannot say.
+ * @returns {Promise<{type: string, id?: string, name?: string}|null>}
+ */
+async function readCurrentVirtualBackground() {
+  try {
+    // Spelled out rather than indexed, so a test can see which methods this
+    // module calls and hold USED_SDK_APIS to them.
+    if (isApiAvailable('getCurrentVirtualBackground')) {
+      return normalizeVirtualBackground(await zoomSdk.getCurrentVirtualBackground());
+    }
+    if (isApiAvailable('getVirtualBackgrounds')) {
+      return normalizeVirtualBackground(await zoomSdk.getVirtualBackgrounds());
+    }
+    return null;
+  } catch (error) {
+    log(`Could not read the current virtual background: ${error.message || error.name}`, 'warn');
+    return null;
+  }
+}
+
+/**
+ * Remember what the user had, just before ours goes over the top of it.
+ *
+ * Only ever called when we do not believe one of ours is already applied, so
+ * the snapshot is always of theirs and never of our own branded image.
+ */
+async function snapshotUserBackground() {
+  const current = await readCurrentVirtualBackground();
+  if (!current) return;
+  writePreviousBackground(current);
+  log(`Remembered the user's background before replacing it: ${current.name || current.type}`, 'info');
+}
+
+/**
+ * Whether one of ours is genuinely on the video, as opposed to merely recorded
+ * as being there.
+ *
+ * The record goes stale the moment the user visits Background & Effects, and a
+ * stale record is expensive: removing costs a confirmation dialog, and being
+ * refused for a background that was never there is what reported "Zoom would
+ * not clear your video" over a video that was already fine.
+ *
+ * @returns {Promise<boolean|null>} null when the client cannot say
+ */
+async function isOurBackgroundApplied() {
+  const current = await readCurrentVirtualBackground();
+  if (!current) return null;
+  // Nothing at all is applied, so ours certainly is not.
+  if (current.type === 'none') return false;
+  // Their own is back up — they changed it themselves, or ours never took.
+  if (sameBackground(current, readPreviousBackground())) return false;
+  return true;
 }
 
 // Whether a video filter of ours is currently on the user's video.
@@ -997,10 +1124,13 @@ export function getOverlayMode() {
  * face. Reading only that in-memory record is what left a branded background up
  * for a whole meeting: idle or not, nothing believed there was anything to remove.
  *
+ * Covers both pipelines, so callers no longer need a "card mode always clears"
+ * special case to compensate for the filter being invisible here.
+ *
  * @returns {boolean}
  */
 export function isOverlayActive() {
-  return activeOverlay !== null || virtualBackgroundApplied;
+  return activeOverlay !== null || virtualBackgroundApplied || videoFilterApplied;
 }
 
 /**
@@ -1052,7 +1182,9 @@ export async function setOverlayMode(mode, currentImageUrl) {
     // previous one, and do it outside the queue so no concurrent push can drop it.
     await clearVideoPipelines();
   } else {
-    await enqueueOverlayOp(() => removeOverlayInternal(previousMode));
+    // Only the outgoing mode's pipeline: the incoming one is about to overwrite
+    // its own, and setVirtualBackground replaces without a removal first.
+    await enqueueOverlayOp(() => removeOverlayInternal(pipelinesForMode(previousMode), previousMode));
   }
   currentOverlayMode = mode;
 
@@ -1065,6 +1197,47 @@ export async function setOverlayMode(mode, currentImageUrl) {
 // Zoom's code for "there was nothing applied", which is a normal outcome here,
 // not a failure.
 const ERROR_NOTHING_APPLIED = 10195;
+
+/**
+ * Take our branded background off by putting the user's own back, rather than
+ * stripping their video to a bare camera.
+ *
+ * Replacing beats removing wherever it can. Someone who joined the meeting
+ * blurred wants to leave it blurred; wiping them to None is a change they never
+ * asked for and have to undo themselves, in a panel, mid-meeting.
+ *
+ * What is actually restorable is narrower than it looks, and the ceiling is
+ * Zoom's, not ours:
+ *
+ * - Blur goes back exactly. It costs a confirmation dialog — setVirtualBackground
+ *   documents the same 10017-on-deny as removal does for blur: true — so this is
+ *   a better outcome for the same price, not a cheaper one.
+ * - None is removal, which is what removal already means.
+ * - One of their own images cannot be put back at all. setVirtualBackground takes
+ *   imageData, a fileUrl or blur — never an id — and getVirtualBackgroundData,
+ *   which would turn the id into pixels, is not in any shipped SDK build. The
+ *   caller is told, so the organizer hears it from us rather than discovering it
+ *   on their own tile.
+ *
+ * @returns {Promise<{lost: boolean}>} lost is true when the user's own image was
+ *   dropped because Zoom offers no way to put it back.
+ */
+async function restoreOrRemoveBackground() {
+  const previous = readPreviousBackground();
+
+  if (previous?.type === 'blur' && isApiAvailable('setVirtualBackground')) {
+    log('Restoring the blur the user had before', 'info');
+    await zoomSdk.setVirtualBackground({ blur: true });
+    return { lost: false };
+  }
+
+  const lost = previous?.type === 'image';
+  if (lost) {
+    log(`No way to put "${previous.name || 'the user\'s own background'}" back; removing instead`, 'warn');
+  }
+  await zoomSdk.removeVirtualBackground();
+  return { lost };
+}
 // removeVirtualBackground always asks the user to confirm. This is them saying no.
 const ERROR_REMOVAL_DECLINED = 10017;
 
@@ -1093,14 +1266,19 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *   looks like any other failure, and the advice that follows from it is
  *   completely different: no retry will ever work, and the only way out is
  *   Zoom's own Background & Effects panel.
+ * - The background is checked against the video before being touched, on clients
+ *   that can answer. A record that has gone stale — the user changed their
+ *   background themselves, which nothing reports — otherwise costs them a
+ *   confirmation dialog for a background of ours that is not even there.
  *
  * Bypasses the overlay queue for the same reason leaveStage does.
  *
- * @returns {Promise<{ok: boolean, declined: boolean, ungranted: string[]}>} ok is
- *   false only when something we believed was applied would not come off;
+ * @returns {Promise<{ok: boolean, declined: boolean, ungranted: string[], lostBackground: boolean}>}
+ *   ok is false only when something we believed was applied would not come off;
  *   declined is true when the user dismissed Zoom's removal confirmation, which
  *   changed nothing; ungranted names the pipelines this client refuses to let the
- *   app touch while something of ours is believed to be on them.
+ *   app touch while something of ours is believed to be on them; lostBackground
+ *   is true when the user's own image could not be put back.
  */
 export async function clearVideoPipelines() {
   if (!sdkInitialized) {
@@ -1111,21 +1289,42 @@ export async function clearVideoPipelines() {
   // Zoom reloads the webview whenever the panel is reopened — which is exactly
   // when an organizer reaches for this button.
   const hadFilter = videoFilterApplied;
-  const hadBackground = virtualBackgroundApplied;
+  let hadBackground = virtualBackgroundApplied;
   activeOverlay = null;
 
   if (!sdkAvailable || !zoomSdk) {
     log('[MOCK] Would clear video filter and virtual background', 'warn');
     markVirtualBackgroundApplied(false);
     markVideoFilterApplied(false);
-    return { ok: false, declined: false, ungranted: [] };
+    return { ok: false, declined: false, ungranted: [], lostBackground: false };
   }
 
+  // Ask the video rather than the record, where the client will answer. Only a
+  // definite "no" is acted on: null means it could not say, which leaves the
+  // record in charge exactly as before.
+  if (hadBackground && (await isOurBackgroundApplied()) === false) {
+    log('Zoom reports nothing of ours on the video; leaving the background alone', 'info');
+    markVirtualBackgroundApplied(false);
+    writePreviousBackground(null);
+    hadBackground = false;
+  }
+
+  let lostBackground = false;
+
   // Independently attempted: one failing must not leave the other applied.
-  const attempts = [
-    {
+  //
+  // Each pipeline is attempted only when it is holding something of ours. The
+  // filter used to be attempted unconditionally, on the grounds that deleting
+  // one is silent and free. It is neither: Zoom errors when there is nothing to
+  // delete, and deleteVideoFilter is documented to delete filters set by other
+  // apps and to set the user's Video Filters setting to None — so pressing the
+  // eraser in camera mode reached past our own overlay and turned off a filter
+  // the organizer had chosen themselves.
+  const attempts = [];
+  if (hadFilter) {
+    attempts.push({
       what: 'video filter',
-      expected: hadFilter,
+      expected: true,
       // deleteVideoFilter is the documented removal. setVideoFilter(null) is the
       // fallback for clients that granted the setter but not the deleter.
       api: isApiAvailable('deleteVideoFilter') ? 'deleteVideoFilter' : 'setVideoFilter',
@@ -1133,20 +1332,20 @@ export async function clearVideoPipelines() {
         isApiAvailable('deleteVideoFilter')
           ? zoomSdk.deleteVideoFilter()
           : zoomSdk.setVideoFilter({ fileUrl: null }),
-    },
-  ];
-  // Strictly on the record, never speculatively. Zoom offers no way to read the
-  // current virtual background — there is no getVirtualBackground, and
-  // getVideoSettings reports camera, HD, mirror and ratio but not this — so the
-  // record is the only thing that can answer "is one of ours up?". Asking anyway
-  // means the client puts a "remove your virtual background?" dialog in front of
-  // someone who has no virtual background at all.
+    });
+  }
+  // On the record, never speculatively — the guard above has already downgraded
+  // the record to a definite no wherever the client could answer. On clients
+  // that cannot, the record is all there is: getVideoSettings reports camera,
+  // HD, mirror and ratio, but nothing about the background. Asking anyway means
+  // a "remove your virtual background?" dialog in front of someone who has no
+  // virtual background at all.
   if (hadBackground) {
     attempts.push({
       what: 'virtual background',
       expected: true,
       api: 'removeVirtualBackground',
-      run: () => zoomSdk.removeVirtualBackground(),
+      run: async () => { lostBackground = (await restoreOrRemoveBackground()).lost; },
     });
   }
 
@@ -1194,9 +1393,14 @@ export async function clearVideoPipelines() {
     }
   }
 
-  if (backgroundGone) markVirtualBackgroundApplied(false);
+  if (backgroundGone) {
+    markVirtualBackgroundApplied(false);
+    // Spent: the user is back on their own background, so there is nothing left
+    // to restore them to. Keeping it would restore a stale choice next time.
+    writePreviousBackground(null);
+  }
   if (filterGone) markVideoFilterApplied(false);
-  return { ok, declined, ungranted };
+  return { ok, declined, ungranted, lostBackground };
 }
 
 /**
@@ -1223,14 +1427,47 @@ export async function leaveStage() {
 }
 
 /**
- * Internal helper to remove a video overlay.
- * @param {string} mode - Overlay mode to tear down ('card' or 'camera')
+ * Which pipeline a video mode drives. Used to tear down only what the outgoing
+ * mode put up: the incoming one overwrites its own pipeline on the next push, so
+ * removing it first would be a confirmation dialog in exchange for nothing.
+ *
+ * @param {string} mode
+ * @returns {{filter: boolean, background: boolean}}
  */
-async function removeOverlayInternal(mode) {
+function pipelinesForMode(mode) {
+  return { filter: mode === OVERLAY_MODE_CARD, background: mode === OVERLAY_MODE_CAMERA };
+}
+
+// Both pipelines, for callers that want the video handed back whole rather than
+// one mode's worth of it.
+const ALL_PIPELINES = { filter: true, background: true };
+
+/**
+ * Take our overlay off the pipelines named, and only where one of ours is up.
+ *
+ * Nothing is removed speculatively. A removal aimed at an empty pipeline is not
+ * free: Zoom errors on it, a background removal costs the user a confirmation
+ * dialog before it even fails, and deleteVideoFilter is documented to delete
+ * filters set by other apps and to set the user's Video Filters setting to None
+ * — so an unconditional call reaches past our own overlay into their setup.
+ *
+ * Which pipelines to consider is the caller's to say, because the two callers
+ * genuinely differ. A mode switch tears down the mode it is leaving. Handing the
+ * video back — a finished speech, the eraser — takes off whatever is there,
+ * since to the organizer a filter and a background are the same branded card.
+ *
+ * @param {{filter: boolean, background: boolean}} pipelines
+ * @param {string} label - What is being torn down, for the log
+ */
+async function removeOverlayInternal(pipelines, label) {
   if (!sdkInitialized) {
     log('SDK not initialized yet, initializing now...', 'warn');
     await initializeZoomSdk();
   }
+
+  const hadFilter = pipelines.filter && videoFilterApplied;
+  const hadBackground = pipelines.background && virtualBackgroundApplied;
+  const mode = label;
 
   // Clear this up front: once removal is requested, nothing is considered
   // applied, even if the removal itself fails because there was no overlay.
@@ -1238,16 +1475,27 @@ async function removeOverlayInternal(mode) {
 
   try {
     if (sdkAvailable && zoomSdk) {
-      if (mode === OVERLAY_MODE_CAMERA) {
-        if (isApiAvailable('removeVirtualBackground')) {
-          log('Removing virtual background', 'info');
-          await zoomSdk.removeVirtualBackground();
-          markVirtualBackgroundApplied(false);
-          log('Successfully removed virtual background', 'info');
-        } else {
+      if (!hadFilter && !hadBackground) {
+        log(`Nothing of ours on the video; nothing to remove (mode: ${mode})`, 'info');
+      }
+      if (hadBackground) {
+        if (!isApiAvailable('removeVirtualBackground')) {
           log('Client did not grant removeVirtualBackground; leaving the background in place', 'warn');
+        } else if ((await isOurBackgroundApplied()) === false) {
+          // Must not put a dialog in front of someone whose background is
+          // already their own.
+          log('Zoom reports the background is not ours; leaving it alone', 'info');
+          markVirtualBackgroundApplied(false);
+          writePreviousBackground(null);
+        } else {
+          log('Putting the user\'s own background back', 'info');
+          await restoreOrRemoveBackground();
+          markVirtualBackgroundApplied(false);
+          writePreviousBackground(null);
+          log('Successfully cleared our virtual background', 'info');
         }
-      } else {
+      }
+      if (hadFilter) {
         if (isApiAvailable('deleteVideoFilter')) {
           log('Deleting video filter', 'info');
           await zoomSdk.deleteVideoFilter();
@@ -1271,11 +1519,13 @@ async function removeOverlayInternal(mode) {
       log(`Error code: ${error.code}`, 'error');
       if (error.code === ERROR_NOTHING_APPLIED) {
         log('No overlay exists to remove', 'warn');
-        // Nothing was there, so stop recording one. Otherwise a flag left true by
-        // a background the user cleared themselves would ask Zoom to remove it —
-        // and prompt them for it — on every idle moment from here on.
-        if (mode === OVERLAY_MODE_CAMERA) markVirtualBackgroundApplied(false);
-        else markVideoFilterApplied(false);
+        // Nothing was there, so stop recording one. Otherwise a flag left true
+        // by an overlay the user cleared themselves would ask Zoom to remove it
+        // — and prompt them for it — on every idle moment from here on. Only
+        // the pipelines this call was asked about: the other was never touched
+        // and its record is still the best thing we have.
+        if (pipelines.background) markVirtualBackgroundApplied(false);
+        if (pipelines.filter) markVideoFilterApplied(false);
       }
     }
   }
@@ -1355,6 +1605,10 @@ async function applyOverlayInternal(imageUrl) {
       if (currentOverlayMode === OVERLAY_MODE_CAMERA) {
         // Camera mode: use setVirtualBackground so user's face shows on top
         if (isApiAvailable('setVirtualBackground')) {
+          // Before the first push of a session, and never once ours is up: what
+          // is on the video now is theirs, and it is the only chance to learn
+          // what to put back. No-ops on clients that cannot report it.
+          if (!virtualBackgroundApplied) await snapshotUserBackground();
           // setVirtualBackground accepts a fileUrl, which lets the Zoom client
           // fetch the image itself. That skips both the decode and the multi-MB
           // ImageData transfer across the bridge. setVideoFilter has no such
@@ -1445,7 +1699,14 @@ async function applyOverlayInternal(imageUrl) {
 }
 
 /**
- * Remove current overlay (dispatches to correct removal based on current mode)
+ * Hand the organizer their video back: take off whichever pipeline is holding
+ * our card.
+ *
+ * Both are considered, not just the current mode's. "Show your own background"
+ * is a promise about their face, and an organizer who was in camera mode earlier
+ * in the meeting does not think of the leftover as a background — they think of
+ * it as the timer still being on them.
+ *
  * @returns {Promise<void>}
  */
 export function removeOverlay() {
@@ -1454,7 +1715,7 @@ export function removeOverlay() {
   // and the window are the organizer's to end, not something a status change or
   // a finished speech should tear down under them.
   if (!isVideoOverlayMode(mode)) return Promise.resolve();
-  return enqueueOverlayOp(() => removeOverlayInternal(mode));
+  return enqueueOverlayOp(() => removeOverlayInternal(ALL_PIPELINES, mode));
 }
 
 /**

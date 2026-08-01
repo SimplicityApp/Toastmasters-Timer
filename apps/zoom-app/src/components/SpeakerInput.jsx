@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { getZoomParticipants } from '../utils/zoomSdk';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, CornerDownLeft } from 'lucide-react';
 
 /**
  * @param {'panel'|'stage'} [variant] - 'stage' is the compact form the timer
@@ -9,8 +9,13 @@ import { ChevronDown } from 'lucide-react';
  *   them and where changing a role is not something to do mid-speech in front of
  *   the meeting. The suggestion list is shared, so picking a speaker off the
  *   agenda works the same in both.
+ * @param {string|null} [activeSpeakerId] - Agenda item the timer is currently on,
+ *   which is what makes Enter a rename rather than an add.
+ * @param {(name: string) => void} [onAddSpeaker] - Put a typed name on the agenda.
+ * @param {(id: string, name: string) => void} [onRenameSpeaker] - Fix the active
+ *   speaker's name without losing their place in the running order.
  */
-export default memo(function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion, variant = 'panel' }) {
+export default memo(function SpeakerInput({ value, onChange, onRoleChange, selectedRole, roleOptions, onEditRules, agendaItems, onSelectSuggestion, activeSpeakerId, onAddSpeaker, onRenameSpeaker, variant = 'panel' }) {
   const isStage = variant === 'stage';
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
@@ -66,7 +71,43 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
     inputRef.current?.blur();
   };
 
+  // What Enter does with a name that matches nothing in the list. Same two
+  // outcomes as the stage picker, and for the same reason: typing a name used to
+  // change only the label above the timer, so nothing was recorded and the
+  // organizer had no way to tell. Renaming wins when an agenda speaker is up —
+  // correcting "Jon" to "John" should fix the agenda, not add a second person.
+  const typed = (value || '').trim();
+  const activeItem = (agendaItems || []).find((item) => item.id === activeSpeakerId);
+  // Completed items are excluded so the same name can be added again later in the
+  // meeting — someone who already spoke may be back on as an evaluator.
+  const upNext = (agendaItems || []).filter((item) => !item.completed || item.id === activeSpeakerId);
+  const pendingRename = Boolean(onRenameSpeaker) && Boolean(activeItem) && Boolean(typed) &&
+    typed !== (activeItem.name || '').trim();
+  const pendingAdd = Boolean(onAddSpeaker) && !activeItem && Boolean(typed) && !upNext.some(
+    (item) => (item.name || '').trim().toLowerCase() === typed.toLowerCase()
+  );
+
+  const commitTypedName = () => {
+    if (pendingRename) onRenameSpeaker(activeItem.id, typed);
+    else if (pendingAdd) onAddSpeaker(typed);
+    else return;
+    setShowSuggestions(false);
+    inputRef.current?.blur();
+  };
+
   const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      // A highlighted suggestion is an explicit choice and outranks the typed
+      // text, which is only a partial match for it.
+      if (showSuggestions && highlightIndex >= 0 && suggestions.length > 0) {
+        e.preventDefault();
+        handleSelect(suggestions[highlightIndex]);
+      } else if (pendingRename || pendingAdd) {
+        e.preventDefault();
+        commitTypedName();
+      }
+      return;
+    }
     if (!showSuggestions || suggestions.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -74,9 +115,6 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
-    } else if (e.key === 'Enter' && highlightIndex >= 0) {
-      e.preventDefault();
-      handleSelect(suggestions[highlightIndex]);
     } else if (e.key === 'Escape') {
       setShowSuggestions(false);
     }
@@ -149,7 +187,7 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
               : 'w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
           }
         />
-        {showSuggestions && (suggestions.length > 0 || isCustomName) && (
+        {showSuggestions && (suggestions.length > 0 || isCustomName || pendingRename) && (
           <ul
             ref={suggestionsRef}
             className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto"
@@ -203,7 +241,21 @@ export default memo(function SpeakerInput({ value, onChange, onRoleChange, selec
                 })}
               </>
             )}
-            {isCustomName && (
+            {/* Says what Enter does before it is pressed, so typing a name is
+                not a guess about whether anything was recorded. Clickable too,
+                since the row is already under the pointer for anyone reaching
+                for the list rather than the keyboard. */}
+            {(pendingAdd || pendingRename) ? (
+              <li
+                onMouseDown={commitTypedName}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-700 border-t border-gray-100 cursor-pointer hover:bg-blue-50"
+              >
+                <CornerDownLeft className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">
+                  {pendingAdd ? `Enter to add "${typed}" to the agenda` : `Enter to rename to "${typed}"`}
+                </span>
+              </li>
+            ) : isCustomName && (
               <li className="px-3 py-2 text-sm text-gray-500 border-t border-gray-100">
                 New Speaker: "{value.trim()}"
               </li>

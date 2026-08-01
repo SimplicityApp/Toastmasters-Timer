@@ -298,12 +298,12 @@ export default memo(function LiveTab() {
       // Usually redundant with TimerContext's own push on status change; the
       // already-showing guard in applyOverlay makes the duplicate free.
       applyOverlay(imageUrl);
-      // Clearing a video filter is silent, so card mode just clears — robust
-      // even if our record of what is applied has gone stale. Clearing a virtual
-      // background costs the user a confirmation dialog, so camera mode only asks
-      // when something of ours is genuinely up: not on mount, not on a speaker
-      // change, not on arriving in the mode with nothing showing.
-    } else if (overlayMode === OVERLAY_MODE_CARD || isOverlayActive()) {
+      // Idle, so the organizer gets their video back: whichever pipeline holds
+      // the card comes off, and neither is touched when nothing of ours is up.
+      // Not on mount, not on a speaker change, not on arriving in a mode with
+      // nothing showing — each of those would otherwise cost a confirmation
+      // dialog in camera mode, or delete the user's own video filter in card.
+    } else if (isOverlayActive()) {
       addDebugLog('Removing overlay (no speech in progress)', 'info');
       removeOverlay();
     }
@@ -352,18 +352,23 @@ export default memo(function LiveTab() {
   };
 
   /**
-   * Add a speaker typed on the stage to the agenda and make them current.
+   * Add a typed speaker to the agenda and make them current.
    *
    * Typing a name used to change only the label above the timer — nothing was
    * recorded, and the organizer had no way to tell. Adding them puts the meeting
    * back on a running order, so finishing can advance to whoever is next.
+   *
+   * Shared by the stage picker and the panel field, which is the point: the two
+   * places you can type a name should not disagree about what typing one means.
    */
   const handleAddSpeaker = (name) => {
-    const id = addToAgenda({ name, role: selectedRole });
-    loadSpeakerFromAgenda(id);
+    addToAgenda({ name, role: selectedRole }, { activate: true });
     setSpeakerName(name);
     showToast(`Added ${name} to the agenda`, 'success');
-    (window.requestIdleCallback || setTimeout)(() => trackEvent('stage_speaker_added', { role: selectedRole }));
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('stage_speaker_added', {
+      role: selectedRole,
+      overlay_mode: overlayMode,
+    }));
   };
 
   /** Fix a name on the agenda without losing the speaker's place in it. */
@@ -546,7 +551,7 @@ export default memo(function LiveTab() {
     setClearGeneration((n) => n + 1);
     try {
       addDebugLog('Clearing all filters and backgrounds', 'info');
-      const { ok, declined, ungranted } = await clearVideoPipelines();
+      const { ok, declined, ungranted, lostBackground } = await clearVideoPipelines();
       if (!sdkStatus?.available) {
         // Outside Zoom every SDK call is a no-op, so there is nothing to report.
       } else if (ungranted?.length) {
@@ -562,6 +567,10 @@ export default memo(function LiveTab() {
         showToast('Zoom needs your confirmation to remove the background — nothing was changed.', 'info', 5000);
       } else if (!ok) {
         showToast('Zoom would not clear your video. Check Zoom\'s own background and filter settings.', 'error', 6000);
+      } else if (lostBackground) {
+        // Zoom offers no way to put a saved background back, so say so rather
+        // than leaving them to notice their own image is gone.
+        showToast('Cleared the timer. Zoom can\'t restore your own background — pick it again in Background & Effects.', 'info', 7000);
       } else {
         showToast('Cleared the timer from your video.', 'success');
       }
@@ -900,6 +909,9 @@ export default memo(function LiveTab() {
         onEditRules={() => setShowEditRulesModal(true)}
         agendaItems={agenda}
         onSelectSuggestion={handleSelectSuggestion}
+        activeSpeakerId={activeSpeakerId}
+        onAddSpeaker={handleAddSpeaker}
+        onRenameSpeaker={handleRenameSpeaker}
       />
 
       {selectedRole !== 'Custom' && (
