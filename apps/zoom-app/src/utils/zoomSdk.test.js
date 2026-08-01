@@ -1652,3 +1652,46 @@ describe('handing the video back while the timer is idle', () => {
     expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
   });
 });
+
+describe('asking the SDK for something before init has finished', () => {
+  it('waits for the in-flight init instead of reporting the SDK unavailable', async () => {
+    // main.jsx renders the app and *then* starts init, on purpose, so every
+    // mount effect runs inside that gap. SpeakerInput fetches participants from
+    // one, once — so landing in the gap left the suggestions empty for the whole
+    // meeting, whatever the caller's role or capabilities.
+    let resolveConfig;
+    sdkMock.config.mockReturnValue(new Promise((resolve) => { resolveConfig = resolve; }));
+    sdkMock.getUserContext = vi.fn().mockResolvedValue({
+      screenName: 'Priya', role: 'host', participantUUID: 'me',
+    });
+    sdkMock.getMeetingParticipants = vi.fn().mockResolvedValue({
+      participants: [{ screenName: 'Sam', participantUUID: 'p2' }],
+    });
+
+    const { initializeZoomSdk, getZoomParticipants } = await loadModule();
+
+    // Init started but not settled — exactly where the mount effect lands.
+    const initializing = initializeZoomSdk();
+    const fetching = getZoomParticipants();
+
+    resolveConfig({});
+    await initializing;
+
+    expect((await fetching).participants).toEqual([
+      { id: 'me', name: 'Priya' },
+      { id: 'p2', name: 'Sam' },
+    ]);
+
+    delete sdkMock.getUserContext;
+    delete sdkMock.getMeetingParticipants;
+  });
+
+  it('runs config once however many callers arrive at the same time', async () => {
+    sdkMock.config.mockResolvedValue({});
+    const { initializeZoomSdk } = await loadModule();
+
+    await Promise.all([initializeZoomSdk(), initializeZoomSdk(), initializeZoomSdk()]);
+
+    expect(sdkMock.config).toHaveBeenCalledTimes(1);
+  });
+});

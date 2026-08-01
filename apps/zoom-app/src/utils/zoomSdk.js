@@ -172,6 +172,9 @@ export function isVideoOverlayMode(mode = currentOverlayMode) {
 // Track SDK initialization state
 let sdkInitialized = false;
 let sdkAvailable = false;
+// The in-flight or settled initialization, so everyone awaits the same one.
+// sdkInitialized says init has *started*; only this says when it has finished.
+let sdkInitPromise = null;
 
 // Track last error for debugging
 let lastError = null;
@@ -441,12 +444,24 @@ function log(message, type = 'info') {
 /**
  * Initialize Zoom SDK
  */
-export async function initializeZoomSdk() {
-  if (sdkInitialized) {
-    console.log(`Zoom SDK already initialized. Available: ${sdkAvailable}`);
-    return sdkAvailable;
-  }
+export function initializeZoomSdk() {
+  // Single-flight. The old shape flipped sdkInitialized synchronously and then
+  // awaited config(), so a second caller arriving during that await saw
+  // "initialized" and carried straight on with sdkAvailable still false. Every
+  // guard in this module is written as `if (!sdkInitialized) await
+  // initializeZoomSdk()`, which made them protect only the never-started case
+  // and not the far more common started-but-not-finished one.
+  //
+  // main.jsx renders before it starts init, on purpose, so the whole first
+  // paint happens inside that window: mount effects run, ask the SDK for
+  // something, and are told it is unavailable. Returning the same promise to
+  // everyone makes waiting for it the default rather than something each
+  // caller has to arrange.
+  if (!sdkInitPromise) sdkInitPromise = initializeZoomSdkOnce();
+  return sdkInitPromise;
+}
 
+async function initializeZoomSdkOnce() {
   sdkInitialized = true;
 
   try {
@@ -620,9 +635,7 @@ export function isAppPoppedOut() {
  * @returns {Promise<boolean>} True if the client accepted the request
  */
 export async function setAppShare(active, { withSound = false } = {}) {
-  if (!sdkInitialized) {
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   if (!sdkAvailable || !zoomSdk || typeof zoomSdk.shareApp !== 'function') {
     log(`[MOCK] Would ${active ? 'start' : 'stop'} sharing the app`, 'warn');
@@ -655,9 +668,7 @@ export async function setAppShare(active, { withSound = false } = {}) {
  * @returns {Promise<boolean>} True if the client accepted the request
  */
 export async function setAppPopout(popped) {
-  if (!sdkInitialized) {
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   if (!sdkAvailable || !zoomSdk || typeof zoomSdk.appPopout !== 'function') {
     log(`[MOCK] Would ${popped ? 'undock' : 'dock'} the app window`, 'warn');
@@ -1282,9 +1293,7 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *   is true when the user's own image could not be put back.
  */
 export async function clearVideoPipelines() {
-  if (!sdkInitialized) {
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   // What we believe is on each pipeline. Both records are persisted, because
   // Zoom reloads the webview whenever the panel is reopened — which is exactly
@@ -1417,9 +1426,7 @@ export async function clearVideoPipelines() {
  * the meeting is still being shared.
  */
 export async function leaveStage() {
-  if (!sdkInitialized) {
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
   activeOverlay = null;
 
   // Stop first, dock second: the share is what the meeting can see.
@@ -1461,10 +1468,7 @@ const ALL_PIPELINES = { filter: true, background: true };
  * @param {string} label - What is being torn down, for the log
  */
 async function removeOverlayInternal(pipelines, label) {
-  if (!sdkInitialized) {
-    log('SDK not initialized yet, initializing now...', 'warn');
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   const hadFilter = pipelines.filter && videoFilterApplied;
   const hadBackground = pipelines.background && virtualBackgroundApplied;
@@ -1578,10 +1582,7 @@ function isAlreadyShowing(imageUrl) {
  */
 async function applyOverlayInternal(imageUrl) {
   // Ensure SDK is initialized before attempting to set filter
-  if (!sdkInitialized) {
-    log('SDK not initialized yet, initializing now...', 'warn');
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   // In a stage mode the app renders the color itself. TimerContext calls this on
   // every status change regardless of mode, so the guard lives here rather than
@@ -1725,10 +1726,7 @@ export function removeOverlay() {
  */
 export async function getVideoState() {
   // Ensure SDK is initialized first
-  if (!sdkInitialized) {
-    console.warn('SDK not initialized yet, initializing now...');
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   try {
     if (sdkAvailable && zoomSdk && typeof zoomSdk.getVideoState === 'function') {
@@ -1772,10 +1770,7 @@ export async function getVideoState() {
  */
 export async function setVideoState(enabled) {
   // Ensure SDK is initialized
-  if (!sdkInitialized) {
-    console.warn('SDK not initialized yet, initializing now...');
-    await initializeZoomSdk();
-  }
+  await initializeZoomSdk();
 
   try {
     if (sdkAvailable && zoomSdk && typeof zoomSdk.setVideoState === 'function') {
@@ -1848,6 +1843,13 @@ const toParticipant = (p, index) => ({
  *   role, which is the one cause the organizer can do something about.
  */
 export async function getZoomParticipants() {
+  // Waited on, not merely checked. SpeakerInput asks for this from a mount
+  // effect, and main.jsx deliberately renders before it starts SDK init — so
+  // this call has always landed inside that gap, read sdkAvailable as false and
+  // returned an empty list. It is fetched once, so there was no second attempt
+  // to correct it, and the suggestions stayed empty for the whole meeting.
+  await initializeZoomSdk();
+
   if (!sdkAvailable) {
     log('[MOCK] SDK is not available; no participants to report.', 'warn');
     return { participants: [], role: '', restricted: false };
@@ -1862,9 +1864,15 @@ export async function getZoomParticipants() {
       const context = await zoomSdk.getUserContext();
       role = normalizeRole(context?.role);
       if (context?.screenName) self = toParticipant(context, 0);
+      else log('getUserContext returned no screenName; leaving yourself out of the list', 'warn');
     } catch (error) {
-      log(`Could not read your own user context: ${error.message || error.name}`, 'warn');
+      log(`Could not read your own user context: ${error.message || error.name} (code ${error.code ?? 'none'})`, 'warn');
     }
+  } else {
+    // Silent before: the one branch that produces a missing name with nothing
+    // in the log to explain it. Almost always the capability not being enabled
+    // on the Marketplace listing, which no amount of retrying fixes.
+    log('getUserContext not granted by this client; your own name will be missing from the list', 'warn');
   }
 
   // getMeetingParticipants, not getParticipants: the latter is not an API the
