@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { ToastProvider } from './ToastContext';
-import { TimerProvider, useTimer } from './TimerContext';
+import { TimerProvider, useTimer, useTimerTick } from './TimerContext';
+import { applyOverlay, removeOverlay, isOverlayActive } from '../utils/zoomSdk';
 
 // Stubbed rather than imported: the real module pulls in @zoom/appssdk, which
 // hangs vitest under jsdom.
@@ -73,5 +74,39 @@ describe('addToAgenda', () => {
     expect(result.current.activeSpeakerId).toBeNull();
     expect(result.current.currentSpeaker).toBeNull();
     expect(result.current.agenda).toHaveLength(1);
+  });
+});
+
+describe('resetTimer', () => {
+  it('leaves the video alone with skipVideo, whatever is on it', () => {
+    // How the RESET button gets a stripped tile: LiveTab clears both pipelines
+    // itself, outside the overlay queue. A push or a removal from here as well
+    // would race that clear — and in camera mode the loser is a confirmation
+    // dialog for a background that has already gone.
+    isOverlayActive.mockReturnValue(true);
+    const { result } = renderHook(() => ({ ...useTimer(), ...useTimerTick() }), { wrapper });
+
+    act(() => {
+      result.current.resetTimer({ skipVideo: true });
+    });
+
+    expect(applyOverlay).not.toHaveBeenCalled();
+    expect(removeOverlay).not.toHaveBeenCalled();
+    expect(result.current.elapsedTime).toBe(0);
+    expect(result.current.currentStatus).toBe('blue');
+  });
+
+  it('still returns the card to blue without the option', () => {
+    // Every other caller — a speaker change, a role change — keeps the old
+    // behavior: reveal-when-idle is off by default, so the color stays up.
+    isOverlayActive.mockReturnValue(true);
+    const { result } = renderHook(() => useTimer(), { wrapper });
+
+    act(() => {
+      result.current.resetTimer();
+    });
+
+    expect(applyOverlay).toHaveBeenCalledWith('/backgrounds/blue.png');
+    expect(removeOverlay).not.toHaveBeenCalled();
   });
 });

@@ -38,11 +38,11 @@ sips -Z 1440 -s format jpeg -s formatOptions 88 raw.png --out 03-mode-menu.jpg
 | --- | --- |
 | `tip-hide-clock.jpg` | Timer Stage with the clock hidden, cropped close on the eye icon |
 | `tip-reveal-face.jpg` | Mode menu with the "Show my own background" checkbox |
-| `tip-clear-video.jpg` | Live tab cropped close on the "Clear video" button |
+| `tip-clear-video.jpg` | Live tab cropped close on the "Clear Background" button |
 
 Notes:
 
-- No hovering needed any more. "Clear video" and the mode button carry their
+- No hovering needed any more. "Clear Background" and the mode button carry their
   labels on the button itself, so shoot them as they sit. Earlier versions of
   this file asked for tooltips in frame; those tooltips are gone.
 - Crop out anything personal: real names, real meeting IDs, other participants.
