@@ -129,9 +129,9 @@ This app uses the **Zoom Apps SDK** with the following capabilities:
 3. Click START
 4. **Expected Result:** Overlay colors change at 5s (green), 10s (yellow), and 15s (red)
 
-### Step 7: Test Clear My Video
+### Step 7: Test Clear Background
 
-1. While the timer is running, click the eraser icon in the top-right corner
+1. While the timer is running, click the "Clear Background" button (eraser icon)
 2. **Expected Result:**
    - The video filter and any virtual background the app applied are removed
    - Your camera is left as Zoom had it, with your own background
@@ -139,6 +139,11 @@ This app uses the **Zoom Apps SDK** with the following capabilities:
 3. Wait for the next color change (or click a preview swatch)
 4. **Expected Result:** The timer resumes driving the overlay normally — clearing
    is a one-off cleanup, not a mode
+5. Start the timer again, then click RESET
+6. **Expected Result:** The timer returns to 00:00 and the filter or background is
+   taken off the video, exactly as "Clear Background" does. No success toast — the
+   clock and the tile are the confirmation — but a refused or unsupported removal
+   is still reported
 
 **Note:** Between speeches the app now hands the video back on its own. Turn off
 "Show my face between speeches" in the display-mode menu to keep the color up for
@@ -246,11 +251,12 @@ the whole meeting instead.
 |---------|-------------|---------------|
 | Timer Display | Real-time countdown/countup timer | None (client-side) |
 | Video Overlay | Colored overlays (grey/green/yellow/red) based on timing | `setVideoFilter`, `deleteVideoFilter` |
-| Clear My Video | Remove every filter and background the app applied | `deleteVideoFilter`, `removeVirtualBackground` |
+| Clear Background | Remove every filter and background the app applied | `deleteVideoFilter`, `removeVirtualBackground` |
 | Video State Check | Detect if video is on/off | `getVideoState` |
 | Turn Video On | Turn on user's video | `setVideoState` |
 | Speaker Management | Add, edit, delete, reorder speakers | None (local storage) |
 | Agenda Import | Import from EasySpeak or simple text | None (local storage) |
+| Reset | Zero the clock, clear the speaker, and take the timer off the video | `deleteVideoFilter`, `removeVirtualBackground` |
 | Timing Reports | Track and export speech timing data | None (local storage) |
 | Custom Timing Rules | Configure timing thresholds per role | None (local storage) |
 

@@ -210,8 +210,8 @@ let cameraResolution = null;
 //
 // Persisted, because Zoom reloads the app's webview every time the panel is
 // closed and reopened. A purely in-memory flag reads false in precisely the
-// situation the "Clear my video" button exists for: a background of ours left on
-// the tile by an earlier session.
+// situation the "Clear Background" button exists for: a background of ours left
+// on the tile by an earlier session.
 const VIRTUAL_BACKGROUND_APPLIED_KEY = 'toastmaster_zoom_virtual_background_applied';
 
 function readVirtualBackgroundApplied() {
@@ -1488,10 +1488,12 @@ const ERROR_REMOVAL_DECLINED = 10017;
 /**
  * Clear the video pipelines: the timer card, and any virtual background of ours.
  *
- * Two callers, same requirement. Entering a stage mode must leave the user's
+ * Three callers, same requirement. Entering a stage mode must leave the user's
  * video completely untouched — that is the whole promise of share and popout:
- * your own face, your own background. And the "Clear my video" button is the
- * organizer's way out when something of ours is stuck on their tile.
+ * your own face, your own background. The "Clear Background" button is the
+ * organizer's way out when something of ours is stuck on their tile. And RESET
+ * hands the video back on its way to zeroing the clock, since undoing a speech
+ * that should not have started has to undo what the meeting could see of it.
  *
  * Only applicable pipelines are touched, and only genuine failures are reported:
  *

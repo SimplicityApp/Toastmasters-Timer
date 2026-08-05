@@ -75,9 +75,13 @@ export default memo(function LiveTab() {
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
 
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
+  // A clear is in flight. Disables both the eraser and RESET, because in Timer +
+  // Camera the wait is Zoom's confirmation dialog, and a second press behind the
+  // first would raise a second dialog for a background already on its way out.
   const [isClearingVideo, setIsClearingVideo] = useState(false);
-  // Bumped by the clear button. Guarantees the overlay effect re-runs exactly
-  // once afterwards, which is the run it skips — see handleClearVideo.
+  // Bumped by anything that hands the video back — the clear button, RESET.
+  // Guarantees the overlay effect re-runs exactly once afterwards, which is the
+  // run it skips — see clearTimerFromVideo.
   const [clearGeneration, setClearGeneration] = useState(0);
 
   // What the app itself is doing, mirrored from the SDK so Zoom's own controls
@@ -284,8 +288,8 @@ export default memo(function LiveTab() {
   // no pixels, and removeOverlay there would tear down the share or the
   // popped-out window itself.
   useEffect(() => {
-    // The run triggered by the clear button itself: leave the video as it was
-    // just cleared to. Bumping the generation is what makes this run happen at
+    // The run triggered by a clear — the eraser, or RESET: leave the video as it
+    // was just cleared to. Bumping the generation is what makes this run happen at
     // all, so the skip is always consumed and never swallows a later push.
     if (lastClearGenerationRef.current !== clearGeneration) {
       lastClearGenerationRef.current = clearGeneration;
@@ -495,16 +499,33 @@ export default memo(function LiveTab() {
     }));
   };
 
-  const handleReset = () => {
+  /**
+   * Put the timer back to zero and hand the organizer their video back.
+   *
+   * Taking the color off is half of what RESET means to the person pressing it:
+   * they are undoing a speech that should not have been started, and a card left
+   * sitting on their tile is the part of it everyone else in the meeting can see.
+   * So the tile is stripped outright here — whichever pipeline is holding it —
+   * rather than left to the reveal-when-idle preference, which governs the
+   * automatic reveals between speeches and not a button press. The cost is the
+   * same as the eraser's: in Timer + Camera, Zoom asks the organizer to confirm.
+   */
+  const handleReset = async () => {
     const previousElapsedTime = elapsedTime;
     const previousStatus = currentStatus;
-    resetTimer();
+    // The clear below owns the video, so resetTimer must not also reach for it.
+    resetTimer({ skipVideo: true });
     setSpeakerName('');
     // Track timer reset
     (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
       previous_status: previousStatus
     }));
+    // Silent when it works: the timer reading 00:00 with the tile back to normal
+    // is its own confirmation, and RESET is pressed often enough that a toast per
+    // press is noise. Anything that went wrong, or that the organizer has to fix
+    // in Zoom themselves, is still reported.
+    await clearTimerFromVideo({ announceSuccess: false });
   };
 
   const handleFinish = () => {
@@ -544,8 +565,15 @@ export default memo(function LiveTab() {
    * legitimately wants a color on the tile — starting a speech, a status change,
    * a mode switch. Notably it does not touch the display preference: pressing
    * clear is a one-time act, not a decision to reveal after every speech.
+   *
+   * Shared with RESET, which owes the organizer the same thing: the two must not
+   * disagree about what taking the timer off the video means, or about what to
+   * say when Zoom will not do it.
+   *
+   * @param {{announceSuccess?: boolean}} [options] - announceSuccess false keeps
+   *   quiet when it worked, for a caller whose own effect is already visible.
    */
-  const handleClearVideo = async () => {
+  const clearTimerFromVideo = async ({ announceSuccess = true } = {}) => {
     setIsClearingVideo(true);
     setPreviewColor(null);
     setClearGeneration((n) => n + 1);
@@ -569,14 +597,20 @@ export default memo(function LiveTab() {
         showToast('Zoom would not clear your video. Check Zoom\'s own background and filter settings.', 'error', 6000);
       } else if (lostBackground) {
         // Zoom offers no way to put a saved background back, so say so rather
-        // than leaving them to notice their own image is gone.
+        // than leaving them to notice their own image is gone. Said even when the
+        // caller wanted silence: losing your own background is not a success.
         showToast('Cleared the timer. Zoom can\'t restore your own background — pick it again in Background & Effects.', 'info', 7000);
-      } else {
+      } else if (announceSuccess) {
         showToast('Cleared the timer from your video.', 'success');
       }
     } finally {
       setIsClearingVideo(false);
     }
+  };
+
+  /** The eraser button. Tracked separately from the resets that clear as well. */
+  const handleClearVideo = async () => {
+    await clearTimerFromVideo();
     (window.requestIdleCallback || setTimeout)(() => trackEvent('video_cleared', {
       overlay_mode: overlayMode,
       current_timer_status: currentStatus,
@@ -709,7 +743,7 @@ export default memo(function LiveTab() {
         />
       )}
 
-      {/* Clear-video escape hatch + overlay mode menu.
+      {/* Clear-background escape hatch + overlay mode menu.
           In the flow rather than floating: these carry their labels now, and two
           labelled buttons pinned over the top-right corner sit on whatever the
           panel is showing underneath. Invisible in the stage modes regardless,
@@ -726,10 +760,10 @@ export default memo(function LiveTab() {
           onClick={handleClearVideo}
           disabled={isClearingVideo}
           className="flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-sm font-medium transition-colors"
-          aria-label="Clear the timer from my video"
+          aria-label="Clear the timer background from my video"
         >
           <Eraser className="h-4 w-4 flex-shrink-0" />
-          {isClearingVideo ? 'Clearing…' : 'Clear video'}
+          {isClearingVideo ? 'Clearing…' : 'Clear Background'}
         </button>
         <OverlayModeMenu
           value={overlayMode}
@@ -1019,9 +1053,10 @@ export default memo(function LiveTab() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
-                  data-tooltip="Reset the timer to 00:00 and clear the current speaker"
+                  disabled={isClearingVideo}
+                  data-tooltip="Reset the timer to 00:00, clear the current speaker, and take the timer off your video"
                   data-tooltip-direction="down"
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="h-4 w-4" />
                   RESET
@@ -1050,9 +1085,10 @@ export default memo(function LiveTab() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
-                  data-tooltip="Reset the timer to 00:00 and clear the current speaker"
+                  disabled={isClearingVideo}
+                  data-tooltip="Reset the timer to 00:00, clear the current speaker, and take the timer off your video"
                   data-tooltip-direction="down"
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="h-4 w-4" />
                   RESET

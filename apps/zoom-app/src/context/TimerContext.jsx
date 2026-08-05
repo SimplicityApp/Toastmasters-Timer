@@ -165,13 +165,22 @@ export function TimerProvider({ children }) {
     setIsRunning(false);
   }, []);
 
-  const resetTimer = useCallback(() => {
+  /**
+   * @param {{skipVideo?: boolean}} [options] - skipVideo leaves the pipelines
+   *   completely alone because the caller is clearing them itself. Pressing RESET
+   *   strips the tile outright rather than following the reveal-when-idle
+   *   preference, and two removals in flight at once — one queued here, one
+   *   bypassing the queue — is a confirmation dialog for a background that has
+   *   already gone.
+   */
+  const resetTimer = useCallback((options) => {
     setIsRunning(false);
     baseElapsedRef.current = 0;
     liveElapsedRef.current = 0;
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
+    if (options?.skipVideo) return;
     // Stage modes are skipped entirely: removeOverlay there would stop the share
     // or dock the timer window.
     //
@@ -190,9 +199,9 @@ export function TimerProvider({ children }) {
       return;
     }
 
-    // A finished or reset speech hands the organizer their video back —
-    // whichever pipeline is holding the card, since to the organizer there is no
-    // difference between the two. Gated on something of ours actually being up:
+    // A finished speech hands the organizer their video back — whichever pipeline
+    // is holding the card, since to the organizer there is no difference between
+    // the two. Gated on something of ours actually being up:
     // resetTimer also runs on every speaker and role change, and a removal aimed
     // at an empty pipeline costs a confirmation dialog in camera mode and reaches
     // into the user's own Video Filters setting in card mode.

@@ -183,9 +183,9 @@ const TIPS = [
   },
   {
     title: 'Clear the timer from your video',
-    body: 'One button takes the timer off your video and puts your camera back the way it was. Handy when you hand the role to someone else, or if anything looks stuck.',
+    body: 'Clear Background takes the timer off your video and puts your camera back the way it was. RESET does the same on its way to zeroing the clock, so this is the one to reach for when you hand the role to someone else, or if anything looks stuck.',
     src: '/zoom/tutorial/tip-clear-video.jpg',
-    hint: 'Live tab with the clear video button',
+    hint: 'Live tab with the Clear Background button',
   },
 ]
 
