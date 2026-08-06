@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   TIME_INPUT_MODE: 'toastmaster_time_input_mode',
   STAGE_CLOCK_HIDDEN: 'toastmaster_stage_clock_hidden',
   REVEAL_FACE_WHEN_IDLE: 'toastmaster_reveal_face_when_idle',
+  OVERLAY_TIME_POSITION: 'toastmaster_overlay_time_position',
 };
 
 /**
@@ -183,6 +184,38 @@ export function loadOverlayMode() {
     return localStorage.getItem(STORAGE_KEYS.OVERLAY_MODE);
   } catch (error) {
     console.error('Failed to load overlay mode:', error);
+    return null;
+  }
+}
+
+/**
+ * Save where the count-up readout sits on the pushed background.
+ * @param {{x: number, y: number}} position - Normalized (0-1) center of the text
+ */
+export function saveOverlayTimePosition(position) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.OVERLAY_TIME_POSITION, JSON.stringify(position));
+  } catch (error) {
+    console.error('Failed to save overlay time position:', error);
+  }
+}
+
+/**
+ * Load where the count-up readout sits on the pushed background.
+ * @returns {{x: number, y: number}|null} Normalized position, or null when
+ *   nothing valid was saved
+ */
+export function loadOverlayTimePosition() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.OVERLAY_TIME_POSITION);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const x = Number(parsed?.x);
+    const y = Number(parsed?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+  } catch (error) {
+    console.error('Failed to load overlay time position:', error);
     return null;
   }
 }

@@ -9,7 +9,7 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
 import { saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
@@ -89,6 +89,23 @@ export default memo(function LiveTab() {
   // the mode: showing "Timer + Camera" while the module pushes card-mode
   // filters is a full card over the organizer's face.
   const [overlayMode, setOverlayModeLocal] = useState(getOverlayMode);
+
+  // Where the count-up sits on the pushed frame, mirrored from the SDK module
+  // so the drag badge follows the pointer without a bridge push per move.
+  const [readoutPosition, setReadoutPosition] = useState(getOverlayTimePosition);
+
+  /** Follow the drag live; hand the position to Zoom only on release. */
+  const handleReadoutPositionChange = (position, { commit } = {}) => {
+    setReadoutPosition(position);
+    if (commit) {
+      setOverlayTimePosition(position);
+      (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_position_moved', {
+        x: Math.round(position.x * 100) / 100,
+        y: Math.round(position.y * 100) / 100,
+        overlay_mode: overlayMode,
+      }));
+    }
+  };
 
   // A speech is under way. A pause counts as active — the speech is on hold, not
   // over — which is why this tracks elapsedTime rather than isRunning alone.
@@ -978,6 +995,8 @@ export default memo(function LiveTab() {
         elapsedTime={elapsedTime}
         status={previewColor || currentStatus}
         rules={currentSpeaker?.rules}
+        readoutPosition={isVideoOverlayMode(overlayMode) ? readoutPosition : null}
+        onReadoutPositionChange={handleReadoutPositionChange}
       />
 
       {!isRunning && (

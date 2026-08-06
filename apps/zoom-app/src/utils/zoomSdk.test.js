@@ -35,8 +35,9 @@ function stubCanvas() {
     scale: (...args) => operations.push(['scale', ...args]),
     drawImage: (...args) => operations.push(['drawImage', ...args.slice(1)]),
     putImageData: () => operations.push(['putImageData']),
-    strokeText: (text) => operations.push(['strokeText', text]),
-    fillText: (text) => operations.push(['fillText', text]),
+    strokeText: (text, x, y) => operations.push(['strokeText', text, x, y]),
+    fillText: (text, x, y) => operations.push(['fillText', text, x, y]),
+    measureText: (text) => ({ width: String(text).length * 40 }),
     getImageData: (x, y, w, h) => ({
       width: w,
       height: h,
@@ -49,6 +50,11 @@ function stubCanvas() {
     throw new Error(`Unexpected createElement('${tag}')`);
   });
   return { operations, fakeCanvas };
+}
+
+/** The time readouts drawn onto frames, in the order they were rendered. */
+function renderedLabels(operations) {
+  return operations.filter(([op]) => op === 'fillText').map(([, text]) => text);
 }
 
 /**
@@ -1973,7 +1979,7 @@ describe('the count-up on the pushed card', () => {
     await applyOverlay('https://zoom.example/backgrounds/green.png');
 
     // Participants watching the card see the time, not just the color.
-    expect(operations).toContainEqual(['fillText', '00:05']);
+    expect(renderedLabels(operations)).toContain('00:05');
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
   });
 
@@ -1988,7 +1994,7 @@ describe('the count-up on the pushed card', () => {
     // The setter re-pushes through the queue; let it drain.
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(operations).toContainEqual(['fillText', '00:06']);
+    expect(renderedLabels(operations)).toContain('00:06');
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
   });
 
@@ -2007,19 +2013,83 @@ describe('the count-up on the pushed card', () => {
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves camera mode alone: face first, and a fileUrl cannot carry the readout', async () => {
-    stubCanvas();
+  it('bakes the readout into Timer + Camera frames too', async () => {
+    const { operations } = stubCanvas();
     saveOverlayMode('camera');
     const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
     await initializeZoomSdk();
 
     setOverlayTimeLabel('00:05');
     await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // A frame carrying the time is different every second, so the fileUrl
+    // shortcut cannot serve it: the pixels have to cross the bridge.
+    expect(renderedLabels(operations)).toContain('00:05');
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
+    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+  });
+
+  it('re-pushes the camera-mode frame when the readout advances', async () => {
+    const { operations } = stubCanvas();
+    saveOverlayMode('camera');
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
     setOverlayTimeLabel('00:06');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
-    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+    expect(renderedLabels(operations)).toContain('00:06');
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the cheap fileUrl push while camera mode is idle', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    const { initializeZoomSdk, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    // No speech, no readout — the Zoom client fetches the image itself.
+    await applyOverlay('https://zoom.example/backgrounds/blue.png');
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/blue.png',
+    });
+  });
+
+  it('moves the readout where the organizer dragged it, and remembers it', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, setOverlayTimePosition, applyOverlay } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+    const firstX = operations.find(([op]) => op === 'fillText')[2];
+
+    setOverlayTimePosition({ x: 0.85, y: 0.85 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const laterX = operations.filter(([op]) => op === 'fillText').at(-1)[2];
+    expect(laterX).toBeGreaterThan(firstX);
+    // Persisted: where the organizer's face is does not change between
+    // meetings, so neither should where the readout dodges it to.
+    const { loadOverlayTimePosition } = await import('@toastmaster-timer/shared');
+    expect(loadOverlayTimePosition()).toEqual({ x: 0.85, y: 0.85 });
+  });
+
+  it('clamps the readout inside the frame however far it is dragged', async () => {
+    const { operations } = stubCanvas();
+    const { renderTimeOnFrame } = await loadModule();
+    const base = { width: 640, height: 360, data: new Uint8ClampedArray(640 * 360 * 4) };
+
+    renderTimeOnFrame(base, '00:05', { x: 0, y: 0 });
+
+    const [, , x, y] = operations.find(([op]) => op === 'fillText');
+    // measureText stubs '00:05' at 200px wide; pad is 4% of height. Dragged to
+    // the corner, the text center still keeps the whole readout on the frame.
+    expect(x).toBeGreaterThanOrEqual(100);
+    expect(y).toBeGreaterThanOrEqual(Math.round(360 * 0.22) / 2);
   });
 
   it('still pushes the plain card when text rendering fails', async () => {
@@ -2033,7 +2103,7 @@ describe('the count-up on the pushed card', () => {
     setOverlayTimeLabel('00:05');
     await applyOverlay('https://zoom.example/backgrounds/green.png');
 
-    expect(operations).not.toContainEqual(['fillText', '00:05']);
+    expect(renderedLabels(operations)).not.toContain('00:05');
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
     expect(isOverlayActive()).toBe(true);
   });

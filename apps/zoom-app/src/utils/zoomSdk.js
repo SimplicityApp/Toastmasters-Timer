@@ -1,5 +1,5 @@
 import zoomSdk from '@zoom/appssdk';
-import { loadOverlayMode } from '@toastmaster-timer/shared';
+import { loadOverlayMode, loadOverlayTimePosition, saveOverlayTimePosition } from '@toastmaster-timer/shared';
 
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
@@ -223,21 +223,54 @@ const imageDataCache = new Map();
 // the elapsed-time readout baked into a filter frame, or null for a plain card.
 let activeOverlay = null;
 
-// The elapsed-time readout to render onto card frames, e.g. '02:35', or null
-// while no speech is being timed. Card mode is an image push, so the count-up
-// other participants see has to be baked into the pixels; camera mode never
-// renders it, because there the organizer's face is the point and the
-// background is pushed by fileUrl, which carries no pixels of ours.
+// The elapsed-time readout to render onto pushed frames, e.g. '02:35', or null
+// while no speech is being timed. Both video modes are image pushes, so the
+// count-up other participants see has to be baked into the pixels. In camera
+// mode that costs the fileUrl shortcut while a speech runs — a frame carrying
+// the time is different every second, so the pixels have to cross the bridge.
 let overlayTimeLabel = null;
 
+// Where the readout sits on the frame: normalized (0-1) center of the text.
+// Top-left by default so it stays clear of the organizer's face, which the
+// camera mode puts in the middle. The organizer repositions it by dragging the
+// badge on the Live tab's timer preview; persisted because the choice is about
+// where their own face is, which does not change between meetings.
+export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.14 };
+
+let overlayTimePosition = loadOverlayTimePosition() || DEFAULT_OVERLAY_TIME_POSITION;
+
+/** @returns {{x: number, y: number}} Normalized center of the readout */
+export function getOverlayTimePosition() {
+  return { ...overlayTimePosition };
+}
+
 /**
- * Set the elapsed-time readout and repaint the card other participants see.
+ * Move the readout and repaint the frame participants are watching.
+ * @param {{x: number, y: number}} position - Normalized (0-1) center
+ */
+export function setOverlayTimePosition(position) {
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const next = { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+  if (next.x === overlayTimePosition.x && next.y === overlayTimePosition.y) return;
+  overlayTimePosition = next;
+  saveOverlayTimePosition(next);
+  // Only a frame that is actually carrying the readout needs repainting.
+  if (overlayTimeLabel && activeOverlay?.url && isVideoOverlayMode()) {
+    applyOverlay(activeOverlay.url);
+  }
+}
+
+/**
+ * Set the elapsed-time readout and repaint the frame other participants see.
  *
  * Driven by the timer once per second while a speech runs. Each change
- * re-pushes the visible filter frame; the overlay queue coalesces pushes a slow
- * client cannot keep up with, so the readout skips ahead rather than lagging
- * behind. Clearing the label never re-pushes — null means the speech is over,
- * and whatever teardown or status push follows owns the tile.
+ * re-pushes the visible frame — filter or background, whichever pipeline is
+ * up; the overlay queue coalesces pushes a slow client cannot keep up with, so
+ * the readout skips ahead rather than lagging behind. Clearing the label never
+ * re-pushes — null means the speech is over, and whatever teardown or status
+ * push follows owns the tile.
  *
  * @param {string|null} label - Formatted elapsed time, or null between speeches
  */
@@ -245,35 +278,41 @@ export function setOverlayTimeLabel(label) {
   const next = label ?? null;
   if (next === overlayTimeLabel) return;
   overlayTimeLabel = next;
-  if (next && activeOverlay?.pipeline === 'filter') {
+  if (next && activeOverlay?.url && isVideoOverlayMode()) {
     applyOverlay(activeOverlay.url);
   }
 }
 
 /**
- * Bake the elapsed-time readout into a card frame. Exported for testing.
+ * Bake the elapsed-time readout into a frame. Exported for testing.
  *
- * The card's middle is empty by design — logo top-left, color name in the top
- * bar — so the readout sits centered there. White digits over a dark keyline
- * stay readable on all four colors, yellow included.
+ * Drawn at the organizer's chosen position, clamped so the text never runs off
+ * the frame. White digits over a dark keyline stay readable on all four
+ * colors, yellow included — and over whatever the camera mode's cutout leaves
+ * visible around the face.
  *
- * @param {ImageData} base - Decoded card background (not mutated; it is cached)
+ * @param {ImageData} base - Decoded background (not mutated; it is cached)
  * @param {string} label - Formatted elapsed time
+ * @param {{x: number, y: number}} [position] - Normalized center of the text
  * @returns {ImageData} A new frame with the readout drawn on
  */
-export function renderTimeOnFrame(base, label) {
+export function renderTimeOnFrame(base, label, position = overlayTimePosition) {
   const canvas = document.createElement('canvas');
   canvas.width = base.width;
   canvas.height = base.height;
   const ctx = canvas.getContext('2d');
   ctx.putImageData(base, 0, 0);
-  // Large enough to read off a gallery-view tile: about a third of the frame.
-  const fontSize = Math.round(base.height * 0.32);
+  // Large enough to read off a gallery-view tile, small enough to sit in a
+  // corner without crowding the face beside it.
+  const fontSize = Math.round(base.height * 0.22);
   ctx.font = `bold ${fontSize}px 'Helvetica Neue', Helvetica, Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const x = Math.round(base.width / 2);
-  const y = Math.round(base.height * 0.54);
+  const pad = Math.round(base.height * 0.04);
+  const textWidth = ctx.measureText(label).width;
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  const x = Math.round(clamp(position.x * base.width, pad + textWidth / 2, base.width - pad - textWidth / 2));
+  const y = Math.round(clamp(position.y * base.height, pad + fontSize / 2, base.height - pad - fontSize / 2));
   ctx.lineWidth = Math.max(2, Math.round(fontSize / 12));
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
   ctx.strokeText(label, x, y);
@@ -1905,8 +1944,16 @@ function isAlreadyShowing(imageUrl) {
   if (currentOverlayMode === OVERLAY_MODE_CAMERA) return false;
   if (!activeOverlay) return false;
   if (activeOverlay.url !== imageUrl || activeOverlay.mode !== currentOverlayMode) return false;
-  // A frame carrying a different time readout is a different frame.
+  // A frame carrying a different time readout is a different frame — and so is
+  // one carrying the same readout somewhere else, right after a drag.
   if ((activeOverlay.label ?? null) !== overlayTimeLabel) return false;
+  if (
+    activeOverlay.label &&
+    (activeOverlay.position?.x !== overlayTimePosition.x ||
+      activeOverlay.position?.y !== overlayTimePosition.y)
+  ) {
+    return false;
+  }
   // A fileUrl push is size-independent, so it is never stale.
   if (!activeOverlay.budget) return true;
   const budget = getOverlayBudget();
@@ -1954,32 +2001,46 @@ async function applyOverlayInternal(imageUrl) {
         // is on the video now is theirs, and it is the only chance to learn
         // what to put back. No-ops on clients that cannot report it.
         if (!virtualBackgroundApplied) await snapshotUserBackground();
+        const label = overlayTimeLabel;
         // setVirtualBackground accepts a fileUrl, which lets the Zoom client
         // fetch the image itself. That skips both the decode and the multi-MB
-        // ImageData transfer across the bridge. setVideoFilter has no such
-        // option, so this shortcut is camera mode only.
-        try {
-          log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
-          const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
-          log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
-          // No pixels pushed, so no budget to go stale.
-          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null, pipeline: 'background' };
-          markVirtualBackgroundApplied(true);
-          lastError = null;
-          return;
-        } catch (fileUrlError) {
-          // The native client may not be able to reach the URL (restricted
-          // network, proxy, TLS inspection). Fall back to shipping the pixels.
-          log(`fileUrl virtual background failed: ${fileUrlError.message || fileUrlError.name}. Falling back to imageData.`, 'warn');
+        // ImageData transfer across the bridge — but only a frame with nothing
+        // baked into it can take it. While a speech runs, the frame carries the
+        // count-up and is different every second, so the pixels have to cross.
+        if (!label) {
+          try {
+            log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
+            const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
+            log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
+            // No pixels pushed, so no budget to go stale.
+            activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null, pipeline: 'background' };
+            markVirtualBackgroundApplied(true);
+            lastError = null;
+            return;
+          } catch (fileUrlError) {
+            // The native client may not be able to reach the URL (restricted
+            // network, proxy, TLS inspection). Fall back to shipping the pixels.
+            log(`fileUrl virtual background failed: ${fileUrlError.message || fileUrlError.name}. Falling back to imageData.`, 'warn');
+          }
         }
 
         log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
         const budget = getOverlayBudget();
         const imageData = await loadImageAsImageData(imageUrl);
         log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
-        const result = await zoomSdk.setVirtualBackground({ imageData });
+        let frame = imageData;
+        if (label) {
+          try {
+            frame = renderTimeOnFrame(imageData, label);
+          } catch (error) {
+            // The readout is a bonus; the color is the signal. Push the plain
+            // background rather than nothing.
+            log(`Could not render the time onto the background: ${error.message || error.name}`, 'warn');
+          }
+        }
+        const result = await zoomSdk.setVirtualBackground({ imageData: frame });
         log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
-        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background' };
+        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background', label, position: overlayTimePosition };
         markVirtualBackgroundApplied(true);
         lastError = null;
         return;
@@ -2006,7 +2067,7 @@ async function applyOverlayInternal(imageUrl) {
           }
           const result = await zoomSdk.setVideoFilter({ imageData: frame });
           log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
-          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'filter', label };
+          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'filter', label, position: overlayTimePosition };
           markVideoFilterApplied(true);
           lastError = null;
           if (result && result.status) {
