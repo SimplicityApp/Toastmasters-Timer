@@ -231,11 +231,13 @@ let activeOverlay = null;
 let overlayTimeLabel = null;
 
 // Where the readout sits on the frame: normalized (0-1) center of the text.
-// Top-left by default so it stays clear of the organizer's face, which the
-// camera mode puts in the middle. The organizer repositions it by dragging the
-// badge on the Live tab's timer preview; persisted because the choice is about
-// where their own face is, which does not change between meetings.
-export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.14 };
+// Upper-left by default so it stays clear of the organizer's face, which the
+// camera mode puts in the middle — and just below the Toastmasters logo, which
+// occupies the card's actual top-left corner. The organizer repositions it by
+// dragging the badge on the Live tab's timer preview; persisted because the
+// choice is about where their own face is, which does not change between
+// meetings.
+export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.3 };
 
 let overlayTimePosition = loadOverlayTimePosition() || DEFAULT_OVERLAY_TIME_POSITION;
 
