@@ -8,7 +8,7 @@ const STORAGE_KEYS = {
   TIME_INPUT_MODE: 'toastmaster_time_input_mode',
   STAGE_CLOCK_HIDDEN: 'toastmaster_stage_clock_hidden',
   REVEAL_FACE_WHEN_IDLE: 'toastmaster_reveal_face_when_idle',
-  OVERLAY_TIME_POSITION: 'toastmaster_overlay_time_position',
+  OVERLAY_TIME_READOUT: 'toastmaster_overlay_time_readout',
 };
 
 /**
@@ -189,33 +189,42 @@ export function loadOverlayMode() {
 }
 
 /**
- * Save where the count-up readout sits on the pushed background.
- * @param {{x: number, y: number}} position - Normalized (0-1) center of the text
+ * Save the count-up readout settings for the pushed background: where it
+ * sits, how big it is, and whether it shows at all.
+ * @param {{x: number, y: number, scale: number, visible: boolean}} readout
  */
-export function saveOverlayTimePosition(position) {
+export function saveOverlayTimeReadout(readout) {
   try {
-    localStorage.setItem(STORAGE_KEYS.OVERLAY_TIME_POSITION, JSON.stringify(position));
+    localStorage.setItem(STORAGE_KEYS.OVERLAY_TIME_READOUT, JSON.stringify(readout));
   } catch (error) {
-    console.error('Failed to save overlay time position:', error);
+    console.error('Failed to save overlay time readout:', error);
   }
 }
 
 /**
- * Load where the count-up readout sits on the pushed background.
- * @returns {{x: number, y: number}|null} Normalized position, or null when
- *   nothing valid was saved
+ * Load the count-up readout settings. Field-tolerant: each field comes back
+ * only if it was saved valid, so a caller can fall back per field.
+ * @returns {{x?: number, y?: number, scale?: number, visible?: boolean}|null}
  */
-export function loadOverlayTimePosition() {
+export function loadOverlayTimeReadout() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.OVERLAY_TIME_POSITION);
+    const raw = localStorage.getItem(STORAGE_KEYS.OVERLAY_TIME_READOUT);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const x = Number(parsed?.x);
-    const y = Number(parsed?.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+    if (!parsed || typeof parsed !== 'object') return null;
+    const readout = {};
+    const x = Number(parsed.x);
+    const y = Number(parsed.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      readout.x = Math.min(1, Math.max(0, x));
+      readout.y = Math.min(1, Math.max(0, y));
+    }
+    const scale = Number(parsed.scale);
+    if (Number.isFinite(scale) && scale > 0) readout.scale = scale;
+    if (typeof parsed.visible === 'boolean') readout.visible = parsed.visible;
+    return Object.keys(readout).length ? readout : null;
   } catch (error) {
-    console.error('Failed to load overlay time position:', error);
+    console.error('Failed to load overlay time readout:', error);
     return null;
   }
 }

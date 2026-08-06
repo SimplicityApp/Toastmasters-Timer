@@ -2074,8 +2074,58 @@ describe('the count-up on the pushed card', () => {
     expect(laterX).toBeGreaterThan(firstX);
     // Persisted: where the organizer's face is does not change between
     // meetings, so neither should where the readout dodges it to.
-    const { loadOverlayTimePosition } = await import('@toastmaster-timer/shared');
-    expect(loadOverlayTimePosition()).toEqual({ x: 0.85, y: 0.85 });
+    const { loadOverlayTimeReadout } = await import('@toastmaster-timer/shared');
+    expect(loadOverlayTimeReadout()).toMatchObject({ x: 0.85, y: 0.85 });
+  });
+
+  it('resizes the readout from the +/- controls, clamped and remembered', async () => {
+    stubCanvas();
+    const {
+      initializeZoomSdk, setOverlayTimeLabel, setOverlayTimeScale, applyOverlay,
+      OVERLAY_TIME_SCALE_MAX,
+    } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Absurd values stop at the bound rather than filling the frame.
+    const applied = setOverlayTimeScale(5);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(applied).toBe(OVERLAY_TIME_SCALE_MAX);
+    // The size change repaints the frame participants are watching.
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+    const { loadOverlayTimeReadout } = await import('@toastmaster-timer/shared');
+    expect(loadOverlayTimeReadout()).toMatchObject({ scale: OVERLAY_TIME_SCALE_MAX });
+  });
+
+  it('hides the readout on request, and stops repainting while hidden', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, setOverlayTimeVisible, applyOverlay } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Hiding must push a plain frame — the readout is up and has to come off.
+    setOverlayTimeVisible(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+    const labelsBefore = renderedLabels(operations).length;
+
+    // While hidden, the ticking clock repaints nothing: every frame it would
+    // push is identical to the one already showing.
+    setOverlayTimeLabel('00:06');
+    setOverlayTimeLabel('00:07');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+    expect(renderedLabels(operations)).toHaveLength(labelsBefore);
+
+    // Showing again brings the current time back, not the one from before.
+    setOverlayTimeVisible(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(3);
+    expect(renderedLabels(operations)).toContain('00:07');
   });
 
   it('clamps the readout inside the frame however far it is dragged', async () => {
@@ -2089,7 +2139,7 @@ describe('the count-up on the pushed card', () => {
     // measureText stubs '00:05' at 200px wide; pad is 4% of height. Dragged to
     // the corner, the text center still keeps the whole readout on the frame.
     expect(x).toBeGreaterThanOrEqual(100);
-    expect(y).toBeGreaterThanOrEqual(Math.round(360 * 0.22) / 2);
+    expect(y).toBeGreaterThanOrEqual(Math.round(360 * 0.18) / 2);
   });
 
   it('still pushes the plain card when text rendering fails', async () => {

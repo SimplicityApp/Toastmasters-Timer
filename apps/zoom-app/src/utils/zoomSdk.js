@@ -1,5 +1,5 @@
 import zoomSdk from '@zoom/appssdk';
-import { loadOverlayMode, loadOverlayTimePosition, saveOverlayTimePosition } from '@toastmaster-timer/shared';
+import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout } from '@toastmaster-timer/shared';
 
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
@@ -239,7 +239,44 @@ let overlayTimeLabel = null;
 // meetings.
 export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.3 };
 
-let overlayTimePosition = loadOverlayTimePosition() || DEFAULT_OVERLAY_TIME_POSITION;
+// How tall the readout is, as a fraction of the frame. The +/- buttons beside
+// the drag badge step through this range; the bounds keep the text both
+// legible off a gallery tile and small enough to stay out of the way.
+export const DEFAULT_OVERLAY_TIME_SCALE = 0.18;
+export const OVERLAY_TIME_SCALE_MIN = 0.12;
+export const OVERLAY_TIME_SCALE_MAX = 0.33;
+
+const storedReadout = loadOverlayTimeReadout();
+let overlayTimePosition =
+  storedReadout?.x !== undefined && storedReadout?.y !== undefined
+    ? { x: storedReadout.x, y: storedReadout.y }
+    : DEFAULT_OVERLAY_TIME_POSITION;
+let overlayTimeScale = storedReadout?.scale ?? DEFAULT_OVERLAY_TIME_SCALE;
+let overlayTimeVisible = storedReadout?.visible ?? true;
+
+function persistOverlayTimeReadout() {
+  saveOverlayTimeReadout({
+    x: overlayTimePosition.x,
+    y: overlayTimePosition.y,
+    scale: overlayTimeScale,
+    visible: overlayTimeVisible,
+  });
+}
+
+/**
+ * The readout the next frame should carry: the elapsed time, or null when
+ * there is none to show — no speech, or the organizer switched it off.
+ */
+function effectiveTimeLabel() {
+  return overlayTimeVisible ? overlayTimeLabel : null;
+}
+
+/** Repaint the pushed frame if it is carrying (or should now carry) a readout. */
+function repaintOverlayFrame() {
+  if (activeOverlay?.url && isVideoOverlayMode()) {
+    applyOverlay(activeOverlay.url);
+  }
+}
 
 /** @returns {{x: number, y: number}} Normalized center of the readout */
 export function getOverlayTimePosition() {
@@ -257,11 +294,48 @@ export function setOverlayTimePosition(position) {
   const next = { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
   if (next.x === overlayTimePosition.x && next.y === overlayTimePosition.y) return;
   overlayTimePosition = next;
-  saveOverlayTimePosition(next);
+  persistOverlayTimeReadout();
   // Only a frame that is actually carrying the readout needs repainting.
-  if (overlayTimeLabel && activeOverlay?.url && isVideoOverlayMode()) {
-    applyOverlay(activeOverlay.url);
-  }
+  if (effectiveTimeLabel()) repaintOverlayFrame();
+}
+
+/** @returns {number} Readout height as a fraction of the frame */
+export function getOverlayTimeScale() {
+  return overlayTimeScale;
+}
+
+/**
+ * Resize the readout and repaint the frame participants are watching.
+ * @param {number} scale - Text height as a fraction of the frame; clamped
+ * @returns {number} The scale actually applied
+ */
+export function setOverlayTimeScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value)) return overlayTimeScale;
+  const next = Math.min(OVERLAY_TIME_SCALE_MAX, Math.max(OVERLAY_TIME_SCALE_MIN, value));
+  if (next === overlayTimeScale) return overlayTimeScale;
+  overlayTimeScale = next;
+  persistOverlayTimeReadout();
+  if (effectiveTimeLabel()) repaintOverlayFrame();
+  return overlayTimeScale;
+}
+
+/** @returns {boolean} Whether the readout is shown on pushed frames */
+export function isOverlayTimeVisible() {
+  return overlayTimeVisible;
+}
+
+/**
+ * Show or hide the readout, repainting the frame either way: hiding a readout
+ * that is up must push a plain frame, not merely stop updating.
+ * @param {boolean} visible
+ */
+export function setOverlayTimeVisible(visible) {
+  const next = Boolean(visible);
+  if (next === overlayTimeVisible) return;
+  overlayTimeVisible = next;
+  persistOverlayTimeReadout();
+  if (overlayTimeLabel) repaintOverlayFrame();
 }
 
 /**
@@ -272,7 +346,8 @@ export function setOverlayTimePosition(position) {
  * up; the overlay queue coalesces pushes a slow client cannot keep up with, so
  * the readout skips ahead rather than lagging behind. Clearing the label never
  * re-pushes — null means the speech is over, and whatever teardown or status
- * push follows owns the tile.
+ * push follows owns the tile. A hidden readout never re-pushes either: the
+ * frame it would repaint is identical.
  *
  * @param {string|null} label - Formatted elapsed time, or null between speeches
  */
@@ -280,9 +355,7 @@ export function setOverlayTimeLabel(label) {
   const next = label ?? null;
   if (next === overlayTimeLabel) return;
   overlayTimeLabel = next;
-  if (next && activeOverlay?.url && isVideoOverlayMode()) {
-    applyOverlay(activeOverlay.url);
-  }
+  if (next && overlayTimeVisible) repaintOverlayFrame();
 }
 
 /**
@@ -296,17 +369,16 @@ export function setOverlayTimeLabel(label) {
  * @param {ImageData} base - Decoded background (not mutated; it is cached)
  * @param {string} label - Formatted elapsed time
  * @param {{x: number, y: number}} [position] - Normalized center of the text
+ * @param {number} [scale] - Text height as a fraction of the frame
  * @returns {ImageData} A new frame with the readout drawn on
  */
-export function renderTimeOnFrame(base, label, position = overlayTimePosition) {
+export function renderTimeOnFrame(base, label, position = overlayTimePosition, scale = overlayTimeScale) {
   const canvas = document.createElement('canvas');
   canvas.width = base.width;
   canvas.height = base.height;
   const ctx = canvas.getContext('2d');
   ctx.putImageData(base, 0, 0);
-  // Large enough to read off a gallery-view tile, small enough to sit in a
-  // corner without crowding the face beside it.
-  const fontSize = Math.round(base.height * 0.22);
+  const fontSize = Math.round(base.height * scale);
   ctx.font = `bold ${fontSize}px 'Helvetica Neue', Helvetica, Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -1947,12 +2019,14 @@ function isAlreadyShowing(imageUrl) {
   if (!activeOverlay) return false;
   if (activeOverlay.url !== imageUrl || activeOverlay.mode !== currentOverlayMode) return false;
   // A frame carrying a different time readout is a different frame — and so is
-  // one carrying the same readout somewhere else, right after a drag.
-  if ((activeOverlay.label ?? null) !== overlayTimeLabel) return false;
+  // one carrying the same readout somewhere else or at another size, right
+  // after a drag or a +/- press.
+  if ((activeOverlay.label ?? null) !== effectiveTimeLabel()) return false;
   if (
     activeOverlay.label &&
     (activeOverlay.position?.x !== overlayTimePosition.x ||
-      activeOverlay.position?.y !== overlayTimePosition.y)
+      activeOverlay.position?.y !== overlayTimePosition.y ||
+      activeOverlay.scale !== overlayTimeScale)
   ) {
     return false;
   }
@@ -2003,7 +2077,7 @@ async function applyOverlayInternal(imageUrl) {
         // is on the video now is theirs, and it is the only chance to learn
         // what to put back. No-ops on clients that cannot report it.
         if (!virtualBackgroundApplied) await snapshotUserBackground();
-        const label = overlayTimeLabel;
+        const label = effectiveTimeLabel();
         // setVirtualBackground accepts a fileUrl, which lets the Zoom client
         // fetch the image itself. That skips both the decode and the multi-MB
         // ImageData transfer across the bridge — but only a frame with nothing
@@ -2042,7 +2116,7 @@ async function applyOverlayInternal(imageUrl) {
         }
         const result = await zoomSdk.setVirtualBackground({ imageData: frame });
         log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
-        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background', label, position: overlayTimePosition };
+        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background', label, position: overlayTimePosition, scale: overlayTimeScale };
         markVirtualBackgroundApplied(true);
         lastError = null;
         return;
@@ -2056,7 +2130,7 @@ async function applyOverlayInternal(imageUrl) {
           log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
           // Bake the count-up into the frame while a speech is running, so the
           // participants watching the card see the time too, not just the color.
-          const label = overlayTimeLabel;
+          const label = effectiveTimeLabel();
           let frame = imageData;
           if (label) {
             try {
@@ -2069,7 +2143,7 @@ async function applyOverlayInternal(imageUrl) {
           }
           const result = await zoomSdk.setVideoFilter({ imageData: frame });
           log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
-          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'filter', label, position: overlayTimePosition };
+          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'filter', label, position: overlayTimePosition, scale: overlayTimeScale };
           markVideoFilterApplied(true);
           lastError = null;
           if (result && result.status) {

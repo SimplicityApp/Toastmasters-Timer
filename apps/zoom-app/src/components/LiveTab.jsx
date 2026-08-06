@@ -9,8 +9,8 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
-import { saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, getOverlayTimeScale, setOverlayTimeScale, isOverlayTimeVisible, setOverlayTimeVisible, setOverlayTimeLabel, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
+import { formatTime, saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -93,6 +93,8 @@ export default memo(function LiveTab() {
   // Where the count-up sits on the pushed frame, mirrored from the SDK module
   // so the drag badge follows the pointer without a bridge push per move.
   const [readoutPosition, setReadoutPosition] = useState(getOverlayTimePosition);
+  const [readoutScale, setReadoutScale] = useState(getOverlayTimeScale);
+  const [readoutVisible, setReadoutVisible] = useState(isOverlayTimeVisible);
 
   /** Follow the drag live; hand the position to Zoom only on release. */
   const handleReadoutPositionChange = (position, { commit } = {}) => {
@@ -105,6 +107,26 @@ export default memo(function LiveTab() {
         overlay_mode: overlayMode,
       }));
     }
+  };
+
+  /** One +/- press; the SDK clamps and reports what it actually applied. */
+  const handleAdjustReadoutScale = (direction) => {
+    const applied = setOverlayTimeScale(readoutScale + direction * 0.03);
+    setReadoutScale(applied);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_scale_adjusted', {
+      scale: Math.round(applied * 100) / 100,
+      overlay_mode: overlayMode,
+    }));
+  };
+
+  const handleToggleReadoutVisible = () => {
+    const visible = !readoutVisible;
+    setReadoutVisible(visible);
+    setOverlayTimeVisible(visible);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_visibility_toggled', {
+      visible,
+      overlay_mode: overlayMode,
+    }));
   };
 
   // A speech is under way. A pause counts as active — the speech is on hold, not
@@ -302,6 +324,15 @@ export default memo(function LiveTab() {
     }
     if (!isVideoOverlayMode(overlayMode)) return;
     if (wantsColorNow) {
+      // A held swatch previews everything a live speech will show, the
+      // count-up included, so the organizer can place and size it before
+      // anyone speaks. While the timer runs, TimerContext owns the label.
+      if (previewColor && !isRunning) {
+        setOverlayTimeLabel(formatTime(elapsedTime));
+      } else if (!speechActive) {
+        // Idle with no swatch held: nothing to count, so no readout.
+        setOverlayTimeLabel(null);
+      }
       const imageUrl = getBackgroundUrl(desiredStatus);
       addDebugLog(`Applying overlay: ${desiredStatus} -> ${imageUrl}`, 'info');
       // Usually redundant with TimerContext's own push on status change; the
@@ -314,9 +345,14 @@ export default memo(function LiveTab() {
       // dialog in camera mode, or delete the user's own video filter in card.
     } else if (isOverlayActive()) {
       addDebugLog('Removing overlay (no speech in progress)', 'info');
+      // A preview may have set the readout; the teardown must not leave it
+      // behind for the next push. Clearing never re-pushes on its own.
+      setOverlayTimeLabel(null);
       removeOverlay();
     }
-  }, [overlayMode, wantsColorNow, desiredStatus, clearGeneration]);
+    // previewColor is listed on its own because desiredStatus can hide a
+    // swatch change: previewing the color the timer already shows.
+  }, [overlayMode, wantsColorNow, desiredStatus, previewColor, clearGeneration]);
 
   // Log when status changes
   useEffect(() => {
@@ -997,6 +1033,9 @@ export default memo(function LiveTab() {
         rules={currentSpeaker?.rules}
         readoutPosition={isVideoOverlayMode(overlayMode) ? readoutPosition : null}
         onReadoutPositionChange={handleReadoutPositionChange}
+        readoutVisible={readoutVisible}
+        onToggleReadoutVisible={handleToggleReadoutVisible}
+        onAdjustReadoutScale={handleAdjustReadoutScale}
       />
 
       {!isRunning && (

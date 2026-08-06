@@ -1,8 +1,17 @@
 import { memo, useRef, useState } from 'react';
-import { Move } from 'lucide-react';
+import { Move, Plus, Minus, Eye, EyeOff } from 'lucide-react';
 import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
 
-export default memo(function TimerDisplay({ elapsedTime, status, rules, readoutPosition, onReadoutPositionChange }) {
+export default memo(function TimerDisplay({
+  elapsedTime,
+  status,
+  rules,
+  readoutPosition,
+  onReadoutPositionChange,
+  readoutVisible,
+  onToggleReadoutVisible,
+  onAdjustReadoutScale,
+}) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
   const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
 
@@ -85,31 +94,70 @@ export default memo(function TimerDisplay({ elapsedTime, status, rules, readoutP
 
       {/* Where the count-up sits on the video other participants see. Only the
           video modes show it: the full-screen timer pushes no frame to drag
-          anything on. */}
+          anything on.
+
+          No data-tooltip anywhere in this cluster, deliberately: the tooltip
+          pseudo-element repaints above the chip while it moves under pointer
+          capture, which smeared black trails across the preview. */}
       {readoutPosition && (
-        <button
-          type="button"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerEnd}
-          onPointerCancel={handlePointerEnd}
-          className={`flex items-center gap-1 px-2 py-1 rounded-md bg-black/35 border border-white/50 text-white text-sm font-mono font-semibold touch-none select-none ${
-            dragging ? 'cursor-grabbing scale-105' : 'cursor-grab'
-          }`}
+        <div
+          className="flex items-center gap-1"
           style={{
-            // Inline because the [data-tooltip] rule in index.css sets
-            // position: relative and outranks the Tailwind utility.
             position: 'absolute',
             left: `${readoutPosition.x * 100}%`,
             top: `${readoutPosition.y * 100}%`,
             transform: 'translate(-50%, -50%)',
           }}
-          aria-label="Drag to place the count-up participants see on your video"
-          data-tooltip="Participants see the count-up here — drag to move it"
         >
-          <Move className="h-3 w-3 opacity-80 flex-shrink-0" />
-          {formatTime(elapsedTime)}
-        </button>
+          <button
+            type="button"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerEnd}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md bg-black/35 border border-white/50 text-white text-sm font-mono font-semibold touch-none select-none ${
+              dragging ? 'cursor-grabbing' : 'cursor-grab'
+            } ${readoutVisible ? '' : 'opacity-50'}`}
+            aria-label="Drag to place the count-up participants see on your video"
+          >
+            <Move className="h-3 w-3 opacity-80 flex-shrink-0" />
+            {formatTime(elapsedTime)}
+          </button>
+          {/* Hidden while dragging: the chip is the only thing that should
+              follow the pointer, and stray buttons under it catch the drop. */}
+          {!dragging && (
+            <div className="flex items-center gap-0.5">
+              {readoutVisible && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onAdjustReadoutScale?.(-1)}
+                    className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
+                    aria-label="Make the count-up smaller"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAdjustReadoutScale?.(1)}
+                    className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
+                    aria-label="Make the count-up larger"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => onToggleReadoutVisible?.()}
+                className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
+                aria-label={readoutVisible ? 'Hide the count-up from your video' : 'Show the count-up on your video'}
+              >
+                {readoutVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
