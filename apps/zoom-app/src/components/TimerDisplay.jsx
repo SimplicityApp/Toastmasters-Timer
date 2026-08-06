@@ -101,7 +101,10 @@ export default memo(function TimerDisplay({
           capture, which smeared black trails across the preview. */}
       {readoutPosition && (
         <div
-          className="flex items-center gap-1"
+          // The anchor is the chip alone, so its center — not the center of
+          // chip plus buttons — is what the stored position means. The chip is
+          // the marker for where the readout lands on the pushed frame; the
+          // buttons hang off its side out of flow, shifting nothing.
           style={{
             position: 'absolute',
             left: `${readoutPosition.x * 100}%`,
@@ -124,38 +127,38 @@ export default memo(function TimerDisplay({
             {formatTime(elapsedTime)}
           </button>
           {/* Hidden while dragging: the chip is the only thing that should
-              follow the pointer, and stray buttons under it catch the drop. */}
-          {!dragging && (
-            <div className="flex items-center gap-0.5">
-              {readoutVisible && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onAdjustReadoutScale?.(-1)}
-                    className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
-                    aria-label="Make the count-up smaller"
-                  >
-                    <Minus className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onAdjustReadoutScale?.(1)}
-                    className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
-                    aria-label="Make the count-up larger"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </>
-              )}
+              follow the pointer, and stray buttons under it catch the drop.
+              Size controls to the chip's left, visibility to its right — both
+              out of flow, so neither shifts the chip off its anchor. */}
+          {!dragging && readoutVisible && (
+            <div className="absolute right-full top-1/2 -translate-y-1/2 mr-1 flex items-center gap-0.5">
               <button
                 type="button"
-                onClick={() => onToggleReadoutVisible?.()}
+                onClick={() => onAdjustReadoutScale?.(-1)}
                 className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
-                aria-label={readoutVisible ? 'Hide the count-up from your video' : 'Show the count-up on your video'}
+                aria-label="Make the count-up smaller"
               >
-                {readoutVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                <Minus className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onAdjustReadoutScale?.(1)}
+                className="flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
+                aria-label="Make the count-up larger"
+              >
+                <Plus className="h-3 w-3" />
               </button>
             </div>
+          )}
+          {!dragging && (
+            <button
+              type="button"
+              onClick={() => onToggleReadoutVisible?.()}
+              className="absolute left-full top-1/2 -translate-y-1/2 ml-1 flex items-center justify-center h-6 w-6 rounded bg-black/35 border border-white/50 text-white hover:bg-black/50"
+              aria-label={readoutVisible ? 'Hide the count-up from your video' : 'Show the count-up on your video'}
+            >
+              {readoutVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            </button>
           )}
         </div>
       )}

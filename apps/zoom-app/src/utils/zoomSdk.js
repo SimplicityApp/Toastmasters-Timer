@@ -231,19 +231,19 @@ let activeOverlay = null;
 let overlayTimeLabel = null;
 
 // Where the readout sits on the frame: normalized (0-1) center of the text.
-// Upper-left by default so it stays clear of the organizer's face, which the
-// camera mode puts in the middle — and just below the Toastmasters logo, which
-// occupies the card's actual top-left corner. The organizer repositions it by
-// dragging the badge on the Live tab's timer preview; persisted because the
+// Top-center by default: above the organizer's face in camera mode, clear of
+// the Toastmasters logo in the top-left corner, and matching where the badge
+// sits in the Live tab's preview — centered above the main clock. The
+// organizer repositions it by dragging that badge; persisted because the
 // choice is about where their own face is, which does not change between
 // meetings.
-export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.3 };
+export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.5, y: 0.28 };
 
 // How tall the readout is, as a fraction of the frame. The +/- buttons beside
-// the drag badge step through this range; the bounds keep the text both
-// legible off a gallery tile and small enough to stay out of the way.
+// the drag badge step through this range; the floor keeps the text a readable
+// sliver rather than nothing, the ceiling keeps it from filling the tile.
 export const DEFAULT_OVERLAY_TIME_SCALE = 0.18;
-export const OVERLAY_TIME_SCALE_MIN = 0.12;
+export const OVERLAY_TIME_SCALE_MIN = 0.06;
 export const OVERLAY_TIME_SCALE_MAX = 0.33;
 
 const storedReadout = loadOverlayTimeReadout();
