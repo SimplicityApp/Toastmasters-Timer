@@ -1,6 +1,6 @@
 import { memo, useRef, useState } from 'react';
 import { Move, Plus, Minus, Eye, EyeOff } from 'lucide-react';
-import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
+import { formatTime, getPhaseInfo, formatPhaseTextFor, getDisplaySeconds } from '@toastmaster-timer/shared';
 
 export default memo(function TimerDisplay({
   elapsedTime,
@@ -13,7 +13,10 @@ export default memo(function TimerDisplay({
   onAdjustReadoutScale,
 }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
-  const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
+  const phaseText = phaseInfo ? formatPhaseTextFor(phaseInfo, rules) : '';
+  // Counts up for a speech, down for a break — everywhere this card shows a
+  // clock, including the drag badge, which mirrors the pushed readout.
+  const displayTime = formatTime(getDisplaySeconds(elapsedTime, rules));
 
   const containerRef = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -81,7 +84,7 @@ export default memo(function TimerDisplay({
         className={`${textColor} text-5xl sm:text-6xl font-mono font-bold mb-4`}
         style={timerTextStyle}
       >
-        {formatTime(elapsedTime)}
+        {displayTime}
       </div>
       {phaseText && (
         <div
@@ -124,7 +127,7 @@ export default memo(function TimerDisplay({
             aria-label="Drag to place the count-up participants see on your video"
           >
             <Move className="h-3 w-3 opacity-80 flex-shrink-0" />
-            {formatTime(elapsedTime)}
+            {displayTime}
           </button>
           {/* Hidden while dragging: the chip is the only thing that should
               follow the pointer, and stray buttons under it catch the drop.

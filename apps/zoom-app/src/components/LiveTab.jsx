@@ -8,7 +8,7 @@ import TimerStage from './TimerStage';
 import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE, BREAK_QUICK_PICKS, DEFAULT_BREAK_SECONDS, deriveBreakRules, getDisplaySeconds } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, getOverlayTimeScale, setOverlayTimeScale, isOverlayTimeVisible, setOverlayTimeVisible, setOverlayTimeLabel, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
 import { formatTime, saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
@@ -55,6 +55,10 @@ export default memo(function LiveTab() {
   const [speakerName, setSpeakerName] = useState(currentSpeaker?.name || '');
   const [selectedRole, setSelectedRole] = useState(currentSpeaker?.role || 'Standard Speech');
   const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
+  // Break Time counts down from this. Not persisted: 10 minutes is the meeting
+  // norm, and a club that broke for 5 yesterday should not silently break for
+  // 5 forever.
+  const [breakSeconds, setBreakSeconds] = useState(DEFAULT_BREAK_SECONDS);
   const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
 
@@ -215,6 +219,11 @@ export default memo(function LiveTab() {
       if (currentSpeaker.role === 'Custom' && currentSpeaker.rules) {
         setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...currentSpeaker.rules });
       }
+      // A break loaded from the agenda carries its length in its rules; the
+      // picker has to show that length, not whatever was picked last.
+      if (currentSpeaker.role === BREAK_ROLE && currentSpeaker.rules?.red) {
+        setBreakSeconds(currentSpeaker.rules.red);
+      }
       // If switching to Custom role but no rules yet, keep current customRules (don't reset)
     } else {
       setSpeakerName('');
@@ -328,7 +337,7 @@ export default memo(function LiveTab() {
       // count-up included, so the organizer can place and size it before
       // anyone speaks. While the timer runs, TimerContext owns the label.
       if (previewColor && !isRunning) {
-        setOverlayTimeLabel(formatTime(elapsedTime));
+        setOverlayTimeLabel(formatTime(getDisplaySeconds(elapsedTime, currentSpeaker?.rules)));
       } else if (!speechActive) {
         // Idle with no swatch held: nothing to count, so no readout.
         setOverlayTimeLabel(null);
@@ -426,8 +435,11 @@ export default memo(function LiveTab() {
   const handleRoleChange = (role) => {
     const previousRole = selectedRole;
     setSelectedRole(role);
-    // Always update current speaker, even if name is empty
-    const rules = role === 'Custom' ? customRules : undefined;
+    // Always update current speaker, even if name is empty. Custom and Break
+    // carry their rules on the speaker: Custom's are edited by hand, Break's
+    // are derived from the length picked below.
+    const rules =
+      role === 'Custom' ? customRules : role === BREAK_ROLE ? deriveBreakRules(breakSeconds) : undefined;
     setCurrentSpeaker({
       name: speakerName || '',
       role,
@@ -475,11 +487,30 @@ export default memo(function LiveTab() {
     return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
   }, [selectedRole, roleRules]);
 
+  // Spelled in time-left terms, because that is what the countdown shows.
+  const breakExplanation = useMemo(() => {
+    const rules = deriveBreakRules(breakSeconds);
+    return `Counts down from ${formatTimeReadable(rules.red)}. Green when ${formatTimeReadable(rules.red - rules.green)} left, yellow when ${formatTimeReadable(rules.red - rules.yellow)} left, red when time is up.`;
+  }, [breakSeconds]);
+
   // Just the state: the overlay effect pushes the swatch and, when it is toggled
   // back off, takes it down again. Pushing from here as well used to fight that
   // effect, which reapplied the timer's own status a render later.
   const handlePreviewColor = (color) => {
     setPreviewColor((held) => (held === color ? null : color));
+  };
+
+  /** Pick a break length; the phase thresholds re-derive from it. */
+  const handleBreakDurationChange = (seconds) => {
+    setBreakSeconds(seconds);
+    setCurrentSpeaker({
+      name: speakerName || '',
+      role: BREAK_ROLE,
+      rules: deriveBreakRules(seconds),
+    });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('break_duration_changed', {
+      seconds,
+    }));
   };
 
   const handleStart = () => {
@@ -491,9 +522,15 @@ export default memo(function LiveTab() {
         return;
       }
     }
-    // Ensure current speaker is set with correct rules
-    // Get rules from roleRules if not Custom, or use customRules if Custom
-    const rules = selectedRole === 'Custom' ? customRules : roleRules[selectedRole];
+    // Ensure current speaker is set with correct rules: hand-edited for
+    // Custom, derived from the picked length for Break, the role's own
+    // otherwise.
+    const rules =
+      selectedRole === 'Custom'
+        ? customRules
+        : selectedRole === BREAK_ROLE
+          ? deriveBreakRules(breakSeconds)
+          : roleRules[selectedRole];
     if (!rules) {
       showToast('Please set timing rules first', 'warning');
       return;
@@ -503,7 +540,7 @@ export default memo(function LiveTab() {
     setCurrentSpeaker({
       name: speakerName || '',
       role: selectedRole,
-      ...(selectedRole === 'Custom' && { rules }),
+      ...((selectedRole === 'Custom' || selectedRole === BREAK_ROLE) && { rules }),
     });
 
     startTimer();
@@ -996,10 +1033,38 @@ export default memo(function LiveTab() {
         onRenameSpeaker={handleRenameSpeaker}
       />
 
-      {selectedRole !== 'Custom' && (
+      {selectedRole !== 'Custom' && selectedRole !== BREAK_ROLE && (
         <p className="text-xs text-gray-500 mt-1">
           Timing rules: {roleExplanation}
         </p>
+      )}
+
+      {selectedRole === BREAK_ROLE && (
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">Break Length</h3>
+            <TimeInputModeToggle mode={timeInputMode} onModeChange={(m) => { saveTimeInputMode(m); setTimeInputMode(m); }} />
+          </div>
+          <div className="flex justify-center gap-2">
+            {BREAK_QUICK_PICKS.map((seconds) => (
+              <button
+                key={seconds}
+                onClick={() => handleBreakDurationChange(seconds)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  breakSeconds === seconds
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {Math.round(seconds / 60)} min
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <TimeInput layout="inline" label="Custom" value={breakSeconds} onChange={handleBreakDurationChange} />
+          </div>
+          <p className="text-xs text-gray-500 text-center">{breakExplanation}</p>
+        </div>
       )}
 
       {selectedRole === 'Custom' && (

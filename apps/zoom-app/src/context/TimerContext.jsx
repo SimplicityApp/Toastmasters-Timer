@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
-import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed, BREAK_ROLE, DEFAULT_BREAK_SECONDS, deriveBreakRules } from '@toastmaster-timer/shared';
+import { calculateStatus, formatTime, getDisplaySeconds } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, setOverlayTimeLabel, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
@@ -70,6 +70,10 @@ export function TimerProvider({ children }) {
     const savedHidden = loadHiddenBuiltinRoles();
     const merged = savedRules ? { ...DEFAULT_ROLE_RULES, ...savedRules } : { ...DEFAULT_ROLE_RULES };
     (savedHidden || []).forEach((r) => delete merged[r]);
+    // After the saved rules on purpose: Break's thresholds are derived from
+    // the length picked on the Live tab, never edited number by number, so a
+    // stale copy that leaked into saved rules must not shadow the derivation.
+    merged[BREAK_ROLE] = deriveBreakRules(DEFAULT_BREAK_SECONDS);
     return merged;
   });
 
@@ -120,13 +124,15 @@ export function TimerProvider({ children }) {
         setElapsedTime(rounded);
         liveElapsedRef.current = rounded;
 
-        // Zoom-specific: once a second, repaint the count-up participants see
-        // on the card. The SDK ignores this in every mode that does not render
-        // a card frame, and coalesces pushes a slow client cannot keep up with.
-        setOverlayTimeLabel(formatTime(rounded));
+        const speaker = currentSpeakerRef.current;
+
+        // Zoom-specific: once a second, repaint the readout participants see
+        // on the card — counting up for a speech, down for a break. The SDK
+        // ignores this in every mode that does not render a card frame, and
+        // coalesces pushes a slow client cannot keep up with.
+        setOverlayTimeLabel(formatTime(getDisplaySeconds(rounded, speaker?.rules)));
 
         // --- batch status update (1c) ---
-        const speaker = currentSpeakerRef.current;
         if (speaker && speaker.rules) {
           const newStatus = calculateStatus(rounded, speaker.rules);
           if (newStatus !== previousStatusRef.current) {
@@ -160,8 +166,9 @@ export function TimerProvider({ children }) {
     }
     // baseElapsedRef is already set to current elapsed (from stopTimer or initial 0)
     const initialStatus = calculateStatus(baseElapsedRef.current, currentSpeakerRef.current.rules);
-    // Before the push, so the first frame already carries the readout.
-    setOverlayTimeLabel(formatTime(baseElapsedRef.current));
+    // Before the push, so the first frame already carries the readout — the
+    // full break length for a countdown, the elapsed time for a speech.
+    setOverlayTimeLabel(formatTime(getDisplaySeconds(baseElapsedRef.current, currentSpeakerRef.current.rules)));
     applyOverlay(getBackgroundUrl(initialStatus));
     previousStatusRef.current = initialStatus;
     setIsRunning(true);
@@ -373,9 +380,11 @@ export function TimerProvider({ children }) {
     if (currentSpeaker && elapsedTime > 0) {
       const rules = currentSpeaker.rules;
       const grace = rules ? (rules.graceAfterRed ?? getDefaultGraceAfterRed(currentSpeaker.role)) : 30;
-      const disqualified = rules ? elapsedTime > rules.red + grace : false;
+      // A break has no disqualification and no under/over commentary: nobody
+      // "runs over" a break, the meeting just resumes.
+      const disqualified = rules && !rules.countdown ? elapsedTime > rules.red + grace : false;
       let comment = '';
-      if (rules) {
+      if (rules && !rules.countdown) {
         if (elapsedTime > rules.red) {
           comment = formatPassedRedComment(elapsedTime, rules.red);
           if (disqualified) comment += ' (Disqualified)';

@@ -16,6 +16,49 @@ export const ROLE_OPTIONS = Object.keys(DEFAULT_ROLE_RULES);
 /** Default rules for the Custom role (and for new rows in Edit Rules). Single source of truth. */
 export const DEFAULT_CUSTOM_RULES = { ...DEFAULT_ROLE_RULES['Custom'] };
 
+// Break Time: a countdown session between speeches. Deliberately not part of
+// DEFAULT_ROLE_RULES — its thresholds are derived from the chosen length, not
+// edited number by number, so it does not belong in the rules editor.
+export const BREAK_ROLE = 'Break';
+export const DEFAULT_BREAK_SECONDS = 600;
+// Offered as one-tap choices next to the custom input. Most common first.
+export const BREAK_QUICK_PICKS = [600, 300, 180];
+
+/**
+ * Timing rules for a break of the given length.
+ *
+ * The same engine as a speech — elapsed time crossing green, then yellow, then
+ * red — but the thresholds are proportions of the total, so every break has
+ * the same rhythm whatever its length: blue for the first 60%, green until
+ * 80%, yellow for the last stretch, red when time is up. The countdown flag is
+ * what makes displays show time remaining instead of time elapsed.
+ *
+ * @param {number} totalSeconds - Break length; clamped to at least 30 seconds
+ * @returns {{green: number, yellow: number, red: number, graceAfterRed: number, countdown: true}}
+ */
+export function deriveBreakRules(totalSeconds) {
+  const total = Math.max(30, Math.round(Number(totalSeconds) || 0));
+  return {
+    green: Math.round(total * 0.6),
+    yellow: Math.round(total * 0.8),
+    red: total,
+    // A break has no disqualification: nobody runs over a break, the meeting
+    // just resumes.
+    graceAfterRed: 0,
+    countdown: true,
+  };
+}
+
+/**
+ * Whether these rules describe a countdown session (a break) rather than a
+ * counted-up speech.
+ * @param {Object} [rules]
+ * @returns {boolean}
+ */
+export function isCountdownRules(rules) {
+  return rules?.countdown === true;
+}
+
 /** Default grace (sec) after red before disqualification: 15 for short/table-topics-eval, 30 otherwise */
 export function getDefaultGraceAfterRed(role) {
   return role === 'Short Roles' || role === 'Table Topics Evaluation' ? 15 : 30;
@@ -68,6 +111,13 @@ export function detectRoleFromText(text, customRoleNames = null) {
   // "Table Topics" (after checking for "Table Topics Evaluation")
   if (normalized.includes('table topics')) {
     return 'Table Topics';
+  }
+
+  // A break on the agenda ("Break", "Coffee break", "10 min break"). The word
+  // boundary keeps "breaker" — and with it "Ice Breaker", already matched
+  // above — from landing here.
+  if (/\bbreak\b/.test(normalized)) {
+    return BREAK_ROLE;
   }
 
   // EasySpeak-style speaker roles (1st Speaker, 2nd Speaker, etc.)

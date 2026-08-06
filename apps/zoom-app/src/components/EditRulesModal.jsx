@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useTimer } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, getDefaultGraceAfterRed, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE } from '@toastmaster-timer/shared';
 import ConfirmModal from './ConfirmModal';
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { trackEvent } from '../utils/posthog';
@@ -72,8 +72,11 @@ export default function EditRulesModal({ isOpen, onClose }) {
     removeRoleRules(role);
   };
 
+  // Break is not editable here: its thresholds are derived from the length
+  // picked on the Live tab, so a hand-edited copy would be overwritten by the
+  // next pick and mislead in the meantime.
   const rolesToShow = [
-    ...(roleOptions ?? []),
+    ...(roleOptions ?? []).filter((role) => role !== BREAK_ROLE),
     ...Object.keys(editedRules).filter((k) => k.startsWith('__new_'))
   ];
 
