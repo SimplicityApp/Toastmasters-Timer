@@ -41,6 +41,7 @@ export default memo(function LiveTab() {
     resetTimer,
     setCurrentSpeaker,
     updateSpeakerName,
+    clearActiveSpeaker,
     finishCurrentSpeech,
     roleRules,
     roleOptions,
@@ -440,6 +441,10 @@ export default memo(function LiveTab() {
     // are derived from the length picked below.
     const rules =
       role === 'Custom' ? customRules : role === BREAK_ROLE ? deriveBreakRules(breakSeconds) : undefined;
+    // A break called mid-agenda interrupts the running order, it does not
+    // stand in for whoever was loaded: detach so finishing the break neither
+    // completes that speaker's slot nor advances past them.
+    if (role === BREAK_ROLE) clearActiveSpeaker();
     setCurrentSpeaker({
       name: speakerName || '',
       role,
@@ -608,10 +613,15 @@ export default memo(function LiveTab() {
 
   const handleFinish = () => {
     const currentAgendaId = activeSpeakerId;
+    // Captured before finishing resets the speaker: a break ending is the
+    // meeting pausing, not advancing, so the next speaker is never auto-loaded
+    // off the back of one — the organizer resumes the agenda when the room is
+    // back.
+    const wasBreak = Boolean(currentSpeaker?.rules?.countdown);
     finishCurrentSpeech();
 
     // Auto-load next uncompleted speaker from agenda
-    if (currentAgendaId) {
+    if (currentAgendaId && !wasBreak) {
       const currentIndex = agenda.findIndex(item => item.id === currentAgendaId);
       const nextSpeaker = agenda.slice(currentIndex + 1).find(item => !item.completed);
       if (nextSpeaker) {

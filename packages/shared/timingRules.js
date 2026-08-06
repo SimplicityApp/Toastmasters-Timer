@@ -19,7 +19,7 @@ export const DEFAULT_CUSTOM_RULES = { ...DEFAULT_ROLE_RULES['Custom'] };
 // Break Time: a countdown session between speeches. Deliberately not part of
 // DEFAULT_ROLE_RULES — its thresholds are derived from the chosen length, not
 // edited number by number, so it does not belong in the rules editor.
-export const BREAK_ROLE = 'Break';
+export const BREAK_ROLE = 'Take a Break';
 export const DEFAULT_BREAK_SECONDS = 600;
 // Offered as one-tap choices next to the custom input. Most common first.
 export const BREAK_QUICK_PICKS = [600, 300, 180];

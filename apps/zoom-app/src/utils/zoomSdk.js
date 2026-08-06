@@ -231,13 +231,13 @@ let activeOverlay = null;
 let overlayTimeLabel = null;
 
 // Where the readout sits on the frame: normalized (0-1) center of the text.
-// Top-center by default: above the organizer's face in camera mode, clear of
-// the Toastmasters logo in the top-left corner, and matching where the badge
-// sits in the Live tab's preview — centered above the main clock. The
-// organizer repositions it by dragging that badge; persisted because the
-// choice is about where their own face is, which does not change between
-// meetings.
-export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.5, y: 0.28 };
+// Upper-left by default, just below the Toastmasters logo that occupies the
+// card's actual top-left corner. Not centered: the middle of the tile is
+// where camera mode puts the organizer's head, which would hide a centered
+// readout. The organizer repositions it by dragging the badge on the Live
+// tab's preview; persisted because the choice is about where their own face
+// is, which does not change between meetings.
+export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.3 };
 
 // How tall the readout is, as a fraction of the frame. The +/- buttons beside
 // the drag badge step through this range; the floor keeps the text a readable

@@ -70,6 +70,9 @@ export function TimerProvider({ children }) {
     const savedHidden = loadHiddenBuiltinRoles();
     const merged = savedRules ? { ...DEFAULT_ROLE_RULES, ...savedRules } : { ...DEFAULT_ROLE_RULES };
     (savedHidden || []).forEach((r) => delete merged[r]);
+    // An interim build briefly shipped the break role under the name 'Break';
+    // drop any saved copy so it does not linger as a stray custom role.
+    delete merged['Break'];
     // After the saved rules on purpose: Break's thresholds are derived from
     // the length picked on the Live tab, never edited number by number, so a
     // stale copy that leaked into saved rules must not shadow the derivation.
@@ -230,6 +233,18 @@ export function TimerProvider({ children }) {
   // Lightweight name-only update (no timer reset, no overlay call)
   const updateSpeakerName = useCallback((name) => {
     setCurrentSpeaker(prev => prev ? { ...prev, name } : null);
+  }, []);
+
+  /**
+   * Detach the timer from the agenda without touching the agenda itself.
+   *
+   * For sessions that interrupt the running order rather than advance it — an
+   * ad-hoc break called while a speaker was loaded. Without this, finishing
+   * the break would mark that speaker's agenda item completed and advance past
+   * them, consuming a slot nobody spoke in.
+   */
+  const clearActiveSpeaker = useCallback(() => {
+    setActiveSpeakerId(null);
   }, []);
 
   const setCurrentSpeakerAction = useCallback((speaker) => {
@@ -480,6 +495,7 @@ export function TimerProvider({ children }) {
     resetTimer,
     setCurrentSpeaker: setCurrentSpeakerAction,
     updateSpeakerName,
+    clearActiveSpeaker,
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
@@ -508,6 +524,7 @@ export function TimerProvider({ children }) {
     resetTimer,
     setCurrentSpeakerAction,
     updateSpeakerName,
+    clearActiveSpeaker,
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
