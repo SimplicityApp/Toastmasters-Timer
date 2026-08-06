@@ -9,8 +9,8 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, DEFAULT_OVERLAY_MODE, LEGACY_OVERLAY_MODES, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
-import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
+import { saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -24,22 +24,6 @@ const DEBUG_PANEL_ENABLED =
 const PromptDebugControls = DEBUG_PANEL_ENABLED
   ? lazy(() => import('./PromptDebugControls'))
   : null;
-
-/**
- * The mode to open in: the organizer's saved choice, or Timer Card.
- *
- * An older build saved 'popout' and 'share' as modes of their own. 'popout' maps
- * to the stage, which is where that timer now lives; 'share' is dropped, because
- * starting a screen share is an outward-facing act and nobody should have one
- * begin on its own because of a preference set last week. Restoring the stage is
- * safe by contrast — on its own it shows nobody anything.
- */
-function resolveInitialMode() {
-  const persisted = loadOverlayMode();
-  const migrated = LEGACY_OVERLAY_MODES[persisted] || persisted;
-  const known = [OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
-  return known.includes(migrated) ? migrated : DEFAULT_OVERLAY_MODE;
-}
 
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
@@ -100,7 +84,11 @@ export default memo(function LiveTab() {
   // the color up for the whole meeting.
   const [revealFaceWhenIdle, setRevealFaceWhenIdle] = useState(loadRevealFaceWhenIdle);
 
-  const [overlayMode, setOverlayModeLocal] = useState(resolveInitialMode);
+  // Seeded from the SDK module, which resolves the organizer's saved mode
+  // itself at load time. The menu and the pipeline must never disagree about
+  // the mode: showing "Timer + Camera" while the module pushes card-mode
+  // filters is a full card over the organizer's face.
+  const [overlayMode, setOverlayModeLocal] = useState(getOverlayMode);
 
   // A speech is under way. A pause counts as active — the speech is on hold, not
   // over — which is why this tracks elapsedTime rather than isRunning alone.
@@ -779,7 +767,7 @@ export default memo(function LiveTab() {
           <div className="flex items-center gap-3 flex-1">
             <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
             <p className="text-sm text-yellow-800 font-medium">
-              Your video is turned off. Please turn on your video to use the Timer Card.
+              Your video is turned off. Please turn on your video to show the timer on it.
             </p>
           </div>
           <button

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
 import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
-import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
+import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, setOverlayTimeLabel, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { recordSpeechFinished } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
@@ -120,6 +120,11 @@ export function TimerProvider({ children }) {
         setElapsedTime(rounded);
         liveElapsedRef.current = rounded;
 
+        // Zoom-specific: once a second, repaint the count-up participants see
+        // on the card. The SDK ignores this in every mode that does not render
+        // a card frame, and coalesces pushes a slow client cannot keep up with.
+        setOverlayTimeLabel(formatTime(rounded));
+
         // --- batch status update (1c) ---
         const speaker = currentSpeakerRef.current;
         if (speaker && speaker.rules) {
@@ -155,6 +160,8 @@ export function TimerProvider({ children }) {
     }
     // baseElapsedRef is already set to current elapsed (from stopTimer or initial 0)
     const initialStatus = calculateStatus(baseElapsedRef.current, currentSpeakerRef.current.rules);
+    // Before the push, so the first frame already carries the readout.
+    setOverlayTimeLabel(formatTime(baseElapsedRef.current));
     applyOverlay(getBackgroundUrl(initialStatus));
     previousStatusRef.current = initialStatus;
     setIsRunning(true);
@@ -180,6 +187,9 @@ export function TimerProvider({ children }) {
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
+    // Before any overlay call below: the speech is over, so nothing pushed
+    // from here on may carry its readout. Clearing never re-pushes on its own.
+    setOverlayTimeLabel(null);
     if (options?.skipVideo) return;
     // Stage modes are skipped entirely: removeOverlay there would stop the share
     // or dock the timer window.

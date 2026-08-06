@@ -12,6 +12,7 @@ vi.mock('../utils/zoomSdk', () => ({
   isOverlayActive: vi.fn(() => false),
   getOverlayMode: vi.fn(() => 'card'),
   isVideoOverlayMode: vi.fn(() => true),
+  setOverlayTimeLabel: vi.fn(),
   OVERLAY_MODE_CARD: 'card',
 }));
 vi.mock('../utils/posthog', () => ({ trackEvent: vi.fn() }));

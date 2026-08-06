@@ -21,26 +21,28 @@ import {
 // They are not simultaneous — Zoom refuses to undock an app that is being shared
 // — so the stage hides the window button while a share is running.
 //
-// The stage leads because it leaves the organizer's video alone; the video modes
-// follow for anyone who prefers the color on their own tile.
+// Timer + Camera leads because it is the default: the color rides on the
+// organizer's tile without taking their face away. Timer Only follows for
+// anyone who prefers the color alone, and the full-screen timer comes last as
+// the deliberate act it is — sharing or popping out a whole window.
 export const OVERLAY_MODES = [
-  {
-    mode: OVERLAY_MODE_STAGE,
-    Icon: Maximize2,
-    label: 'Timer Stage',
-    description: 'Full-size timer to share or pop out',
-  },
-  {
-    mode: OVERLAY_MODE_CARD,
-    Icon: Monitor,
-    label: 'Timer Card',
-    description: 'Color replaces your video',
-  },
   {
     mode: OVERLAY_MODE_CAMERA,
     Icon: Camera,
     label: 'Timer + Camera',
     description: 'Color behind your face',
+  },
+  {
+    mode: OVERLAY_MODE_CARD,
+    Icon: Monitor,
+    label: 'Timer Only',
+    description: 'Color replaces your video',
+  },
+  {
+    mode: OVERLAY_MODE_STAGE,
+    Icon: Maximize2,
+    label: 'Full-Screen Timer',
+    description: 'Full-size timer to share or pop out',
   },
 ];
 
