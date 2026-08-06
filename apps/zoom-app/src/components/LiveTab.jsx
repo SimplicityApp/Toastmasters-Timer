@@ -8,9 +8,9 @@ import TimerStage from './TimerStage';
 import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, DEFAULT_OVERLAY_MODE, LEGACY_OVERLAY_MODES, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
-import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE, BREAK_QUICK_PICKS, DEFAULT_BREAK_SECONDS, deriveBreakRules, getDisplaySeconds } from '@toastmaster-timer/shared';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, getOverlayTimeScale, setOverlayTimeScale, isOverlayTimeVisible, setOverlayTimeVisible, setOverlayTimeLabel, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
+import { formatTime, saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -24,22 +24,6 @@ const DEBUG_PANEL_ENABLED =
 const PromptDebugControls = DEBUG_PANEL_ENABLED
   ? lazy(() => import('./PromptDebugControls'))
   : null;
-
-/**
- * The mode to open in: the organizer's saved choice, or Timer Card.
- *
- * An older build saved 'popout' and 'share' as modes of their own. 'popout' maps
- * to the stage, which is where that timer now lives; 'share' is dropped, because
- * starting a screen share is an outward-facing act and nobody should have one
- * begin on its own because of a preference set last week. Restoring the stage is
- * safe by contrast — on its own it shows nobody anything.
- */
-function resolveInitialMode() {
-  const persisted = loadOverlayMode();
-  const migrated = LEGACY_OVERLAY_MODES[persisted] || persisted;
-  const known = [OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
-  return known.includes(migrated) ? migrated : DEFAULT_OVERLAY_MODE;
-}
 
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
@@ -57,6 +41,7 @@ export default memo(function LiveTab() {
     resetTimer,
     setCurrentSpeaker,
     updateSpeakerName,
+    clearActiveSpeaker,
     finishCurrentSpeech,
     roleRules,
     roleOptions,
@@ -71,6 +56,10 @@ export default memo(function LiveTab() {
   const [speakerName, setSpeakerName] = useState(currentSpeaker?.name || '');
   const [selectedRole, setSelectedRole] = useState(currentSpeaker?.role || 'Standard Speech');
   const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
+  // Break Time counts down from this. Not persisted: 10 minutes is the meeting
+  // norm, and a club that broke for 5 yesterday should not silently break for
+  // 5 forever.
+  const [breakSeconds, setBreakSeconds] = useState(DEFAULT_BREAK_SECONDS);
   const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
 
@@ -100,7 +89,50 @@ export default memo(function LiveTab() {
   // the color up for the whole meeting.
   const [revealFaceWhenIdle, setRevealFaceWhenIdle] = useState(loadRevealFaceWhenIdle);
 
-  const [overlayMode, setOverlayModeLocal] = useState(resolveInitialMode);
+  // Seeded from the SDK module, which resolves the organizer's saved mode
+  // itself at load time. The menu and the pipeline must never disagree about
+  // the mode: showing "Timer + Camera" while the module pushes card-mode
+  // filters is a full card over the organizer's face.
+  const [overlayMode, setOverlayModeLocal] = useState(getOverlayMode);
+
+  // Where the count-up sits on the pushed frame, mirrored from the SDK module
+  // so the drag badge follows the pointer without a bridge push per move.
+  const [readoutPosition, setReadoutPosition] = useState(getOverlayTimePosition);
+  const [readoutScale, setReadoutScale] = useState(getOverlayTimeScale);
+  const [readoutVisible, setReadoutVisible] = useState(isOverlayTimeVisible);
+
+  /** Follow the drag live; hand the position to Zoom only on release. */
+  const handleReadoutPositionChange = (position, { commit } = {}) => {
+    setReadoutPosition(position);
+    if (commit) {
+      setOverlayTimePosition(position);
+      (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_position_moved', {
+        x: Math.round(position.x * 100) / 100,
+        y: Math.round(position.y * 100) / 100,
+        overlay_mode: overlayMode,
+      }));
+    }
+  };
+
+  /** One +/- press; the SDK clamps and reports what it actually applied. */
+  const handleAdjustReadoutScale = (direction) => {
+    const applied = setOverlayTimeScale(readoutScale + direction * 0.03);
+    setReadoutScale(applied);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_scale_adjusted', {
+      scale: Math.round(applied * 100) / 100,
+      overlay_mode: overlayMode,
+    }));
+  };
+
+  const handleToggleReadoutVisible = () => {
+    const visible = !readoutVisible;
+    setReadoutVisible(visible);
+    setOverlayTimeVisible(visible);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_visibility_toggled', {
+      visible,
+      overlay_mode: overlayMode,
+    }));
+  };
 
   // A speech is under way. A pause counts as active — the speech is on hold, not
   // over — which is why this tracks elapsedTime rather than isRunning alone.
@@ -187,6 +219,11 @@ export default memo(function LiveTab() {
       // If custom role and has custom rules, update local state (merge so missing graceAfterRed is filled)
       if (currentSpeaker.role === 'Custom' && currentSpeaker.rules) {
         setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...currentSpeaker.rules });
+      }
+      // A break loaded from the agenda carries its length in its rules; the
+      // picker has to show that length, not whatever was picked last.
+      if (currentSpeaker.role === BREAK_ROLE && currentSpeaker.rules?.red) {
+        setBreakSeconds(currentSpeaker.rules.red);
       }
       // If switching to Custom role but no rules yet, keep current customRules (don't reset)
     } else {
@@ -297,6 +334,15 @@ export default memo(function LiveTab() {
     }
     if (!isVideoOverlayMode(overlayMode)) return;
     if (wantsColorNow) {
+      // A held swatch previews everything a live speech will show, the
+      // count-up included, so the organizer can place and size it before
+      // anyone speaks. While the timer runs, TimerContext owns the label.
+      if (previewColor && !isRunning) {
+        setOverlayTimeLabel(formatTime(getDisplaySeconds(elapsedTime, currentSpeaker?.rules)));
+      } else if (!speechActive) {
+        // Idle with no swatch held: nothing to count, so no readout.
+        setOverlayTimeLabel(null);
+      }
       const imageUrl = getBackgroundUrl(desiredStatus);
       addDebugLog(`Applying overlay: ${desiredStatus} -> ${imageUrl}`, 'info');
       // Usually redundant with TimerContext's own push on status change; the
@@ -309,9 +355,14 @@ export default memo(function LiveTab() {
       // dialog in camera mode, or delete the user's own video filter in card.
     } else if (isOverlayActive()) {
       addDebugLog('Removing overlay (no speech in progress)', 'info');
+      // A preview may have set the readout; the teardown must not leave it
+      // behind for the next push. Clearing never re-pushes on its own.
+      setOverlayTimeLabel(null);
       removeOverlay();
     }
-  }, [overlayMode, wantsColorNow, desiredStatus, clearGeneration]);
+    // previewColor is listed on its own because desiredStatus can hide a
+    // swatch change: previewing the color the timer already shows.
+  }, [overlayMode, wantsColorNow, desiredStatus, previewColor, clearGeneration]);
 
   // Log when status changes
   useEffect(() => {
@@ -385,8 +436,15 @@ export default memo(function LiveTab() {
   const handleRoleChange = (role) => {
     const previousRole = selectedRole;
     setSelectedRole(role);
-    // Always update current speaker, even if name is empty
-    const rules = role === 'Custom' ? customRules : undefined;
+    // Always update current speaker, even if name is empty. Custom and Break
+    // carry their rules on the speaker: Custom's are edited by hand, Break's
+    // are derived from the length picked below.
+    const rules =
+      role === 'Custom' ? customRules : role === BREAK_ROLE ? deriveBreakRules(breakSeconds) : undefined;
+    // A break called mid-agenda interrupts the running order, it does not
+    // stand in for whoever was loaded: detach so finishing the break neither
+    // completes that speaker's slot nor advances past them.
+    if (role === BREAK_ROLE) clearActiveSpeaker();
     setCurrentSpeaker({
       name: speakerName || '',
       role,
@@ -434,11 +492,30 @@ export default memo(function LiveTab() {
     return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
   }, [selectedRole, roleRules]);
 
+  // Spelled in time-left terms, because that is what the countdown shows.
+  const breakExplanation = useMemo(() => {
+    const rules = deriveBreakRules(breakSeconds);
+    return `Counts down from ${formatTimeReadable(rules.red)}. Green when ${formatTimeReadable(rules.red - rules.green)} left, yellow when ${formatTimeReadable(rules.red - rules.yellow)} left, red when time is up.`;
+  }, [breakSeconds]);
+
   // Just the state: the overlay effect pushes the swatch and, when it is toggled
   // back off, takes it down again. Pushing from here as well used to fight that
   // effect, which reapplied the timer's own status a render later.
   const handlePreviewColor = (color) => {
     setPreviewColor((held) => (held === color ? null : color));
+  };
+
+  /** Pick a break length; the phase thresholds re-derive from it. */
+  const handleBreakDurationChange = (seconds) => {
+    setBreakSeconds(seconds);
+    setCurrentSpeaker({
+      name: speakerName || '',
+      role: BREAK_ROLE,
+      rules: deriveBreakRules(seconds),
+    });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('break_duration_changed', {
+      seconds,
+    }));
   };
 
   const handleStart = () => {
@@ -450,9 +527,15 @@ export default memo(function LiveTab() {
         return;
       }
     }
-    // Ensure current speaker is set with correct rules
-    // Get rules from roleRules if not Custom, or use customRules if Custom
-    const rules = selectedRole === 'Custom' ? customRules : roleRules[selectedRole];
+    // Ensure current speaker is set with correct rules: hand-edited for
+    // Custom, derived from the picked length for Break, the role's own
+    // otherwise.
+    const rules =
+      selectedRole === 'Custom'
+        ? customRules
+        : selectedRole === BREAK_ROLE
+          ? deriveBreakRules(breakSeconds)
+          : roleRules[selectedRole];
     if (!rules) {
       showToast('Please set timing rules first', 'warning');
       return;
@@ -462,7 +545,7 @@ export default memo(function LiveTab() {
     setCurrentSpeaker({
       name: speakerName || '',
       role: selectedRole,
-      ...(selectedRole === 'Custom' && { rules }),
+      ...((selectedRole === 'Custom' || selectedRole === BREAK_ROLE) && { rules }),
     });
 
     startTimer();
@@ -530,10 +613,15 @@ export default memo(function LiveTab() {
 
   const handleFinish = () => {
     const currentAgendaId = activeSpeakerId;
+    // Captured before finishing resets the speaker: a break ending is the
+    // meeting pausing, not advancing, so the next speaker is never auto-loaded
+    // off the back of one — the organizer resumes the agenda when the room is
+    // back.
+    const wasBreak = Boolean(currentSpeaker?.rules?.countdown);
     finishCurrentSpeech();
 
     // Auto-load next uncompleted speaker from agenda
-    if (currentAgendaId) {
+    if (currentAgendaId && !wasBreak) {
       const currentIndex = agenda.findIndex(item => item.id === currentAgendaId);
       const nextSpeaker = agenda.slice(currentIndex + 1).find(item => !item.completed);
       if (nextSpeaker) {
@@ -779,7 +867,7 @@ export default memo(function LiveTab() {
           <div className="flex items-center gap-3 flex-1">
             <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
             <p className="text-sm text-yellow-800 font-medium">
-              Your video is turned off. Please turn on your video to use the Timer Card.
+              Your video is turned off. Please turn on your video to show the timer on it.
             </p>
           </div>
           <button
@@ -955,10 +1043,38 @@ export default memo(function LiveTab() {
         onRenameSpeaker={handleRenameSpeaker}
       />
 
-      {selectedRole !== 'Custom' && (
+      {selectedRole !== 'Custom' && selectedRole !== BREAK_ROLE && (
         <p className="text-xs text-gray-500 mt-1">
           Timing rules: {roleExplanation}
         </p>
+      )}
+
+      {selectedRole === BREAK_ROLE && (
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">Break Length</h3>
+            <TimeInputModeToggle mode={timeInputMode} onModeChange={(m) => { saveTimeInputMode(m); setTimeInputMode(m); }} />
+          </div>
+          <div className="flex justify-center gap-2">
+            {BREAK_QUICK_PICKS.map((seconds) => (
+              <button
+                key={seconds}
+                onClick={() => handleBreakDurationChange(seconds)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  breakSeconds === seconds
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {Math.round(seconds / 60)} min
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <TimeInput layout="inline" label="Custom" value={breakSeconds} onChange={handleBreakDurationChange} />
+          </div>
+          <p className="text-xs text-gray-500 text-center">{breakExplanation}</p>
+        </div>
       )}
 
       {selectedRole === 'Custom' && (
@@ -990,6 +1106,11 @@ export default memo(function LiveTab() {
         elapsedTime={elapsedTime}
         status={previewColor || currentStatus}
         rules={currentSpeaker?.rules}
+        readoutPosition={isVideoOverlayMode(overlayMode) ? readoutPosition : null}
+        onReadoutPositionChange={handleReadoutPositionChange}
+        readoutVisible={readoutVisible}
+        onToggleReadoutVisible={handleToggleReadoutVisible}
+        onAdjustReadoutScale={handleAdjustReadoutScale}
       />
 
       {!isRunning && (

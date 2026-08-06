@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { saveOverlayMode } from '@toastmaster-timer/shared';
 // The module's own source, so the API list can be checked against the calls it
 // actually makes rather than against a second hand-kept list.
 import zoomSdkSource from './zoomSdk.js?raw';
@@ -33,6 +34,10 @@ function stubCanvas() {
   const ctx = {
     scale: (...args) => operations.push(['scale', ...args]),
     drawImage: (...args) => operations.push(['drawImage', ...args.slice(1)]),
+    putImageData: () => operations.push(['putImageData']),
+    strokeText: (text, x, y) => operations.push(['strokeText', text, x, y]),
+    fillText: (text, x, y) => operations.push(['fillText', text, x, y]),
+    measureText: (text) => ({ width: String(text).length * 40 }),
     getImageData: (x, y, w, h) => ({
       width: w,
       height: h,
@@ -45,6 +50,11 @@ function stubCanvas() {
     throw new Error(`Unexpected createElement('${tag}')`);
   });
   return { operations, fakeCanvas };
+}
+
+/** The time readouts drawn onto frames, in the order they were rendered. */
+function renderedLabels(operations) {
+  return operations.filter(([op]) => op === 'fillText').map(([, text]) => text);
 }
 
 /**
@@ -111,6 +121,11 @@ async function loadModule() {
 // at import time, so a leftover value would follow the next loadModule().
 beforeEach(() => {
   localStorage.clear();
+  // Most of this suite predates Timer + Camera becoming the default and
+  // exercises the card pipeline's mechanics, so start in card mode explicitly.
+  // Tests about the persisted mode or the default save their own mode after
+  // this, or clear storage again.
+  saveOverlayMode('card');
 });
 
 afterEach(() => {
@@ -490,8 +505,8 @@ describe('camera resolution tracking', () => {
     // the optional capability rather than the whole SDK.
     expect(isSdkAvailable()).toBe(true);
     expect(sdkMock.config.mock.calls[1][0].capabilities).not.toContain('onMyMediaChange');
-    // Timer Card is what the retry has to preserve: it is the default mode and
-    // every other mode degrades to it.
+    // The filter pipeline is what the retry has to preserve: every video mode
+    // degrades to it, including the Timer + Camera default.
     expect(sdkMock.config.mock.calls[1][0].capabilities).toContain('setVideoFilter');
     expect(sdkMock.config.mock.calls[1][0].capabilities).toContain('deleteVideoFilter');
   });
@@ -1874,5 +1889,298 @@ describe('asking the SDK for something before init has finished', () => {
     await Promise.all([initializeZoomSdk(), initializeZoomSdk(), initializeZoomSdk()]);
 
     expect(sdkMock.config).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the overlay mode survives a webview reload', () => {
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({ status: 'ok' });
+  });
+
+  it('pushes through the pipeline of the persisted mode, not the default', async () => {
+    // Zoom re-creates the app webview every time the panel is closed and
+    // reopened. The Live tab restores the organizer's saved mode into its menu,
+    // but this module used to wake up in the default mode regardless — so with
+    // Timer + Camera saved, the menu said "Timer + Camera" while every push
+    // went through setVideoFilter, covering the organizer's face with the full
+    // card. The clear button could not help: the running timer re-pushed the
+    // filter on the next status change. Only RESET recovered, because it stops
+    // the speech before clearing.
+    saveOverlayMode('camera');
+    const { initializeZoomSdk, applyOverlay, getOverlayMode, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+
+    expect(getOverlayMode()).toBe(OVERLAY_MODE_CAMERA);
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/green.png',
+    });
+    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+  });
+
+  it('migrates the legacy popout mode to the stage', async () => {
+    saveOverlayMode('popout');
+    const { getOverlayMode, OVERLAY_MODE_STAGE } = await loadModule();
+    expect(getOverlayMode()).toBe(OVERLAY_MODE_STAGE);
+  });
+
+  it('falls back to the default for a mode no build ever saved', async () => {
+    // 'share' was a mode once; a saved preference must never start a share, so
+    // it maps to the default rather than to anything outward-facing.
+    saveOverlayMode('share');
+    const { getOverlayMode, DEFAULT_OVERLAY_MODE } = await loadModule();
+    expect(getOverlayMode()).toBe(DEFAULT_OVERLAY_MODE);
+  });
+
+  it('starts a fresh install in Timer + Camera', async () => {
+    // The default keeps the organizer's face on screen: color behind them, not
+    // over them.
+    localStorage.clear();
+    const { getOverlayMode, DEFAULT_OVERLAY_MODE, OVERLAY_MODE_CAMERA } = await loadModule();
+    expect(DEFAULT_OVERLAY_MODE).toBe(OVERLAY_MODE_CAMERA);
+    expect(getOverlayMode()).toBe(OVERLAY_MODE_CAMERA);
+  });
+
+  it('degrades Timer + Camera to the card pipeline when the client refused setVirtualBackground', async () => {
+    // Camera is the default now, so a client without setVirtualBackground must
+    // still show the color signal — as a plain card — rather than nothing.
+    localStorage.clear();
+    stubImage();
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['setVirtualBackground'] });
+    const { initializeZoomSdk, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledWith({ imageData: expect.anything() });
+  });
+});
+
+describe('the count-up on the pushed card', () => {
+  beforeEach(() => {
+    stubImage();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({ status: 'ok' });
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+  });
+
+  it('bakes the elapsed time into card-mode frames', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Participants watching the card see the time, not just the color.
+    expect(renderedLabels(operations)).toContain('00:05');
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-pushes the frame each time the readout advances', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    setOverlayTimeLabel('00:06');
+    // The setter re-pushes through the queue; let it drain.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(renderedLabels(operations)).toContain('00:06');
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-push just because the readout was cleared', async () => {
+    stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Null means the speech is over; the teardown that follows owns the tile,
+    // and a repaint here would race it.
+    setOverlayTimeLabel(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
+  });
+
+  it('bakes the readout into Timer + Camera frames too', async () => {
+    const { operations } = stubCanvas();
+    saveOverlayMode('camera');
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // A frame carrying the time is different every second, so the fileUrl
+    // shortcut cannot serve it: the pixels have to cross the bridge.
+    expect(renderedLabels(operations)).toContain('00:05');
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
+    expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
+  });
+
+  it('re-pushes the camera-mode frame when the readout advances', async () => {
+    const { operations } = stubCanvas();
+    saveOverlayMode('camera');
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    setOverlayTimeLabel('00:06');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(renderedLabels(operations)).toContain('00:06');
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the cheap fileUrl push while camera mode is idle', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    const { initializeZoomSdk, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    // No speech, no readout — the Zoom client fetches the image itself.
+    await applyOverlay('https://zoom.example/backgrounds/blue.png');
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/blue.png',
+    });
+  });
+
+  it('moves the readout where the organizer dragged it, and remembers it', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, setOverlayTimePosition, applyOverlay } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+    const firstX = operations.find(([op]) => op === 'fillText')[2];
+
+    setOverlayTimePosition({ x: 0.85, y: 0.85 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const laterX = operations.filter(([op]) => op === 'fillText').at(-1)[2];
+    expect(laterX).toBeGreaterThan(firstX);
+    // Persisted: where the organizer's face is does not change between
+    // meetings, so neither should where the readout dodges it to.
+    const { loadOverlayTimeReadout } = await import('@toastmaster-timer/shared');
+    expect(loadOverlayTimeReadout()).toMatchObject({ x: 0.85, y: 0.85 });
+  });
+
+  it('resizes the readout from the +/- controls, clamped and remembered', async () => {
+    stubCanvas();
+    const {
+      initializeZoomSdk, setOverlayTimeLabel, setOverlayTimeScale, applyOverlay,
+      OVERLAY_TIME_SCALE_MAX,
+    } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Absurd values stop at the bound rather than filling the frame.
+    const applied = setOverlayTimeScale(5);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(applied).toBe(OVERLAY_TIME_SCALE_MAX);
+    // The size change repaints the frame participants are watching.
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+    const { loadOverlayTimeReadout } = await import('@toastmaster-timer/shared');
+    expect(loadOverlayTimeReadout()).toMatchObject({ scale: OVERLAY_TIME_SCALE_MAX });
+  });
+
+  it('hides the readout on request, and stops repainting while hidden', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, setOverlayTimeVisible, applyOverlay } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Hiding must push a plain frame — the readout is up and has to come off.
+    setOverlayTimeVisible(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+    const labelsBefore = renderedLabels(operations).length;
+
+    // While hidden, the ticking clock repaints nothing: every frame it would
+    // push is identical to the one already showing.
+    setOverlayTimeLabel('00:06');
+    setOverlayTimeLabel('00:07');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(2);
+    expect(renderedLabels(operations)).toHaveLength(labelsBefore);
+
+    // Showing again brings the current time back, not the one from before.
+    setOverlayTimeVisible(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(3);
+    expect(renderedLabels(operations)).toContain('00:07');
+  });
+
+  it('clamps the readout inside the frame however far it is dragged', async () => {
+    const { operations } = stubCanvas();
+    const { renderTimeOnFrame } = await loadModule();
+    const base = { width: 640, height: 360, data: new Uint8ClampedArray(640 * 360 * 4) };
+
+    renderTimeOnFrame(base, '00:05', { x: 0, y: 0 });
+
+    const [, , x, y] = operations.find(([op]) => op === 'fillText');
+    // measureText stubs '00:05' at 200px wide; pad is 4% of height. Dragged to
+    // the corner, the text center still keeps the whole readout on the frame.
+    expect(x).toBeGreaterThanOrEqual(100);
+    expect(y).toBeGreaterThanOrEqual(Math.round(360 * 0.18) / 2);
+  });
+
+  it('still pushes the plain card when text rendering fails', async () => {
+    // The readout is a bonus; the color signal must survive a broken canvas.
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay, isOverlayActive } = await loadModule();
+    await initializeZoomSdk();
+    const brokenCtx = document.createElement('canvas').getContext('2d');
+    brokenCtx.putImageData = () => { throw new Error('no canvas here'); };
+
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    expect(renderedLabels(operations)).not.toContain('00:05');
+    expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
+    expect(isOverlayActive()).toBe(true);
+  });
+});
+
+describe('switching video modes never drops the teardown', () => {
+  it('still deletes the filter when a newer push supersedes the queued teardown', async () => {
+    // Switching card -> camera queues the filter teardown. A status push
+    // landing right behind it used to supersede it, so the full card stayed
+    // over the organizer's face while the camera-mode background went up
+    // underneath — with per-second count-up pushes, a routine race.
+    stubCanvas();
+    stubImage();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({ status: 'ok' });
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    const { initializeZoomSdk, applyOverlay, setOverlayMode, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    const switching = setOverlayMode(OVERLAY_MODE_CAMERA, null);
+    // Enqueued before the teardown has run, so it holds the newest request id.
+    const newerPush = applyOverlay('https://zoom.example/backgrounds/yellow.png');
+    await Promise.all([switching, newerPush]);
+
+    expect(sdkMock.deleteVideoFilter).toHaveBeenCalled();
   });
 });

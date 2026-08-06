@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   TIME_INPUT_MODE: 'toastmaster_time_input_mode',
   STAGE_CLOCK_HIDDEN: 'toastmaster_stage_clock_hidden',
   REVEAL_FACE_WHEN_IDLE: 'toastmaster_reveal_face_when_idle',
+  OVERLAY_TIME_READOUT: 'toastmaster_overlay_time_readout',
 };
 
 /**
@@ -183,6 +184,47 @@ export function loadOverlayMode() {
     return localStorage.getItem(STORAGE_KEYS.OVERLAY_MODE);
   } catch (error) {
     console.error('Failed to load overlay mode:', error);
+    return null;
+  }
+}
+
+/**
+ * Save the count-up readout settings for the pushed background: where it
+ * sits, how big it is, and whether it shows at all.
+ * @param {{x: number, y: number, scale: number, visible: boolean}} readout
+ */
+export function saveOverlayTimeReadout(readout) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.OVERLAY_TIME_READOUT, JSON.stringify(readout));
+  } catch (error) {
+    console.error('Failed to save overlay time readout:', error);
+  }
+}
+
+/**
+ * Load the count-up readout settings. Field-tolerant: each field comes back
+ * only if it was saved valid, so a caller can fall back per field.
+ * @returns {{x?: number, y?: number, scale?: number, visible?: boolean}|null}
+ */
+export function loadOverlayTimeReadout() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.OVERLAY_TIME_READOUT);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const readout = {};
+    const x = Number(parsed.x);
+    const y = Number(parsed.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      readout.x = Math.min(1, Math.max(0, x));
+      readout.y = Math.min(1, Math.max(0, y));
+    }
+    const scale = Number(parsed.scale);
+    if (Number.isFinite(scale) && scale > 0) readout.scale = scale;
+    if (typeof parsed.visible === 'boolean') readout.visible = parsed.visible;
+    return Object.keys(readout).length ? readout : null;
+  } catch (error) {
+    console.error('Failed to load overlay time readout:', error);
     return null;
   }
 }

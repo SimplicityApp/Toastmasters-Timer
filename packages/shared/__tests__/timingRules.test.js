@@ -4,6 +4,8 @@ import {
   DEFAULT_CUSTOM_RULES,
   getDefaultGraceAfterRed,
   detectRoleFromText,
+  deriveBreakRules,
+  BREAK_ROLE,
 } from '../timingRules.js';
 
 describe('DEFAULT_ROLE_RULES', () => {
@@ -222,5 +224,38 @@ describe('detectRoleFromText', () => {
     it('falls back to Standard Speech for unknown text', () => {
       expect(detectRoleFromText('unknown random text xyz')).toBe('Standard Speech');
     });
+  });
+});
+
+describe('deriveBreakRules', () => {
+  it('splits the total 60/80/100, so every break has the same rhythm', () => {
+    expect(deriveBreakRules(600)).toMatchObject({ green: 360, yellow: 480, red: 600 });
+    expect(deriveBreakRules(300)).toMatchObject({ green: 180, yellow: 240, red: 300 });
+    expect(deriveBreakRules(180)).toMatchObject({ green: 108, yellow: 144, red: 180 });
+  });
+
+  it('marks the rules as a countdown with no disqualification grace', () => {
+    expect(deriveBreakRules(600)).toMatchObject({ countdown: true, graceAfterRed: 0 });
+  });
+
+  it('clamps absurd lengths to something a timer can run', () => {
+    // A half-typed custom value must not produce a zero-length break.
+    expect(deriveBreakRules(0).red).toBe(30);
+    expect(deriveBreakRules(undefined).red).toBe(30);
+  });
+});
+
+describe('detectRoleFromText: breaks', () => {
+
+  it.each(['Break', 'break', 'Coffee Break', '10 min break', 'Break time'])(
+    'detects %s as a break',
+    (text) => {
+      expect(detectRoleFromText(text)).toBe(BREAK_ROLE);
+    }
+  );
+
+  it('still detects Ice Breaker as Ice Breaker, not a break', () => {
+    expect(detectRoleFromText('Ice Breaker')).toBe('Ice Breaker');
+    expect(detectRoleFromText('Icebreaker #1')).toBe('Ice Breaker');
   });
 });

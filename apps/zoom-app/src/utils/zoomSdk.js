@@ -1,4 +1,5 @@
 import zoomSdk from '@zoom/appssdk';
+import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout } from '@toastmaster-timer/shared';
 
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
@@ -74,15 +75,16 @@ const OVERLAY_CEILING_HEIGHT = 360;
  *
  * `required` keeps config() alive on a limited client: reject the full request
  * and it is retried with these alone, so only what the timer genuinely cannot run
- * without belongs here. Timer Card is the default mode and the core function;
- * every other mode degrades to it.
+ * without belongs here. The video filter is the core function: Timer + Camera is
+ * the default, but it degrades to the filter pipeline on clients that refuse
+ * setVirtualBackground, so the filter APIs are the ones nothing can stand in for.
  *
  * Keep in step with the zoomSdk.* calls below — a test asserts it, both ways.
  */
 export const USED_SDK_APIS = [
   { name: 'config', capability: null, required: true, purpose: 'Grants every capability below' },
-  { name: 'setVideoFilter', capability: 'setVideoFilter', required: true, purpose: 'Timer Card' },
-  { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Card' },
+  { name: 'setVideoFilter', capability: 'setVideoFilter', required: true, purpose: 'Timer Only' },
+  { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Only' },
   { name: 'setVirtualBackground', capability: 'setVirtualBackground', required: false, purpose: 'Timer + Camera' },
   { name: 'removeVirtualBackground', capability: 'removeVirtualBackground', required: false, purpose: 'Clearing Timer + Camera' },
   { name: 'getCurrentVirtualBackground', capability: 'getCurrentVirtualBackground', required: false, purpose: 'Leaving the user\'s own background alone' },
@@ -148,19 +150,40 @@ export function isApiAvailable(name) {
 export const OVERLAY_MODE_CARD = 'card';
 export const OVERLAY_MODE_CAMERA = 'camera';
 export const OVERLAY_MODE_STAGE = 'stage';
-// What the Live tab starts in when nothing is saved. Timer Card is the pick
-// because it is the only mode that changes nothing about the meeting on its own:
-// opening the app neither undocks a window nor starts a share, and the panel and
-// its tabs stay in front of the organizer. The stage is a deliberate choice the
-// organizer makes from the menu, never where they land.
-export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_CARD;
+// What the Live tab starts in when nothing is saved. Timer + Camera is the pick
+// because it keeps the organizer's face on screen: the color goes behind them
+// rather than over them, which is what a first-time organizer expects a video
+// timer to do. Like the card it changes nothing about the meeting on its own —
+// no window undocks and no share starts. The stage is a deliberate choice the
+// organizer makes from the menu, never where they land. On clients that never
+// granted setVirtualBackground, camera mode degrades to the card pipeline.
+export const DEFAULT_OVERLAY_MODE = OVERLAY_MODE_CAMERA;
 
 // Modes an older build may have persisted, before sharing and popping out became
 // actions taken from inside the stage rather than modes of their own. Only the
 // window one is carried over: a saved preference must never start a screen share.
 export const LEGACY_OVERLAY_MODES = { popout: OVERLAY_MODE_STAGE };
 
-let currentOverlayMode = OVERLAY_MODE_CARD;
+/**
+ * The organizer's saved mode, migrated and validated, or the default.
+ * Exported so the Live tab seeds its menu from the same answer.
+ */
+export function resolvePersistedOverlayMode() {
+  const persisted = loadOverlayMode();
+  const migrated = LEGACY_OVERLAY_MODES[persisted] || persisted;
+  const known = [OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
+  return known.includes(migrated) ? migrated : DEFAULT_OVERLAY_MODE;
+}
+
+// Starts on the *persisted* mode, never blindly on the default. Zoom re-creates
+// this webview every time the panel is closed and reopened, and the Live tab
+// restores the saved mode into its menu — so waking up on the default here put
+// the two out of agreement, and every push then drove the wrong pipeline. With
+// Timer + Camera saved, that meant setVideoFilter covering the organizer's face
+// with the full card while the menu promised their face would show; clearing
+// could not stick, because the running timer re-pushed the filter on the next
+// status change.
+let currentOverlayMode = resolvePersistedOverlayMode();
 
 /**
  * Whether a mode drives the video pipeline. The stage shows the color through the
@@ -191,10 +214,186 @@ let logCallback = null;
 const imageDataCache = new Map();
 
 // The overlay currently pushed to Zoom, or null if none:
-//   { url, mode, budget }
+//   { url, mode, budget, pipeline, label }
 // budget is the overlay size the pixels were rendered for, or null for a fileUrl
 // push, which carries no pixels and so never goes stale on a resolution change.
+// pipeline says which SDK pipeline the push went through ('filter' or
+// 'background'), which is no longer implied by the mode: Timer + Camera
+// degrades to the filter on clients that refused setVirtualBackground. label is
+// the elapsed-time readout baked into a filter frame, or null for a plain card.
 let activeOverlay = null;
+
+// The elapsed-time readout to render onto pushed frames, e.g. '02:35', or null
+// while no speech is being timed. Both video modes are image pushes, so the
+// count-up other participants see has to be baked into the pixels. In camera
+// mode that costs the fileUrl shortcut while a speech runs — a frame carrying
+// the time is different every second, so the pixels have to cross the bridge.
+let overlayTimeLabel = null;
+
+// Where the readout sits on the frame: normalized (0-1) center of the text.
+// Upper-left by default, just below the Toastmasters logo that occupies the
+// card's actual top-left corner. Not centered: the middle of the tile is
+// where camera mode puts the organizer's head, which would hide a centered
+// readout. The organizer repositions it by dragging the badge on the Live
+// tab's preview; persisted because the choice is about where their own face
+// is, which does not change between meetings.
+export const DEFAULT_OVERLAY_TIME_POSITION = { x: 0.18, y: 0.3 };
+
+// How tall the readout is, as a fraction of the frame. The +/- buttons beside
+// the drag badge step through this range; the floor keeps the text a readable
+// sliver rather than nothing, the ceiling keeps it from filling the tile.
+export const DEFAULT_OVERLAY_TIME_SCALE = 0.18;
+export const OVERLAY_TIME_SCALE_MIN = 0.06;
+export const OVERLAY_TIME_SCALE_MAX = 0.33;
+
+const storedReadout = loadOverlayTimeReadout();
+let overlayTimePosition =
+  storedReadout?.x !== undefined && storedReadout?.y !== undefined
+    ? { x: storedReadout.x, y: storedReadout.y }
+    : DEFAULT_OVERLAY_TIME_POSITION;
+let overlayTimeScale = storedReadout?.scale ?? DEFAULT_OVERLAY_TIME_SCALE;
+let overlayTimeVisible = storedReadout?.visible ?? true;
+
+function persistOverlayTimeReadout() {
+  saveOverlayTimeReadout({
+    x: overlayTimePosition.x,
+    y: overlayTimePosition.y,
+    scale: overlayTimeScale,
+    visible: overlayTimeVisible,
+  });
+}
+
+/**
+ * The readout the next frame should carry: the elapsed time, or null when
+ * there is none to show — no speech, or the organizer switched it off.
+ */
+function effectiveTimeLabel() {
+  return overlayTimeVisible ? overlayTimeLabel : null;
+}
+
+/** Repaint the pushed frame if it is carrying (or should now carry) a readout. */
+function repaintOverlayFrame() {
+  if (activeOverlay?.url && isVideoOverlayMode()) {
+    applyOverlay(activeOverlay.url);
+  }
+}
+
+/** @returns {{x: number, y: number}} Normalized center of the readout */
+export function getOverlayTimePosition() {
+  return { ...overlayTimePosition };
+}
+
+/**
+ * Move the readout and repaint the frame participants are watching.
+ * @param {{x: number, y: number}} position - Normalized (0-1) center
+ */
+export function setOverlayTimePosition(position) {
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const next = { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+  if (next.x === overlayTimePosition.x && next.y === overlayTimePosition.y) return;
+  overlayTimePosition = next;
+  persistOverlayTimeReadout();
+  // Only a frame that is actually carrying the readout needs repainting.
+  if (effectiveTimeLabel()) repaintOverlayFrame();
+}
+
+/** @returns {number} Readout height as a fraction of the frame */
+export function getOverlayTimeScale() {
+  return overlayTimeScale;
+}
+
+/**
+ * Resize the readout and repaint the frame participants are watching.
+ * @param {number} scale - Text height as a fraction of the frame; clamped
+ * @returns {number} The scale actually applied
+ */
+export function setOverlayTimeScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value)) return overlayTimeScale;
+  const next = Math.min(OVERLAY_TIME_SCALE_MAX, Math.max(OVERLAY_TIME_SCALE_MIN, value));
+  if (next === overlayTimeScale) return overlayTimeScale;
+  overlayTimeScale = next;
+  persistOverlayTimeReadout();
+  if (effectiveTimeLabel()) repaintOverlayFrame();
+  return overlayTimeScale;
+}
+
+/** @returns {boolean} Whether the readout is shown on pushed frames */
+export function isOverlayTimeVisible() {
+  return overlayTimeVisible;
+}
+
+/**
+ * Show or hide the readout, repainting the frame either way: hiding a readout
+ * that is up must push a plain frame, not merely stop updating.
+ * @param {boolean} visible
+ */
+export function setOverlayTimeVisible(visible) {
+  const next = Boolean(visible);
+  if (next === overlayTimeVisible) return;
+  overlayTimeVisible = next;
+  persistOverlayTimeReadout();
+  if (overlayTimeLabel) repaintOverlayFrame();
+}
+
+/**
+ * Set the elapsed-time readout and repaint the frame other participants see.
+ *
+ * Driven by the timer once per second while a speech runs. Each change
+ * re-pushes the visible frame — filter or background, whichever pipeline is
+ * up; the overlay queue coalesces pushes a slow client cannot keep up with, so
+ * the readout skips ahead rather than lagging behind. Clearing the label never
+ * re-pushes — null means the speech is over, and whatever teardown or status
+ * push follows owns the tile. A hidden readout never re-pushes either: the
+ * frame it would repaint is identical.
+ *
+ * @param {string|null} label - Formatted elapsed time, or null between speeches
+ */
+export function setOverlayTimeLabel(label) {
+  const next = label ?? null;
+  if (next === overlayTimeLabel) return;
+  overlayTimeLabel = next;
+  if (next && overlayTimeVisible) repaintOverlayFrame();
+}
+
+/**
+ * Bake the elapsed-time readout into a frame. Exported for testing.
+ *
+ * Drawn at the organizer's chosen position, clamped so the text never runs off
+ * the frame. White digits over a dark keyline stay readable on all four
+ * colors, yellow included — and over whatever the camera mode's cutout leaves
+ * visible around the face.
+ *
+ * @param {ImageData} base - Decoded background (not mutated; it is cached)
+ * @param {string} label - Formatted elapsed time
+ * @param {{x: number, y: number}} [position] - Normalized center of the text
+ * @param {number} [scale] - Text height as a fraction of the frame
+ * @returns {ImageData} A new frame with the readout drawn on
+ */
+export function renderTimeOnFrame(base, label, position = overlayTimePosition, scale = overlayTimeScale) {
+  const canvas = document.createElement('canvas');
+  canvas.width = base.width;
+  canvas.height = base.height;
+  const ctx = canvas.getContext('2d');
+  ctx.putImageData(base, 0, 0);
+  const fontSize = Math.round(base.height * scale);
+  ctx.font = `bold ${fontSize}px 'Helvetica Neue', Helvetica, Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const pad = Math.round(base.height * 0.04);
+  const textWidth = ctx.measureText(label).width;
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  const x = Math.round(clamp(position.x * base.width, pad + textWidth / 2, base.width - pad - textWidth / 2));
+  const y = Math.round(clamp(position.y * base.height, pad + fontSize / 2, base.height - pad - fontSize / 2));
+  ctx.lineWidth = Math.max(2, Math.round(fontSize / 12));
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.strokeText(label, x, y);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, x, y);
+  return ctx.getImageData(0, 0, base.width, base.height);
+}
 
 // Camera resolution reported by onMyMediaChange, or null until one arrives.
 let cameraResolution = null;
@@ -1378,19 +1577,30 @@ export function isOverlayActive() {
 }
 
 /**
- * Run an overlay SDK operation, one at a time, dropping any request that a newer
- * one has already superseded.
+ * Run an overlay SDK operation, one at a time, dropping any *push* that a newer
+ * request has already superseded.
  *
  * Each push is multiple MB across the webview -> native bridge and takes as long
  * as it takes. Without this, several pushes run concurrently and can land out of
  * order, leaving a stale color on screen after a newer one was requested.
+ *
+ * Only pushes are droppable. A queued removal must always run: it targets a
+ * different pipeline than the push that outran it, so skipping it leaves a card
+ * on the tile that nothing will ever take down. That is exactly how switching
+ * to Timer + Camera could trap the full card over the organizer's face — the
+ * mode switch queued the filter teardown, a status push landed behind it and
+ * superseded it, and the teardown never ran. Per-second count-up pushes make
+ * that race routine rather than rare.
+ *
  * @param {Function} op - Async operation to run
+ * @param {{supersedable?: boolean}} [options] - supersedable false marks a
+ *   removal, which newer requests must never skip
  * @returns {Promise<void>}
  */
-function enqueueOverlayOp(op) {
+function enqueueOverlayOp(op, { supersedable = true } = {}) {
   const requestId = ++overlayRequestId;
   const run = () => {
-    if (requestId !== overlayRequestId) {
+    if (supersedable && requestId !== overlayRequestId) {
       log('Skipping overlay request superseded by a newer one', 'info');
       return undefined;
     }
@@ -1428,7 +1638,10 @@ export async function setOverlayMode(mode, currentImageUrl) {
   } else {
     // Only the outgoing mode's pipeline: the incoming one is about to overwrite
     // its own, and setVirtualBackground replaces without a removal first.
-    await enqueueOverlayOp(() => removeOverlayInternal(pipelinesForMode(previousMode), previousMode));
+    await enqueueOverlayOp(
+      () => removeOverlayInternal(pipelinesForMode(previousMode), previousMode),
+      { supersedable: false }
+    );
   }
   currentOverlayMode = mode;
 
@@ -1805,6 +2018,18 @@ function isAlreadyShowing(imageUrl) {
   if (currentOverlayMode === OVERLAY_MODE_CAMERA) return false;
   if (!activeOverlay) return false;
   if (activeOverlay.url !== imageUrl || activeOverlay.mode !== currentOverlayMode) return false;
+  // A frame carrying a different time readout is a different frame — and so is
+  // one carrying the same readout somewhere else or at another size, right
+  // after a drag or a +/- press.
+  if ((activeOverlay.label ?? null) !== effectiveTimeLabel()) return false;
+  if (
+    activeOverlay.label &&
+    (activeOverlay.position?.x !== overlayTimePosition.x ||
+      activeOverlay.position?.y !== overlayTimePosition.y ||
+      activeOverlay.scale !== overlayTimeScale)
+  ) {
+    return false;
+  }
   // A fileUrl push is size-independent, so it is never stale.
   if (!activeOverlay.budget) return true;
   const budget = getOverlayBudget();
@@ -1838,23 +2063,33 @@ async function applyOverlayInternal(imageUrl) {
 
   try {
     if (sdkAvailable && zoomSdk) {
-      if (currentOverlayMode === OVERLAY_MODE_CAMERA) {
-        // Camera mode: use setVirtualBackground so user's face shows on top
-        if (isApiAvailable('setVirtualBackground')) {
-          // Before the first push of a session, and never once ours is up: what
-          // is on the video now is theirs, and it is the only chance to learn
-          // what to put back. No-ops on clients that cannot report it.
-          if (!virtualBackgroundApplied) await snapshotUserBackground();
-          // setVirtualBackground accepts a fileUrl, which lets the Zoom client
-          // fetch the image itself. That skips both the decode and the multi-MB
-          // ImageData transfer across the bridge. setVideoFilter has no such
-          // option, so this shortcut is camera mode only.
+      // Camera mode degrades to the filter pipeline on clients that refuse
+      // setVirtualBackground: the face is lost but the color signal — the whole
+      // point of the timer — survives. Camera is the default mode now, so a
+      // silent no-op here would mean a first-run organizer sees nothing at all.
+      const cameraModeGranted =
+        currentOverlayMode === OVERLAY_MODE_CAMERA && isApiAvailable('setVirtualBackground');
+      if (currentOverlayMode === OVERLAY_MODE_CAMERA && !cameraModeGranted && isApiAvailable('setVideoFilter')) {
+        log('Client did not grant setVirtualBackground; showing Timer + Camera as a plain card', 'warn');
+      }
+      if (cameraModeGranted) {
+        // Before the first push of a session, and never once ours is up: what
+        // is on the video now is theirs, and it is the only chance to learn
+        // what to put back. No-ops on clients that cannot report it.
+        if (!virtualBackgroundApplied) await snapshotUserBackground();
+        const label = effectiveTimeLabel();
+        // setVirtualBackground accepts a fileUrl, which lets the Zoom client
+        // fetch the image itself. That skips both the decode and the multi-MB
+        // ImageData transfer across the bridge — but only a frame with nothing
+        // baked into it can take it. While a speech runs, the frame carries the
+        // count-up and is different every second, so the pixels have to cross.
+        if (!label) {
           try {
             log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
             const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
             log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
             // No pixels pushed, so no budget to go stale.
-            activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null };
+            activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null, pipeline: 'background' };
             markVirtualBackgroundApplied(true);
             lastError = null;
             return;
@@ -1863,28 +2098,52 @@ async function applyOverlayInternal(imageUrl) {
             // network, proxy, TLS inspection). Fall back to shipping the pixels.
             log(`fileUrl virtual background failed: ${fileUrlError.message || fileUrlError.name}. Falling back to imageData.`, 'warn');
           }
-
-          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
-          const budget = getOverlayBudget();
-          const imageData = await loadImageAsImageData(imageUrl);
-          log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
-          const result = await zoomSdk.setVirtualBackground({ imageData });
-          log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
-          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
-          markVirtualBackgroundApplied(true);
-          lastError = null;
-          return;
         }
+
+        log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+        const budget = getOverlayBudget();
+        const imageData = await loadImageAsImageData(imageUrl);
+        log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
+        let frame = imageData;
+        if (label) {
+          try {
+            frame = renderTimeOnFrame(imageData, label);
+          } catch (error) {
+            // The readout is a bonus; the color is the signal. Push the plain
+            // background rather than nothing.
+            log(`Could not render the time onto the background: ${error.message || error.name}`, 'warn');
+          }
+        }
+        const result = await zoomSdk.setVirtualBackground({ imageData: frame });
+        log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
+        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background', label, position: overlayTimePosition, scale: overlayTimeScale };
+        markVirtualBackgroundApplied(true);
+        lastError = null;
+        return;
       } else {
-        // Card mode: use setVideoFilter (covers entire video)
+        // Card pipeline: setVideoFilter covers the entire video. Both Timer
+        // Only and a degraded Timer + Camera land here.
         if (isApiAvailable('setVideoFilter')) {
           log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
           const budget = getOverlayBudget();
           const imageData = await loadImageAsImageData(imageUrl);
           log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
-          const result = await zoomSdk.setVideoFilter({ imageData });
+          // Bake the count-up into the frame while a speech is running, so the
+          // participants watching the card see the time too, not just the color.
+          const label = effectiveTimeLabel();
+          let frame = imageData;
+          if (label) {
+            try {
+              frame = renderTimeOnFrame(imageData, label);
+            } catch (error) {
+              // The readout is a bonus; the color is the signal. Push the
+              // plain card rather than nothing.
+              log(`Could not render the time onto the card: ${error.message || error.name}`, 'warn');
+            }
+          }
+          const result = await zoomSdk.setVideoFilter({ imageData: frame });
           log(`Successfully applied video filter overlay. Result: ${JSON.stringify(result)}`, 'info');
-          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget };
+          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'filter', label, position: overlayTimePosition, scale: overlayTimeScale };
           markVideoFilterApplied(true);
           lastError = null;
           if (result && result.status) {
@@ -1951,7 +2210,7 @@ export function removeOverlay() {
   // and the window are the organizer's to end, not something a status change or
   // a finished speech should tear down under them.
   if (!isVideoOverlayMode(mode)) return Promise.resolve();
-  return enqueueOverlayOp(() => removeOverlayInternal(ALL_PIPELINES, mode));
+  return enqueueOverlayOp(() => removeOverlayInternal(ALL_PIPELINES, mode), { supersedable: false });
 }
 
 /**
