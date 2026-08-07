@@ -15,7 +15,7 @@
     "@headlessui/react": "^1.7.17",
     "@toastmaster-timer/shared": "file:../../packages/shared",
     "lucide-react": "^0.294.0",
-    "posthog-js": "^1.334.1",
+    "posthog-js": "^1.410.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0"
