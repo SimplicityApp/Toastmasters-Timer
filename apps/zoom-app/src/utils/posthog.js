@@ -16,6 +16,9 @@ export function initPostHog() {
   try {
     posthog.init(posthogKey, {
       api_host: posthogHost,
+      // posthogHost is our managed reverse proxy (e.simple-tech.app), so links
+      // back to PostHog (toolbar, survey editor) need the real app host.
+      ui_host: 'https://us.posthog.com',
       person_profiles: 'always',
       // Enable autocapture for pageviews and clicks
       autocapture: true,
