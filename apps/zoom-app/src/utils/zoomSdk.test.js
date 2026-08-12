@@ -1744,7 +1744,7 @@ describe('putting the user back on their own background', () => {
 
     // getVirtualBackgroundData turns the snapshotted id into pixels, which is the
     // only input setVirtualBackground accepts for an image.
-    expect(sdkMock.callZoomApi).toHaveBeenCalledWith('getVirtualBackgroundData', { id: 'vb-77' });
+    expect(sdkMock.callZoomApi).toHaveBeenCalledWith('getVirtualBackgroundData', { id: 'vb-77' }, expect.any(Number));
     expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
     // Removal is what used to strip them bare, and it is also the one call here
     // that costs a confirmation dialog.
@@ -1788,7 +1788,7 @@ describe('putting the user back on their own background', () => {
 
     const result = await clearVideoPipelines();
 
-    expect(sdkMock.callZoomApi).toHaveBeenCalledWith('getVirtualBackgroundData', { id: 'vb-77' });
+    expect(sdkMock.callZoomApi).toHaveBeenCalledWith('getVirtualBackgroundData', { id: 'vb-77' }, expect.any(Number));
     expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
     expect(result).toMatchObject({ ok: true, lostBackground: false });
   });
@@ -1923,7 +1923,7 @@ describe('putting the user back on their own background', () => {
     await clearVideoPipelines();
 
     // The kitchen goes back, not the cached bookshelf.
-    expect(sdkMock.callZoomApi).toHaveBeenLastCalledWith('getVirtualBackgroundData', { id: 'vb-99' });
+    expect(sdkMock.callZoomApi).toHaveBeenLastCalledWith('getVirtualBackgroundData', { id: 'vb-99' }, expect.any(Number));
     expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: kitchen });
     expect(pixelFetches()).toBe(2);
   });
@@ -1961,6 +1961,30 @@ describe('putting the user back on their own background', () => {
     expect(JSON.parse(localStorage.getItem('toastmaster_zoom_previous_background'))).toEqual({
       type: 'none',
     });
+  });
+
+  it('bounds the pixel fetch well under the SDK default, so FINISH cannot stall on it', async () => {
+    // A client that takes the call and never answers is what an apiName it does
+    // not recognise looks like from here. callZoomApi gives up on its own after
+    // 10s, which would freeze the handover between pressing FINISH and the video
+    // coming back, then remove anyway.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'image', id: 'vb-77', name: 'bookshelf.png' })
+    );
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    withBackgroundReader({ id: 'timer-red' });
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: fakePixels() });
+
+    await clearVideoPipelines();
+
+    const [, , timeout] = sdkMock.callZoomApi.mock.calls.find(
+      ([api]) => api === 'getVirtualBackgroundData'
+    );
+    expect(timeout).toBeGreaterThan(0);
+    expect(timeout).toBeLessThan(10000);
   });
 
   it('reaches the getters that have no wrapper method through the bridge', async () => {

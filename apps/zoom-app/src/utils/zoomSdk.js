@@ -181,14 +181,27 @@ export function isApiAvailable(name) {
  *
  * @param {string} name - SDK method name
  * @param {object} [data] - Request payload, omitted for the getters that take none
+ * @param {number} [timeoutMs] - Bridge path only; the wrappers take no timeout
  * @returns {Promise<any>}
  */
-function callSdkApi(name, data) {
+function callSdkApi(name, data, timeoutMs) {
   if (typeof zoomSdk[name] === 'function') {
     return data === undefined ? zoomSdk[name]() : zoomSdk[name](data);
   }
-  return zoomSdk.callZoomApi(name, data);
+  return zoomSdk.callZoomApi(name, data, timeoutMs);
 }
+
+// How long to wait for the pixels of the user's own background.
+//
+// callZoomApi rejects on its own after 10s, which is correct for a call the user
+// is waiting on and far too long for this one: it sits between pressing FINISH
+// and the video coming back. A client that takes the call but never answers —
+// which is what an unrecognised apiName looks like from here — would freeze the
+// handover for ten seconds and then remove anyway.
+//
+// Short is safe because this is almost always a cache hit: the prefetch starts
+// when the speech starts, minutes before any restore needs it.
+const BACKGROUND_PIXELS_TIMEOUT_MS = 4000;
 
 // Overlay mode constants.
 //
@@ -578,6 +591,28 @@ function sameBackground(a, b) {
 }
 
 /**
+ * Normalize a getter's response, and say what it was when that fails.
+ *
+ * The shape is not in any shipped typing, so a response we do not recognise is a
+ * real possibility rather than a theoretical one — and it is indistinguishable
+ * from an ungranted API at the call site. Naming the keys turns one debug-panel
+ * read into the answer, without dumping an ImageData into the log.
+ *
+ * @param {string} api - Which getter answered, for the message
+ * @param {any} raw
+ * @returns {{type: string, id?: string, name?: string}|null}
+ */
+function readingFrom(api, raw) {
+  const reading = normalizeVirtualBackground(raw);
+  if (!reading) {
+    const shape =
+      raw && typeof raw === 'object' ? `keys: ${Object.keys(raw).join(', ') || 'none'}` : `${typeof raw}: ${raw}`;
+    log(`${api} answered in a shape this app does not recognise (${shape})`, 'warn');
+  }
+  return reading;
+}
+
+/**
  * What is on the user's video right now, or null when the client cannot say.
  * @returns {Promise<{type: string, id?: string, name?: string}|null>}
  */
@@ -586,11 +621,15 @@ async function readCurrentVirtualBackground() {
     // Spelled out rather than indexed, so a test can see which methods this
     // module calls and hold USED_SDK_APIS to them.
     if (isApiAvailable('getCurrentVirtualBackground')) {
-      return normalizeVirtualBackground(await callSdkApi('getCurrentVirtualBackground'));
+      return readingFrom('getCurrentVirtualBackground', await callSdkApi('getCurrentVirtualBackground'));
     }
     if (isApiAvailable('getVirtualBackgrounds')) {
-      return normalizeVirtualBackground(await callSdkApi('getVirtualBackgrounds'));
+      return readingFrom('getVirtualBackgrounds', await callSdkApi('getVirtualBackgrounds'));
     }
+    log(
+      'Client granted neither getCurrentVirtualBackground nor getVirtualBackgrounds; what the user had cannot be read at all',
+      'warn'
+    );
     return null;
   } catch (error) {
     log(`Could not read the current virtual background: ${error.message || error.name}`, 'warn');
@@ -609,10 +648,21 @@ async function readCurrentVirtualBackground() {
  * @returns {Promise<ImageData|null>} null when the client cannot supply them
  */
 async function readBackgroundPixels(id) {
-  if (!id || !isApiAvailable('getVirtualBackgroundData')) return null;
+  if (!id) return null;
+  // Said out loud, because this is the difference between the organizer getting
+  // their bookshelf back and getting Zoom's "reset to none" dialog. It used to
+  // return null in silence, which made an un-ticked Marketplace capability look
+  // exactly like a broken restore.
+  if (!isApiAvailable('getVirtualBackgroundData')) {
+    log(
+      'Client did not grant getVirtualBackgroundData, so the pixels of the user\'s own background cannot be read. Enable it for the app in the Zoom Marketplace; without it a clear can only remove.',
+      'warn'
+    );
+    return null;
+  }
   if (previousBackgroundPixels?.id === id) return previousBackgroundPixels.imageData;
   try {
-    const raw = await callSdkApi('getVirtualBackgroundData', { id });
+    const raw = await callSdkApi('getVirtualBackgroundData', { id }, BACKGROUND_PIXELS_TIMEOUT_MS);
     // Tolerant for the same reason normalizeVirtualBackground is: the response
     // shape cannot be pinned down from any shipped typing, so accept the payload
     // under any plausible wrapping and give up rather than guess.
@@ -650,9 +700,18 @@ async function readBackgroundPixels(id) {
  */
 async function snapshotUserBackground() {
   const current = await readCurrentVirtualBackground();
-  if (!current) return;
+  if (!current) {
+    // Also said out loud. With no snapshot there is nothing to restore to, and
+    // every clear from here can only remove — which reads to the organizer as the
+    // restore being broken rather than as the read never having happened.
+    log('Could not read what the user had, so a clear will only be able to remove', 'warn');
+    return;
+  }
   writePreviousBackground(current);
-  if (current.type === 'image' && current.id) readBackgroundPixels(current.id).catch(() => {});
+  if (current.type === 'image') {
+    if (current.id) readBackgroundPixels(current.id).catch(() => {});
+    else log(`Zoom named the user's background "${current.name}" but gave no id, so its pixels cannot be fetched`, 'warn');
+  }
   log(`Remembered the user's background before replacing it: ${current.name || current.type}`, 'info');
 }
 
