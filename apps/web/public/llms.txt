@@ -1,0 +1,66 @@
+# Toastmasters Timer
+
+> A free, browser-based speech timer built for the Timer role at Toastmasters
+> meetings. It shows the standard green / yellow / red signals for every speech
+> type, logs each speaker's exact time, and produces the Timer's end-of-meeting
+> report. It also runs as a Zoom app that changes the Timer's virtual
+> background colour automatically, so no one has to hold coloured cards to a
+> webcam.
+
+Site: https://www.timer.simple-tech.app/
+Cost: Free. No account, sign-up, payment, or installation required.
+Platform: Any modern web browser (desktop, tablet, phone) and Zoom.
+Publisher: Simple Tech
+Affiliation: Independent. Not affiliated with, endorsed by, or sponsored by
+Toastmasters International.
+
+## Key facts
+
+- Standard Toastmasters timing rules are built in: Standard Speech 5–7 min
+  (green 5:00, yellow 6:00, red 7:00), Table Topics 1–2 min (green 1:00,
+  yellow 1:30, red 2:00), Evaluation 2–3 min (green 2:00, yellow 2:30,
+  red 3:00), Longer Speech 7–9 min (green 7:00, yellow 8:00, red 9:00).
+- Speakers have a 30-second grace period after the red signal. Finishing before
+  green or more than 30 seconds after red makes a speaker ineligible for that
+  meeting's awards.
+- Three ways to display the signal: full-screen colour in the browser, a
+  floating overlay, or an automatic Zoom virtual background.
+- The Zoom app changes the background colour on its own as thresholds are
+  reached — it does not require screen sharing or physical cards.
+- Timing data stays in the browser; the tool does not require an account.
+
+## Pages
+
+- [Toastmasters Timer (home)](https://www.timer.simple-tech.app/): What the tool
+  does, the three display modes, and the standard timing rules.
+- [Open the timer](https://www.timer.simple-tech.app/app): The timer itself.
+- [Timer Role Guide](https://www.timer.simple-tech.app/toastmasters-timer-role-guide):
+  What the Timer does before, during, and after a meeting; step-by-step
+  instructions, tips, and common mistakes.
+- [Speech Types & Timing Rules](https://www.timer.simple-tech.app/toastmasters-speech-types-and-timing):
+  Complete reference for every Toastmasters speech type and its green/yellow/red
+  thresholds.
+- [Timing Chart](https://www.timer.simple-tech.app/toastmasters-timing-chart):
+  Visual colour reference table for all speech types.
+- [Timer Script and Report Template](https://www.timer.simple-tech.app/toastmasters-timer-script):
+  Word-for-word script for explaining the signals and delivering the timing
+  report, plus a fill-in log.
+- [Table Topics Timer](https://www.timer.simple-tech.app/table-topics-timer):
+  Table Topics timing rules (1–2 minutes) and how to time a rapid-fire session.
+- [Speech Contest Timing Rules](https://www.timer.simple-tech.app/toastmasters-speech-contest-timing-rules):
+  How contest timing differs from club meetings, including disqualification
+  rules.
+- [How to Use Zoom for Toastmasters](https://www.timer.simple-tech.app/how-to-use-zoom-for-toastmasters):
+  Running the Timer role in an online or hybrid meeting.
+- [Free Zoom Timer Backgrounds](https://www.timer.simple-tech.app/toastmasters-zoom-timer-backgrounds):
+  Downloadable green, yellow, and red virtual backgrounds, and how to install
+  them in Zoom.
+- [Best Toastmasters Timer Apps Compared](https://www.timer.simple-tech.app/best-toastmasters-timer-apps):
+  Honest comparison of the available timer tools, including alternatives.
+
+## Optional
+
+- [Documentation](https://www.timer.simple-tech.app/documentation)
+- [Support](https://www.timer.simple-tech.app/support)
+- [Privacy Policy](https://www.timer.simple-tech.app/privacy)
+- [Terms of Use](https://www.timer.simple-tech.app/terms-of-use)
