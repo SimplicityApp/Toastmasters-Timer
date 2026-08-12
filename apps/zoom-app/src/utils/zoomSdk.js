@@ -545,40 +545,59 @@ function writePreviousBackground(background) {
   }
 }
 
+/** The first of these that is a usable, non-empty string. */
+function firstString(...values) {
+  return values.find((value) => typeof value === 'string' && value.trim())?.trim();
+}
+
 /**
  * Reduce whatever the client reports to { type, id, name }.
  *
- * Deliberately tolerant, and deliberately gives up rather than guesses. These
- * APIs are grantable in the Marketplace but absent from @zoom/appssdk 0.16.36,
- * 0.16.40, 0.16.41 and the CDN bundle, so their exact response shape cannot be
- * pinned down here — checked, not assumed. See BRIDGE_ONLY_APIS for how they are
- * reached at all. Returning null means "the client did not tell us", which every
- * caller treats as the old behaviour rather than as an answer. A wrong guess
- * would be worse than no guess: it decides whether the user gets a confirmation
- * dialog they did not need.
+ * The real shape, from a 5.17 desktop client, is:
+ *
+ *   { currentBackground: {...} | null, currentBackgroundSetting: 'none' | 'blur' | ... }
+ *
+ * with currentBackgroundSetting saying which of the three states applies and
+ * currentBackground identifying the image when one is up. That is what the
+ * documentation describes in prose — "the virtual background that is currently
+ * applied, or if the current background setting is None or Blur" — and it is two
+ * fields, not one. Reading only the object was what made a real answer look
+ * unrecognisable, and the clear then removed the organizer's bookshelf instead of
+ * putting it back.
+ *
+ * Still deliberately tolerant, and still gives up rather than guesses. These APIs
+ * are grantable in the Marketplace but absent from @zoom/appssdk 0.16.36,
+ * 0.16.40, 0.16.41 and the CDN bundle, so nothing here can be pinned to a typing
+ * — the shape above is what a client was observed to send, not what a contract
+ * promises. The older key spellings stay accepted for that reason. Returning null
+ * means "the client did not tell us", which every caller treats as the old
+ * behaviour rather than as an answer. A wrong guess would be worse than no guess:
+ * it decides whether the user gets a confirmation dialog they did not need.
  *
  * @param {any} raw
  * @returns {{type: string, id?: string, name?: string}|null}
  */
 export function normalizeVirtualBackground(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  // getVirtualBackgrounds returns the list plus the applied one; the single
-  // getter returns the applied one alone. Accept either, under any of the names
-  // the response might carry it as.
-  const current = raw.currentVirtualBackground || raw.current || raw.virtualBackground || raw;
-  if (!current || typeof current !== 'object') return null;
 
-  const label = [current.type, current.id, current.name]
-    .find((value) => typeof value === 'string' && value.trim());
-  if (!label) return null;
+  // getVirtualBackgrounds returns the saved list alongside the applied one; the
+  // single getter returns the applied one alone. Both carry it under these keys.
+  const applied =
+    raw.currentBackground ?? raw.currentVirtualBackground ?? raw.current ?? raw.virtualBackground ?? raw;
+  // Zoom may name the applied background by object or by bare id.
+  const asObject = applied && typeof applied === 'object' ? applied : null;
+  const id = firstString(asObject?.id, typeof applied === 'string' ? applied : undefined);
+  const name = firstString(asObject?.name, asObject?.fileName);
 
-  const lowered = label.trim().toLowerCase();
-  if (lowered === 'none') return { type: 'none' };
-  if (lowered === 'blur') return { type: 'blur' };
-  // Anything else names an actual image: the id identifies it, the name is for
+  // The setting is the authority on which of the three states is up, because it
+  // is the only field that distinguishes "none" from "the client did not say".
+  const setting = firstString(raw.currentBackgroundSetting, raw.backgroundSetting, raw.setting);
+  const state = (setting || firstString(asObject?.type, id, name) || '').toLowerCase();
+  if (state === 'none') return { type: 'none' };
+  if (state === 'blur') return { type: 'blur' };
+
+  // Anything else is an actual image: the id identifies it, the name is for
   // telling the user which one we could not put back.
-  const id = typeof current.id === 'string' ? current.id : undefined;
-  const name = typeof current.name === 'string' ? current.name : undefined;
   if (!id && !name) return null;
   return { type: 'image', ...(id && { id }), ...(name && { name }) };
 }
@@ -605,11 +624,36 @@ function sameBackground(a, b) {
 function readingFrom(api, raw) {
   const reading = normalizeVirtualBackground(raw);
   if (!reading) {
-    const shape =
-      raw && typeof raw === 'object' ? `keys: ${Object.keys(raw).join(', ') || 'none'}` : `${typeof raw}: ${raw}`;
-    log(`${api} answered in a shape this app does not recognise (${shape})`, 'warn');
+    log(`${api} answered in a shape this app does not recognise: ${describeShape(raw)}`, 'warn');
   }
   return reading;
+}
+
+/**
+ * A one-line sketch of a response: keys and leaf values, two levels deep.
+ *
+ * Top-level keys alone are not enough. They said `currentBackground,
+ * currentBackgroundSetting` and cost a second round-trip to learn what was inside
+ * them — which is exactly the information needed to fix the parser.
+ *
+ * Bounded on purpose. Typed arrays are named rather than walked, because an
+ * ImageData's `data` holds millions of entries and would bury the panel; strings
+ * are cut short, because a data URI is not worth a screenful.
+ */
+function describeShape(value, depth = 0) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') return JSON.stringify(value.length > 40 ? `${value.slice(0, 40)}…` : value);
+  if (typeof value !== 'object') return String(value);
+  if (ArrayBuffer.isView(value)) return `${value.constructor?.name || 'TypedArray'}(${value.length})`;
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    return depth >= 1 ? `array(${value.length})` : `[${describeShape(value[0], depth + 1)}, …${value.length}]`;
+  }
+  const keys = Object.keys(value);
+  if (!keys.length) return '{}';
+  if (depth >= 2) return `{${keys.join(', ')}}`;
+  return `{ ${keys.map((key) => `${key}: ${describeShape(value[key], depth + 1)}`).join(', ')} }`;
 }
 
 /**

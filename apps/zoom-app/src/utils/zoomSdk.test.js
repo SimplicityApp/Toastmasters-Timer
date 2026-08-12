@@ -2057,6 +2057,90 @@ describe('putting the user back on their own background', () => {
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
   });
 
+  it('names the nested keys of a shape it cannot read, without dumping the pixels', async () => {
+    // Top-level keys alone cost a round-trip: they said "currentBackground,
+    // currentBackgroundSetting" without saying what was inside, which is the part
+    // that fixes the parser. An ImageData's byte array must stay out of it — the
+    // panel would be unreadable and the real answer buried.
+    const { initializeZoomSdk, setLogCallback, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    const lines = [];
+    setLogCallback((message) => lines.push(message));
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      unexpected: { deeper: 'value' },
+      pixels: { width: 4, height: 4, data: new Uint8ClampedArray(64) },
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    await clearVideoPipelines();
+
+    const complaint = lines.find((line) => line.includes('does not recognise'));
+    expect(complaint).toContain('unexpected: { deeper: "value" }');
+    expect(complaint).toContain('Uint8ClampedArray(64)');
+    expect(complaint).not.toMatch(/0, 0, 0/);
+  });
+
+  it('reads the shape a real client actually sends', async () => {
+    // Observed on a 5.17 desktop client, from the debug log of a restore that
+    // failed: getCurrentVirtualBackground answers with two fields, not one. The
+    // parser read only the object and called a perfectly good answer
+    // unrecognisable, so the clear removed the organizer's background instead of
+    // putting it back.
+    const { normalizeVirtualBackground } = await loadModule();
+
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+        currentBackgroundSetting: 'image',
+      })
+    ).toEqual({ type: 'image', id: 'vb-77', name: 'bookshelf.png' });
+
+    // The setting is the only field that separates "none" from "did not say".
+    expect(
+      normalizeVirtualBackground({ currentBackground: null, currentBackgroundSetting: 'none' })
+    ).toEqual({ type: 'none' });
+    expect(
+      normalizeVirtualBackground({ currentBackground: null, currentBackgroundSetting: 'blur' })
+    ).toEqual({ type: 'blur' });
+    // Case and padding are the client's business, not ours.
+    expect(
+      normalizeVirtualBackground({ currentBackground: null, currentBackgroundSetting: ' Blur ' })
+    ).toEqual({ type: 'blur' });
+    // It wins over an image left in the object, since it says what is applied.
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+        currentBackgroundSetting: 'None',
+      })
+    ).toEqual({ type: 'none' });
+  });
+
+  it('restores end to end from the real client shape', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+      currentBackgroundSetting: 'image',
+    });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({
+      currentBackground: { id: 'timer-green' },
+      currentBackgroundSetting: 'image',
+    });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
   it('gives up rather than guessing at a response it does not recognise', async () => {
     // The response shape cannot be pinned down while the API is absent from the
     // SDK, so anything unfamiliar has to mean "the client did not say" — never
