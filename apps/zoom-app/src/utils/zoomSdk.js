@@ -594,8 +594,20 @@ export function normalizeVirtualBackground(raw) {
     raw.currentBackground ?? raw.currentVirtualBackground ?? raw.current ?? raw.virtualBackground ?? raw;
   // Zoom may name the applied background by object or by bare id.
   const asObject = applied && typeof applied === 'object' ? applied : null;
-  const id = firstString(asObject?.id, typeof applied === 'string' ? applied : undefined);
-  const name = firstString(asObject?.name, asObject?.fileName);
+  // currentBackgroundId is how getVirtualBackgrounds names it — that response has
+  // no applied-background object at all, only an id beside the saved list. Without
+  // this, a client granting only that getter reads as "did not say".
+  const id = firstString(
+    asObject?.id,
+    typeof applied === 'string' ? applied : undefined,
+    raw.currentBackgroundId
+  );
+  // The list is the only place a name for that id exists, and a name is what the
+  // organizer is told about when a restore cannot happen.
+  const listed = [raw.backgrounds, raw.virtualBackgrounds, raw.list]
+    .find(Array.isArray)
+    ?.find((entry) => entry && typeof entry === 'object' && firstString(entry.id) === id);
+  const name = firstString(asObject?.name, asObject?.fileName, listed?.name, listed?.fileName);
 
   // The setting is the authority on which of the three states is up, because it
   // is the only field that distinguishes "none" from "the client did not say".
@@ -749,19 +761,27 @@ async function readBackgroundPixels(id, name) {
   return null;
 }
 
-// Payload spellings to try for getVirtualBackgroundData, in order.
+// Payload spellings to try for getVirtualBackgroundData, best first.
 //
-// The API takes "the ID of a virtual background as input" and no shipped typing
-// names the field, so the first client to reject `{id}` with "Validation error,
-// please check API parameters" leaves nothing to read but the error. Trying a
-// short ordered list costs nothing on a getter — a wrong key errors and changes
-// nothing — and the log names the one that worked, so this list can collapse to
-// it once a client has answered.
+// backgroundId is the one a 7.1.5 desktop client accepts; id and
+// virtualBackgroundId are both refused with code 10002, "Validation error, please
+// check API parameters". No shipped typing names the field, so the others stay as
+// fallbacks rather than being deleted — a wrong key on a getter errors and
+// changes nothing, and the log names whichever one answered.
 const BACKGROUND_DATA_PAYLOADS = [
+  (id) => ({ backgroundId: id }),
   (id) => ({ id }),
   (id) => ({ virtualBackgroundId: id }),
-  (id) => ({ backgroundId: id }),
 ];
+
+// Ceiling for a restored background, in pixels per side.
+//
+// setVirtualBackground documents imageData as "limited to 15MB after encoding",
+// and RGBA costs 4 bytes a pixel: 1920x1080 is 8.3MB, and 2560x1440 would be
+// 14.7MB with nothing to spare. The overlay budget is not used here — it is
+// 640x360, sized for a card that is about to be overwritten every second, and
+// handing someone's own background back at that size would visibly degrade it.
+const RESTORED_BACKGROUND_MAX = { width: 1920, height: 1080 };
 
 /**
  * One attempt at the pixels. Logs exactly what it sent, so a rejection says which
@@ -773,18 +793,30 @@ const BACKGROUND_DATA_PAYLOADS = [
 async function fetchBackgroundPixels(payload) {
   try {
     const raw = await callSdkApi('getVirtualBackgroundData', payload, BACKGROUND_PIXELS_TIMEOUT_MS);
-    // Tolerant for the same reason normalizeVirtualBackground is: the response
-    // shape cannot be pinned down from any shipped typing, so accept the payload
-    // under any plausible wrapping and give up rather than guess.
-    //
-    // Shape-tested rather than picked by key order, because an ImageData has a
-    // `data` property of its own. Reaching for `raw.data` before testing `raw`
-    // itself would unwrap a perfectly good ImageData down to its byte array and
-    // then reject it as unusable.
+
+    // What a 7.1.5 desktop client actually sends back is an encoded image, not
+    // pixels: { imageData: { data: "/9j/4AAQSkZJRgABAQAASABIAAD…" } }, which is a
+    // base64 JPEG. The name `imageData` is misleading — it is not the ImageData
+    // that setVirtualBackground takes, and reading it as one is what turned a
+    // successful call into "returned no usable pixels".
+    const encoded = firstString(
+      raw?.imageData?.data,
+      raw?.imageData,
+      raw?.data?.data,
+      raw?.data,
+      typeof raw === 'string' ? raw : undefined
+    );
+    if (encoded) return await decodeEncodedBackground(encoded);
+
+    // Still accepted, in case another client answers with real pixels. Shape-tested
+    // rather than picked by key order, because an ImageData has a `data` property
+    // of its own: reaching for `raw.data` first would unwrap a good ImageData down
+    // to its byte array and then reject it as unusable.
     const isImageData = (value) =>
       !!value && typeof value.width === 'number' && typeof value.height === 'number' && !!value.data;
-    const imageData = [raw, raw?.imageData, raw?.virtualBackgroundData, raw?.data].find(isImageData);
+    const imageData = [raw, raw?.imageData, raw?.virtualBackgroundData].find(isImageData);
     if (imageData) return imageData;
+
     log(
       `getVirtualBackgroundData(${describeShape(payload)}) returned no usable pixels: ${describeShape(raw)}`,
       'warn'
@@ -796,6 +828,31 @@ async function fetchBackgroundPixels(payload) {
       `getVirtualBackgroundData(${describeShape(payload)}) failed${code}: ${error.message || error.name}`,
       'warn'
     );
+    return null;
+  }
+}
+
+/**
+ * Turn the client's encoded image into the ImageData setVirtualBackground needs.
+ *
+ * Accepts a bare base64 payload or a full data URI, since only the former was
+ * observed and the difference is one prefix. The format is sniffed from the base64
+ * signature rather than assumed: "/9j/" is JPEG, "iVBORw0" is PNG. An Image
+ * element decodes either, and the existing canvas helper reads the pixels out.
+ *
+ * @param {string} encoded - base64 image data, with or without a data: prefix
+ * @returns {Promise<ImageData|null>}
+ */
+async function decodeEncodedBackground(encoded) {
+  const uri = encoded.startsWith('data:')
+    ? encoded
+    : `data:${encoded.startsWith('iVBORw0') ? 'image/png' : 'image/jpeg'};base64,${encoded}`;
+  try {
+    const imageData = await decodeToImageData(uri, RESTORED_BACKGROUND_MAX);
+    log(`Decoded the user's background from ${encoded.length} base64 chars`, 'info');
+    return imageData;
+  } catch (error) {
+    log(`Could not decode the user's background image: ${error.message || error.name}`, 'warn');
     return null;
   }
 }
@@ -1687,6 +1744,56 @@ export function imageToImageData(drawable, width, height) {
   // cropped. Note that omitting it would draw at natural size.
   ctx.drawImage(drawable, 0, 0, width, height);
   return ctx.getImageData(0, 0, width, height);
+}
+
+/**
+ * Decode an image to ImageData, fitting within `max` and never scaling up.
+ *
+ * Separate from loadImageAsImageData on purpose. That path clamps to the overlay
+ * ceiling of 640x360, which is right for a card about to be overwritten every
+ * second and wrong for handing someone their own background back — it would come
+ * back visibly softer than they left it.
+ *
+ * @param {string} uri - Any src an Image accepts, including a data: URI
+ * @param {{width: number, height: number}} max - Bounding box to fit within
+ * @returns {Promise<ImageData>}
+ */
+function decodeToImageData(uri, max) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(
+      () => finish(reject, new Error(`decode timed out after ${BACKGROUND_PIXELS_TIMEOUT_MS}ms`)),
+      BACKGROUND_PIXELS_TIMEOUT_MS
+    );
+
+    img.onload = () => {
+      const { naturalWidth: width, naturalHeight: height } = img;
+      if (!width || !height) {
+        finish(reject, new Error(`decoded to ${width}x${height}`));
+        return;
+      }
+      const scale = Math.min(1, max.width / width, max.height / height);
+      try {
+        finish(
+          resolve,
+          imageToImageData(img, Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)))
+        );
+      } catch (error) {
+        finish(reject, error);
+      }
+    };
+    img.onerror = () => finish(reject, new Error('image failed to decode'));
+    // No crossOrigin: a data: URI is same-origin, and setting it on one is
+    // pointless rather than harmless on some clients.
+    img.src = uri;
+  });
 }
 
 /**
