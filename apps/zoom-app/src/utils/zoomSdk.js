@@ -517,10 +517,13 @@ function readPreviousBackground() {
 }
 
 function writePreviousBackground(background) {
-  // The pixel cache is keyed to whatever was recorded here, so it goes whenever
-  // this does. Leaving it behind would let a stale image be restored over a
-  // background the user has since changed themselves.
-  previousBackgroundPixels = null;
+  // Drop the pixels only when they stop describing what is recorded. Re-reading
+  // the same background before every speech is the normal case — the organizer
+  // keeps one background all meeting — and dropping the cache on each of those
+  // would re-fetch megabytes for the image we just put back.
+  if (background?.type !== 'image' || previousBackgroundPixels?.id !== background.id) {
+    previousBackgroundPixels = null;
+  }
   try {
     if (background) localStorage.setItem(PREVIOUS_BACKGROUND_KEY, JSON.stringify(background));
     else localStorage.removeItem(PREVIOUS_BACKGROUND_KEY);
@@ -662,13 +665,23 @@ async function snapshotUserBackground() {
  * refused for a background that was never there is what reported "Zoom would
  * not clear your video" over a video that was already fine.
  *
+ * Whenever the answer is "not ours", what is on the video is by definition the
+ * user's own, so it is recorded on the way past. This is the only place that
+ * learns about a background the user chose while ours was up — nothing reports
+ * that change — and it is free here, because the read has already happened.
+ *
  * @returns {Promise<boolean|null>} null when the client cannot say
  */
 async function isOurBackgroundApplied() {
   const current = await readCurrentVirtualBackground();
   if (!current) return null;
-  // Nothing at all is applied, so ours certainly is not.
-  if (current.type === 'none') return false;
+  // Nothing at all is applied, so ours certainly is not. Worth recording as
+  // theirs: someone who times a speech on a bare camera wants it bare again, and
+  // "none" restores as a removal.
+  if (current.type === 'none') {
+    writePreviousBackground(current);
+    return false;
+  }
   // Their own is back up — they changed it themselves, or ours never took.
   if (sameBackground(current, readPreviousBackground())) return false;
   return true;
@@ -1767,12 +1780,35 @@ export async function setOverlayMode(mode, currentImageUrl) {
 const ERROR_NOTHING_APPLIED = 10195;
 
 /**
+ * Which API putting the user's background back will actually need.
+ *
+ * Only "none" — and the case where we never learned what they had — is a
+ * removal. A blur or an image goes back with setVirtualBackground, so gating
+ * those on removeVirtualBackground refuses to restore anything on a client that
+ * granted the setter and not the remover. That gate is why the caller has to ask
+ * rather than assume: the two APIs are granted independently.
+ *
+ * @returns {'setVirtualBackground'|'removeVirtualBackground'}
+ */
+function restoreBackgroundApi() {
+  const previous = readPreviousBackground();
+  const bySet = previous?.type === 'blur' || (previous?.type === 'image' && previous.id);
+  return bySet && isApiAvailable('setVirtualBackground')
+    ? 'setVirtualBackground'
+    : 'removeVirtualBackground';
+}
+
+/**
  * Take our branded background off by putting the user's own back, rather than
  * stripping their video to a bare camera.
  *
  * Replacing beats removing wherever it can. Someone who joined the meeting
  * blurred wants to leave it blurred; wiping them to None is a change they never
  * asked for and have to undo themselves, in a panel, mid-meeting.
+ *
+ * Every caller reaches this — the eraser, RESET, a finished speech, the idle
+ * reveal, a mode switch — so all of them hand back the same video: whatever the
+ * organizer had before the timer touched it.
  *
  * What is actually restorable is narrower than it looks, and the ceiling is
  * Zoom's, not ours:
@@ -1895,7 +1931,6 @@ export async function clearVideoPipelines() {
   if (hadBackground && (await isOurBackgroundApplied()) === false) {
     log('Zoom reports nothing of ours on the video; leaving the background alone', 'info');
     markVirtualBackgroundApplied(false);
-    writePreviousBackground(null);
     hadBackground = false;
   }
 
@@ -1934,7 +1969,9 @@ export async function clearVideoPipelines() {
     attempts.push({
       what: 'virtual background',
       expected: true,
-      api: 'removeVirtualBackground',
+      // Whichever API the restore will genuinely use. Putting their blur or their
+      // own image back is a set, not a removal.
+      api: restoreBackgroundApi(),
       run: async () => { lostBackground = (await restoreOrRemoveBackground()).lost; },
     });
   }
@@ -1985,9 +2022,15 @@ export async function clearVideoPipelines() {
 
   if (backgroundGone) {
     markVirtualBackgroundApplied(false);
-    // Spent: the user is back on their own background, so there is nothing left
-    // to restore them to. Keeping it would restore a stale choice next time.
-    writePreviousBackground(null);
+    // The record is deliberately kept. It used to be cleared here, on the grounds
+    // that a background already restored is nothing left to restore to — which
+    // held only while the next speech could always re-read it. It cannot: the
+    // read needs getCurrentVirtualBackground, which not every client grants, and
+    // a single failed read then dropped the organizer to a bare camera for the
+    // rest of the meeting. Kept, it is the durable answer to "what is theirs",
+    // and staleness is covered from both ends: snapshotUserBackground refreshes
+    // it before every push, and isOurBackgroundApplied refreshes it whenever it
+    // finds the video is already their own.
   }
   if (filterGone) markVideoFilterApplied(false);
   return { ok, declined, ungranted, lostBackground };
@@ -2064,19 +2107,18 @@ async function removeOverlayInternal(pipelines, label) {
         log(`Nothing of ours on the video; nothing to remove (mode: ${mode})`, 'info');
       }
       if (hadBackground) {
-        if (!isApiAvailable('removeVirtualBackground')) {
-          log('Client did not grant removeVirtualBackground; leaving the background in place', 'warn');
+        const api = restoreBackgroundApi();
+        if (!isApiAvailable(api)) {
+          log(`Client did not grant ${api}; leaving the background in place`, 'warn');
         } else if ((await isOurBackgroundApplied()) === false) {
           // Must not put a dialog in front of someone whose background is
           // already their own.
           log('Zoom reports the background is not ours; leaving it alone', 'info');
           markVirtualBackgroundApplied(false);
-          writePreviousBackground(null);
         } else {
           log('Putting the user\'s own background back', 'info');
           await restoreOrRemoveBackground();
           markVirtualBackgroundApplied(false);
-          writePreviousBackground(null);
           log('Successfully cleared our virtual background', 'info');
         }
       }
