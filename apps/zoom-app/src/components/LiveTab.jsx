@@ -583,33 +583,70 @@ export default memo(function LiveTab() {
   };
 
   /**
-   * Put the timer back to zero and hand the organizer their video back.
+   * Put the timer back to zero, and put the tile back to whatever this organizer
+   * has said idle should look like.
    *
-   * Taking the color off is half of what RESET means to the person pressing it:
-   * they are undoing a speech that should not have been started, and a card left
-   * sitting on their tile is the part of it everyone else in the meeting can see.
-   * So the tile is stripped outright here — whichever pipeline is holding it —
-   * rather than left to the reveal-when-idle preference, which governs the
-   * automatic reveals between speeches and not a button press. The cost is the
-   * same as the eraser's: in Timer + Camera, Zoom asks the organizer to confirm.
+   * Undoing a speech that should not have been started has to undo what the
+   * meeting could see of it, so RESET has always owned the tile as well as the
+   * clock. What it must not own is which of the two idle states that means. It
+   * used to strip the tile outright, on the grounds that the reveal-when-idle
+   * preference governs the automatic reveals between speeches and not a button
+   * press — but the organizer who turned that preference off did so to keep the
+   * color up for the whole meeting, and stripping their tile hands them the one
+   * thing they opted out of. So both halves are asked here:
+   *
+   * - Reveals on: the video comes back whole, their own background included.
+   *   This is the eraser's path, in silence, and it costs the same confirmation
+   *   dialog in Timer + Camera.
+   * - Reveals off: the tile returns to the blue card. Unconditionally, unlike
+   *   resetTimer's own handling — which is why the video is skipped there and
+   *   decided here. That gate exists because resetTimer also runs on every
+   *   speaker and role change, where pushing an overlay nothing is displaying
+   *   would spend a multi-MB bridge transfer for no visible effect. A button
+   *   press is exactly the ask it withholds it for: after the eraser, or before
+   *   the meeting's first speech, RESET is how the card comes back.
    */
   const handleReset = async () => {
     const previousElapsedTime = elapsedTime;
     const previousStatus = currentStatus;
-    // The clear below owns the video, so resetTimer must not also reach for it.
+    // Either branch below owns the video, so resetTimer must not also reach for
+    // it: two removals in flight at once is a confirmation dialog for a
+    // background that has already gone.
     resetTimer({ skipVideo: true });
     setSpeakerName('');
     // Track timer reset
     (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
-      previous_status: previousStatus
+      previous_status: previousStatus,
+      reveal_face_when_idle: revealFaceWhenIdle
     }));
+    if (!revealFaceWhenIdle) {
+      // A held swatch outranks the timer's own status everywhere the color is
+      // decided, so a preview left up would paint straight back over the card.
+      // RESET is a return to the starting state; a swatch does not survive it.
+      setPreviewColor(null);
+      if (isVideoOverlayMode(overlayMode)) {
+        addDebugLog('Reset with reveal-when-idle off: returning the tile to blue', 'info');
+        applyOverlay(getBackgroundUrl('blue'));
+      }
+      return;
+    }
     // Silent when it works: the timer reading 00:00 with the tile back to normal
     // is its own confirmation, and RESET is pressed often enough that a toast per
     // press is noise. Anything that went wrong, or that the organizer has to fix
     // in Zoom themselves, is still reported.
     await clearTimerFromVideo({ announceSuccess: false });
   };
+
+  // Says what RESET will do to the video, because that half of it now depends on
+  // a preference set two clicks away in the mode menu — and the two outcomes are
+  // opposites. Stage modes leave the camera alone entirely, so they get neither
+  // promise.
+  const resetTooltip = isVideoOverlayMode(overlayMode)
+    ? `Reset the timer to 00:00, clear the current speaker, and ${
+        revealFaceWhenIdle ? 'hand your own background back' : 'put the blue timer card back on your video'
+      }`
+    : 'Reset the timer to 00:00 and clear the current speaker';
 
   const handleFinish = () => {
     const currentAgendaId = activeSpeakerId;
@@ -1175,7 +1212,7 @@ export default memo(function LiveTab() {
                 <button
                   onClick={handleReset}
                   disabled={isClearingVideo}
-                  data-tooltip="Reset the timer to 00:00, clear the current speaker, and take the timer off your video"
+                  data-tooltip={resetTooltip}
                   data-tooltip-direction="down"
                   className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
@@ -1207,7 +1244,7 @@ export default memo(function LiveTab() {
                 <button
                   onClick={handleReset}
                   disabled={isClearingVideo}
-                  data-tooltip="Reset the timer to 00:00, clear the current speaker, and take the timer off your video"
+                  data-tooltip={resetTooltip}
                   data-tooltip-direction="down"
                   className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
