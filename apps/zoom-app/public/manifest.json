@@ -26,6 +26,9 @@
     "getVirtualBackgrounds": {
       "enabled": true
     },
+    "getVirtualBackgroundData": {
+      "enabled": true
+    },
     "getVideoState": {
       "enabled": true
     },
