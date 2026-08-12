@@ -520,6 +520,11 @@ const PREVIOUS_BACKGROUND_KEY = 'toastmaster_zoom_previous_background';
 // nothing else.
 let previousBackgroundPixels = null;
 
+// The id whose pixels this client refused, so the restore path does not repeat a
+// run of failed calls while the organizer waits for their video back. Discarded
+// with the record it belongs to, since a new background deserves a fresh try.
+let unfetchableBackgroundId = null;
+
 function readPreviousBackground() {
   try {
     const raw = localStorage.getItem(PREVIOUS_BACKGROUND_KEY);
@@ -536,6 +541,9 @@ function writePreviousBackground(background) {
   // would re-fetch megabytes for the image we just put back.
   if (background?.type !== 'image' || previousBackgroundPixels?.id !== background.id) {
     previousBackgroundPixels = null;
+  }
+  if (background?.type !== 'image' || unfetchableBackgroundId !== background.id) {
+    unfetchableBackgroundId = null;
   }
   try {
     if (background) localStorage.setItem(PREVIOUS_BACKGROUND_KEY, JSON.stringify(background));
@@ -688,10 +696,11 @@ async function readCurrentVirtualBackground() {
  * setVirtualBackground takes imageData, a fileUrl or blur, and never an id, so
  * without this step an id names a background we cannot put back.
  *
- * @param {string} id
+ * @param {string} id - Identifier from the current-background read
+ * @param {string} [name] - Its display name, used to find it in the saved list
  * @returns {Promise<ImageData|null>} null when the client cannot supply them
  */
-async function readBackgroundPixels(id) {
+async function readBackgroundPixels(id, name) {
   if (!id) return null;
   // Said out loud, because this is the difference between the organizer getting
   // their bookshelf back and getting Zoom's "reset to none" dialog. It used to
@@ -705,8 +714,65 @@ async function readBackgroundPixels(id) {
     return null;
   }
   if (previousBackgroundPixels?.id === id) return previousBackgroundPixels.imageData;
+  // A failure is cached as firmly as a success. Without this, the run of attempts
+  // below repeats on the restore path — at the one moment the organizer is waiting
+  // for their video back, and to reach the same answer it already had.
+  if (unfetchableBackgroundId === id) return null;
+
+  const tryCandidate = async (candidate) => {
+    for (const build of BACKGROUND_DATA_PAYLOADS) {
+      const payload = build(candidate);
+      const imageData = await fetchBackgroundPixels(payload);
+      if (!imageData) continue;
+      previousBackgroundPixels = { id, imageData };
+      log(
+        `Fetched pixels for the user's own background (${imageData.width}x${imageData.height}) using ${describeShape(payload)}`,
+        'info'
+      );
+      return imageData;
+    }
+    return null;
+  };
+
+  // The id from the current-background read first, so a client that accepts it
+  // costs exactly one call. The saved list is consulted only once that is refused.
+  const direct = await tryCandidate(id);
+  if (direct) return direct;
+
+  for (const candidate of await otherIdsFor(name, id)) {
+    log(`Retrying with the id the saved list uses for "${name}": ${candidate}`, 'info');
+    const viaList = await tryCandidate(candidate);
+    if (viaList) return viaList;
+  }
+
+  unfetchableBackgroundId = id;
+  return null;
+}
+
+// Payload spellings to try for getVirtualBackgroundData, in order.
+//
+// The API takes "the ID of a virtual background as input" and no shipped typing
+// names the field, so the first client to reject `{id}` with "Validation error,
+// please check API parameters" leaves nothing to read but the error. Trying a
+// short ordered list costs nothing on a getter — a wrong key errors and changes
+// nothing — and the log names the one that worked, so this list can collapse to
+// it once a client has answered.
+const BACKGROUND_DATA_PAYLOADS = [
+  (id) => ({ id }),
+  (id) => ({ virtualBackgroundId: id }),
+  (id) => ({ backgroundId: id }),
+];
+
+/**
+ * One attempt at the pixels. Logs exactly what it sent, so a rejection says which
+ * payload was rejected rather than only that something was.
+ *
+ * @param {object} payload
+ * @returns {Promise<ImageData|null>}
+ */
+async function fetchBackgroundPixels(payload) {
   try {
-    const raw = await callSdkApi('getVirtualBackgroundData', { id }, BACKGROUND_PIXELS_TIMEOUT_MS);
+    const raw = await callSdkApi('getVirtualBackgroundData', payload, BACKGROUND_PIXELS_TIMEOUT_MS);
     // Tolerant for the same reason normalizeVirtualBackground is: the response
     // shape cannot be pinned down from any shipped typing, so accept the payload
     // under any plausible wrapping and give up rather than guess.
@@ -718,16 +784,56 @@ async function readBackgroundPixels(id) {
     const isImageData = (value) =>
       !!value && typeof value.width === 'number' && typeof value.height === 'number' && !!value.data;
     const imageData = [raw, raw?.imageData, raw?.virtualBackgroundData, raw?.data].find(isImageData);
-    if (!imageData) {
-      log('getVirtualBackgroundData returned no usable pixels', 'warn');
-      return null;
-    }
-    previousBackgroundPixels = { id, imageData };
-    log(`Fetched pixels for the user's own background (${imageData.width}x${imageData.height})`, 'info');
-    return imageData;
-  } catch (error) {
-    log(`Could not fetch the user's background pixels: ${error.message || error.name}`, 'warn');
+    if (imageData) return imageData;
+    log(
+      `getVirtualBackgroundData(${describeShape(payload)}) returned no usable pixels: ${describeShape(raw)}`,
+      'warn'
+    );
     return null;
+  } catch (error) {
+    const code = error.code ? ` (code ${error.code})` : '';
+    log(
+      `getVirtualBackgroundData(${describeShape(payload)}) failed${code}: ${error.message || error.name}`,
+      'warn'
+    );
+    return null;
+  }
+}
+
+/**
+ * Other identifiers the same background might be known by, from the saved list.
+ *
+ * The documentation is explicit that ids for getVirtualBackgroundData "are
+ * obtained through the getVirtualBackgrounds response" — not from
+ * getCurrentVirtualBackground, which is where ours comes from. Those two need not
+ * agree, and a stock background like "San Francisco" is exactly where they would
+ * not. So when the id in hand is rejected, ask the list what it calls the same
+ * background and try that instead.
+ *
+ * Logs the list's shape either way. It is the one response nothing has inspected
+ * yet, and its entries are where the correct id field is named.
+ *
+ * @param {string} [name] - What the current background is called
+ * @param {string} tried - The id already attempted, so it is not repeated
+ * @returns {Promise<string[]>}
+ */
+async function otherIdsFor(name, tried) {
+  if (!isApiAvailable('getVirtualBackgrounds')) return [];
+  try {
+    const raw = await callSdkApi('getVirtualBackgrounds', undefined, BACKGROUND_PIXELS_TIMEOUT_MS);
+    log(`getVirtualBackgrounds answered: ${describeShape(raw)}`, 'info');
+    const list = [raw?.virtualBackgrounds, raw?.backgrounds, raw?.list, raw].find(Array.isArray) || [];
+    return list
+      .filter((entry) => entry && typeof entry === 'object')
+      // Only the matching one, by name. Feeding every saved background to a
+      // getter in turn would be a lot of calls to land on a background the user
+      // never had up.
+      .filter((entry) => !name || firstString(entry.name, entry.fileName) === name)
+      .flatMap((entry) => [entry.id, entry.backgroundId, entry.virtualBackgroundId])
+      .filter((value) => typeof value === 'string' && value.trim() && value !== tried);
+  } catch (error) {
+    log(`Could not read the saved background list: ${error.message || error.name}`, 'warn');
+    return [];
   }
 }
 
@@ -753,7 +859,7 @@ async function snapshotUserBackground() {
   }
   writePreviousBackground(current);
   if (current.type === 'image') {
-    if (current.id) readBackgroundPixels(current.id).catch(() => {});
+    if (current.id) readBackgroundPixels(current.id, current.name).catch(() => {});
     else log(`Zoom named the user's background "${current.name}" but gave no id, so its pixels cannot be fetched`, 'warn');
   }
   log(`Remembered the user's background before replacing it: ${current.name || current.type}`, 'info');
@@ -1948,7 +2054,7 @@ async function restoreOrRemoveBackground() {
     // Falls through to removal on a null answer rather than throwing: a
     // background we cannot restore must still come off, or the speech's last
     // color stays on the tile for the rest of the meeting.
-    const imageData = await readBackgroundPixels(previous.id);
+    const imageData = await readBackgroundPixels(previous.id, previous.name);
     if (imageData) {
       try {
         log(`Restoring the user's own background: ${previous.name || previous.id}`, 'info');

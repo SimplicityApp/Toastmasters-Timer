@@ -1987,6 +1987,124 @@ describe('putting the user back on their own background', () => {
     expect(timeout).toBeLessThan(10000);
   });
 
+  /** Reject like a client that dislikes the payload, not the id. */
+  function validationError() {
+    return Object.assign(new Error('Validation error, please check API parameters.'), { code: -1 });
+  }
+
+  it('names the payload it sent when the client rejects it', async () => {
+    // "Validation error, please check API parameters" with no record of what was
+    // sent leaves nothing to act on. The log has to decompose the call.
+    const { initializeZoomSdk, setLogCallback, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    const lines = [];
+    setLogCallback((message) => lines.push(message));
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    sdkMock.callZoomApi.mockRejectedValue(validationError());
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    await clearVideoPipelines();
+
+    expect(lines.some((line) => line.includes('getVirtualBackgroundData({ id: "vb-77" }) failed'))).toBe(true);
+  });
+
+  it('tries other payload spellings before giving up', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    const pixels = fakePixels();
+    // This client wants virtualBackgroundId, not id.
+    sdkMock.callZoomApi.mockImplementation((api, payload) => {
+      if (api !== 'getVirtualBackgroundData') return Promise.resolve({});
+      if (payload?.virtualBackgroundId === 'vb-77') return Promise.resolve({ imageData: pixels });
+      return Promise.reject(validationError());
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'image' });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('falls back to the id the saved list uses for the same background', async () => {
+    // The docs say ids for getVirtualBackgroundData come from getVirtualBackgrounds,
+    // not from getCurrentVirtualBackground. The two need not agree, and a stock
+    // background is where they would not.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'current-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockImplementation((api, payload) => {
+      if (api === 'getVirtualBackgrounds') {
+        return Promise.resolve({
+          virtualBackgrounds: [
+            { id: 'list-99', name: 'San Francisco' },
+            { id: 'list-11', name: 'Golden Gate' },
+          ],
+        });
+      }
+      if (payload?.id === 'list-99') return Promise.resolve({ imageData: pixels });
+      return Promise.reject(validationError());
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'image' });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    // Only the entry that matches by name. Feeding every saved background to the
+    // getter in turn would be a lot of calls to land on one the user never had up.
+    expect(sdkMock.callZoomApi).not.toHaveBeenCalledWith(
+      'getVirtualBackgroundData',
+      { id: 'list-11' },
+      expect.any(Number)
+    );
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('does not repeat a failed run of calls while the organizer waits', async () => {
+    // The prefetch at speech start has already established the answer. Repeating
+    // it on the restore path stalls the handover to learn nothing new.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    sdkMock.callZoomApi.mockRejectedValue(validationError());
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    const afterPrefetch = pixelFetches();
+    expect(afterPrefetch).toBeGreaterThan(0);
+
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'image' });
+    const result = await clearVideoPipelines();
+
+    expect(pixelFetches()).toBe(afterPrefetch);
+    // Still removes, so the speech color cannot outlive the speech.
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: true });
+  });
+
   it('reaches the getters that have no wrapper method through the bridge', async () => {
     // The bug this whole path had: isApiAvailable demanded typeof
     // zoomSdk[name] === 'function', which no client can satisfy for an API the
