@@ -2,9 +2,12 @@ import { memo } from 'react';
 import { trackEvent } from '../utils/posthog';
 
 export default memo(function NavTabs({ activeTab, onTabChange }) {
+  // Agenda, Live, Report: the meeting's own order. The agenda is prepared
+  // before the meeting, the timer runs during it, the report is read after —
+  // so Live sits in the middle even though it is still the tab the app opens on.
   const tabs = [
-    { id: 'live', label: 'LIVE' },
     { id: 'agenda', label: 'AGENDA' },
+    { id: 'live', label: 'LIVE' },
     { id: 'report', label: 'REPORT' },
   ];
 

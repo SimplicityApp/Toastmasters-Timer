@@ -3,6 +3,8 @@ import {
   formatTime,
   getPhaseInfo,
   formatPhaseText,
+  formatPhaseTextFor,
+  getDisplaySeconds,
 } from '../timerLogic.js';
 
 const STANDARD_RULES = { green: 300, yellow: 360, red: 420 };
@@ -170,5 +172,35 @@ describe('formatPhaseText', () => {
     const phaseInfo = { phase: 'Red phase', endsAt: null, nextPhase: null };
     const result = formatPhaseText(phaseInfo);
     expect(result).toBe('Red phase');
+  });
+});
+
+describe('countdown display (breaks)', () => {
+  const BREAK_RULES = { green: 360, yellow: 480, red: 600, countdown: true };
+
+  it('shows remaining time for countdown rules and elapsed for speeches', () => {
+    expect(getDisplaySeconds(60, BREAK_RULES)).toBe(540);
+    expect(getDisplaySeconds(60, STANDARD_RULES)).toBe(60);
+    expect(getDisplaySeconds(60, undefined)).toBe(60);
+  });
+
+  it('sits on zero once a break has run over, never negative', () => {
+    expect(getDisplaySeconds(700, BREAK_RULES)).toBe(0);
+  });
+
+  it('describes countdown phases in time-left terms', () => {
+    const blue = getPhaseInfo(0, BREAK_RULES, 'blue');
+    expect(formatPhaseTextFor(blue, BREAK_RULES)).toBe('Green when 04:00 left');
+    const green = getPhaseInfo(400, BREAK_RULES, 'green');
+    expect(formatPhaseTextFor(green, BREAK_RULES)).toBe('Yellow when 02:00 left');
+    const yellow = getPhaseInfo(500, BREAK_RULES, 'yellow');
+    expect(formatPhaseTextFor(yellow, BREAK_RULES)).toBe('Red at 00:00');
+    const red = getPhaseInfo(650, BREAK_RULES, 'red');
+    expect(formatPhaseTextFor(red, BREAK_RULES)).toBe('Time is up');
+  });
+
+  it('falls back to the elapsed-time wording for speeches', () => {
+    const blue = getPhaseInfo(0, STANDARD_RULES, 'blue');
+    expect(formatPhaseTextFor(blue, STANDARD_RULES)).toBe(formatPhaseText(blue));
   });
 });

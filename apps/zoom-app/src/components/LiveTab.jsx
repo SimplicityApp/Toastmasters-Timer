@@ -8,9 +8,9 @@ import TimerStage from './TimerStage';
 import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
-import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, setOverlayMode, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, DEFAULT_OVERLAY_MODE, LEGACY_OVERLAY_MODES, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
-import { saveOverlayMode, loadOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE, BREAK_QUICK_PICKS, DEFAULT_BREAK_SECONDS, deriveBreakRules, getDisplaySeconds } from '@toastmaster-timer/shared';
+import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, getOverlayTimeScale, setOverlayTimeScale, isOverlayTimeVisible, setOverlayTimeVisible, setOverlayTimeLabel, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
+import { formatTime, saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { trackEvent } from '../utils/posthog';
 
@@ -24,22 +24,6 @@ const DEBUG_PANEL_ENABLED =
 const PromptDebugControls = DEBUG_PANEL_ENABLED
   ? lazy(() => import('./PromptDebugControls'))
   : null;
-
-/**
- * The mode to open in: the organizer's saved choice, or Timer Card.
- *
- * An older build saved 'popout' and 'share' as modes of their own. 'popout' maps
- * to the stage, which is where that timer now lives; 'share' is dropped, because
- * starting a screen share is an outward-facing act and nobody should have one
- * begin on its own because of a preference set last week. Restoring the stage is
- * safe by contrast — on its own it shows nobody anything.
- */
-function resolveInitialMode() {
-  const persisted = loadOverlayMode();
-  const migrated = LEGACY_OVERLAY_MODES[persisted] || persisted;
-  const known = [OVERLAY_MODE_STAGE, OVERLAY_MODE_CARD, OVERLAY_MODE_CAMERA];
-  return known.includes(migrated) ? migrated : DEFAULT_OVERLAY_MODE;
-}
 
 const PREVIEW_COLORS = [
   { color: 'blue', bg: 'bg-blue-500', ring: 'ring-blue-300', label: 'Blue' },
@@ -57,6 +41,7 @@ export default memo(function LiveTab() {
     resetTimer,
     setCurrentSpeaker,
     updateSpeakerName,
+    clearActiveSpeaker,
     finishCurrentSpeech,
     roleRules,
     roleOptions,
@@ -71,13 +56,21 @@ export default memo(function LiveTab() {
   const [speakerName, setSpeakerName] = useState(currentSpeaker?.name || '');
   const [selectedRole, setSelectedRole] = useState(currentSpeaker?.role || 'Standard Speech');
   const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
+  // Break Time counts down from this. Not persisted: 10 minutes is the meeting
+  // norm, and a club that broke for 5 yesterday should not silently break for
+  // 5 forever.
+  const [breakSeconds, setBreakSeconds] = useState(DEFAULT_BREAK_SECONDS);
   const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
 
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
+  // A clear is in flight. Disables both the eraser and RESET, because in Timer +
+  // Camera the wait is Zoom's confirmation dialog, and a second press behind the
+  // first would raise a second dialog for a background already on its way out.
   const [isClearingVideo, setIsClearingVideo] = useState(false);
-  // Bumped by the clear button. Guarantees the overlay effect re-runs exactly
-  // once afterwards, which is the run it skips — see handleClearVideo.
+  // Bumped by anything that hands the video back — the clear button, RESET.
+  // Guarantees the overlay effect re-runs exactly once afterwards, which is the
+  // run it skips — see clearTimerFromVideo.
   const [clearGeneration, setClearGeneration] = useState(0);
 
   // What the app itself is doing, mirrored from the SDK so Zoom's own controls
@@ -96,7 +89,50 @@ export default memo(function LiveTab() {
   // the color up for the whole meeting.
   const [revealFaceWhenIdle, setRevealFaceWhenIdle] = useState(loadRevealFaceWhenIdle);
 
-  const [overlayMode, setOverlayModeLocal] = useState(resolveInitialMode);
+  // Seeded from the SDK module, which resolves the organizer's saved mode
+  // itself at load time. The menu and the pipeline must never disagree about
+  // the mode: showing "Timer + Camera" while the module pushes card-mode
+  // filters is a full card over the organizer's face.
+  const [overlayMode, setOverlayModeLocal] = useState(getOverlayMode);
+
+  // Where the count-up sits on the pushed frame, mirrored from the SDK module
+  // so the drag badge follows the pointer without a bridge push per move.
+  const [readoutPosition, setReadoutPosition] = useState(getOverlayTimePosition);
+  const [readoutScale, setReadoutScale] = useState(getOverlayTimeScale);
+  const [readoutVisible, setReadoutVisible] = useState(isOverlayTimeVisible);
+
+  /** Follow the drag live; hand the position to Zoom only on release. */
+  const handleReadoutPositionChange = (position, { commit } = {}) => {
+    setReadoutPosition(position);
+    if (commit) {
+      setOverlayTimePosition(position);
+      (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_position_moved', {
+        x: Math.round(position.x * 100) / 100,
+        y: Math.round(position.y * 100) / 100,
+        overlay_mode: overlayMode,
+      }));
+    }
+  };
+
+  /** One +/- press; the SDK clamps and reports what it actually applied. */
+  const handleAdjustReadoutScale = (direction) => {
+    const applied = setOverlayTimeScale(readoutScale + direction * 0.03);
+    setReadoutScale(applied);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_scale_adjusted', {
+      scale: Math.round(applied * 100) / 100,
+      overlay_mode: overlayMode,
+    }));
+  };
+
+  const handleToggleReadoutVisible = () => {
+    const visible = !readoutVisible;
+    setReadoutVisible(visible);
+    setOverlayTimeVisible(visible);
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('readout_visibility_toggled', {
+      visible,
+      overlay_mode: overlayMode,
+    }));
+  };
 
   // A speech is under way. A pause counts as active — the speech is on hold, not
   // over — which is why this tracks elapsedTime rather than isRunning alone.
@@ -183,6 +219,11 @@ export default memo(function LiveTab() {
       // If custom role and has custom rules, update local state (merge so missing graceAfterRed is filled)
       if (currentSpeaker.role === 'Custom' && currentSpeaker.rules) {
         setCustomRules({ ...DEFAULT_CUSTOM_RULES, ...currentSpeaker.rules });
+      }
+      // A break loaded from the agenda carries its length in its rules; the
+      // picker has to show that length, not whatever was picked last.
+      if (currentSpeaker.role === BREAK_ROLE && currentSpeaker.rules?.red) {
+        setBreakSeconds(currentSpeaker.rules.red);
       }
       // If switching to Custom role but no rules yet, keep current customRules (don't reset)
     } else {
@@ -284,8 +325,8 @@ export default memo(function LiveTab() {
   // no pixels, and removeOverlay there would tear down the share or the
   // popped-out window itself.
   useEffect(() => {
-    // The run triggered by the clear button itself: leave the video as it was
-    // just cleared to. Bumping the generation is what makes this run happen at
+    // The run triggered by a clear — the eraser, or RESET: leave the video as it
+    // was just cleared to. Bumping the generation is what makes this run happen at
     // all, so the skip is always consumed and never swallows a later push.
     if (lastClearGenerationRef.current !== clearGeneration) {
       lastClearGenerationRef.current = clearGeneration;
@@ -293,6 +334,15 @@ export default memo(function LiveTab() {
     }
     if (!isVideoOverlayMode(overlayMode)) return;
     if (wantsColorNow) {
+      // A held swatch previews everything a live speech will show, the
+      // count-up included, so the organizer can place and size it before
+      // anyone speaks. While the timer runs, TimerContext owns the label.
+      if (previewColor && !isRunning) {
+        setOverlayTimeLabel(formatTime(getDisplaySeconds(elapsedTime, currentSpeaker?.rules)));
+      } else if (!speechActive) {
+        // Idle with no swatch held: nothing to count, so no readout.
+        setOverlayTimeLabel(null);
+      }
       const imageUrl = getBackgroundUrl(desiredStatus);
       addDebugLog(`Applying overlay: ${desiredStatus} -> ${imageUrl}`, 'info');
       // Usually redundant with TimerContext's own push on status change; the
@@ -305,9 +355,14 @@ export default memo(function LiveTab() {
       // dialog in camera mode, or delete the user's own video filter in card.
     } else if (isOverlayActive()) {
       addDebugLog('Removing overlay (no speech in progress)', 'info');
+      // A preview may have set the readout; the teardown must not leave it
+      // behind for the next push. Clearing never re-pushes on its own.
+      setOverlayTimeLabel(null);
       removeOverlay();
     }
-  }, [overlayMode, wantsColorNow, desiredStatus, clearGeneration]);
+    // previewColor is listed on its own because desiredStatus can hide a
+    // swatch change: previewing the color the timer already shows.
+  }, [overlayMode, wantsColorNow, desiredStatus, previewColor, clearGeneration]);
 
   // Log when status changes
   useEffect(() => {
@@ -381,8 +436,15 @@ export default memo(function LiveTab() {
   const handleRoleChange = (role) => {
     const previousRole = selectedRole;
     setSelectedRole(role);
-    // Always update current speaker, even if name is empty
-    const rules = role === 'Custom' ? customRules : undefined;
+    // Always update current speaker, even if name is empty. Custom and Break
+    // carry their rules on the speaker: Custom's are edited by hand, Break's
+    // are derived from the length picked below.
+    const rules =
+      role === 'Custom' ? customRules : role === BREAK_ROLE ? deriveBreakRules(breakSeconds) : undefined;
+    // A break called mid-agenda interrupts the running order, it does not
+    // stand in for whoever was loaded: detach so finishing the break neither
+    // completes that speaker's slot nor advances past them.
+    if (role === BREAK_ROLE) clearActiveSpeaker();
     setCurrentSpeaker({
       name: speakerName || '',
       role,
@@ -430,11 +492,30 @@ export default memo(function LiveTab() {
     return `Green: ${formatTimeReadable(rules.green)}, Yellow: ${formatTimeReadable(rules.yellow)}, Red: ${formatTimeReadable(rules.red)}`;
   }, [selectedRole, roleRules]);
 
+  // Spelled in time-left terms, because that is what the countdown shows.
+  const breakExplanation = useMemo(() => {
+    const rules = deriveBreakRules(breakSeconds);
+    return `Counts down from ${formatTimeReadable(rules.red)}. Green when ${formatTimeReadable(rules.red - rules.green)} left, yellow when ${formatTimeReadable(rules.red - rules.yellow)} left, red when time is up.`;
+  }, [breakSeconds]);
+
   // Just the state: the overlay effect pushes the swatch and, when it is toggled
   // back off, takes it down again. Pushing from here as well used to fight that
   // effect, which reapplied the timer's own status a render later.
   const handlePreviewColor = (color) => {
     setPreviewColor((held) => (held === color ? null : color));
+  };
+
+  /** Pick a break length; the phase thresholds re-derive from it. */
+  const handleBreakDurationChange = (seconds) => {
+    setBreakSeconds(seconds);
+    setCurrentSpeaker({
+      name: speakerName || '',
+      role: BREAK_ROLE,
+      rules: deriveBreakRules(seconds),
+    });
+    (window.requestIdleCallback || setTimeout)(() => trackEvent('break_duration_changed', {
+      seconds,
+    }));
   };
 
   const handleStart = () => {
@@ -446,9 +527,15 @@ export default memo(function LiveTab() {
         return;
       }
     }
-    // Ensure current speaker is set with correct rules
-    // Get rules from roleRules if not Custom, or use customRules if Custom
-    const rules = selectedRole === 'Custom' ? customRules : roleRules[selectedRole];
+    // Ensure current speaker is set with correct rules: hand-edited for
+    // Custom, derived from the picked length for Break, the role's own
+    // otherwise.
+    const rules =
+      selectedRole === 'Custom'
+        ? customRules
+        : selectedRole === BREAK_ROLE
+          ? deriveBreakRules(breakSeconds)
+          : roleRules[selectedRole];
     if (!rules) {
       showToast('Please set timing rules first', 'warning');
       return;
@@ -458,7 +545,7 @@ export default memo(function LiveTab() {
     setCurrentSpeaker({
       name: speakerName || '',
       role: selectedRole,
-      ...(selectedRole === 'Custom' && { rules }),
+      ...((selectedRole === 'Custom' || selectedRole === BREAK_ROLE) && { rules }),
     });
 
     startTimer();
@@ -499,40 +586,56 @@ export default memo(function LiveTab() {
    * Put the timer back to zero, and put the tile back to whatever this organizer
    * has said idle should look like.
    *
-   * Which of the two that is belongs to "Show my own background", not to RESET.
-   * An organizer who asked to be handed their face back between speeches means it
-   * here most of all — a reset speech is the most idle the meeting gets — while
-   * one who turned it off wants the color up for the whole meeting, so the tile
-   * returns to the blue card rather than going bare. Pressing RESET is not a
-   * decision about that preference; it is one more moment governed by it.
+   * Undoing a speech that should not have been started has to undo what the
+   * meeting could see of it, so RESET has always owned the tile as well as the
+   * clock. What it must not own is which of the two idle states that means. It
+   * used to strip the tile outright, on the grounds that the reveal-when-idle
+   * preference governs the automatic reveals between speeches and not a button
+   * press — but the organizer who turned that preference off did so to keep the
+   * color up for the whole meeting, and stripping their tile hands them the one
+   * thing they opted out of. So both halves are asked here:
    *
-   * resetTimer applies the preference itself, since the speaker and role changes
-   * that also run through it owe the organizer the same thing. The push below
-   * covers the one case it deliberately skips: with the preference off and
-   * nothing of ours on the tile — after the eraser, or before the first speech of
-   * the meeting — it will not spend a multi-MB bridge transfer on an overlay
-   * nobody asked for. A button press is that ask, and "the timer is off my video
-   * even though I opted out of that" is the state this is here to end.
+   * - Reveals on: the video comes back whole, their own background included.
+   *   This is the eraser's path, in silence, and it costs the same confirmation
+   *   dialog in Timer + Camera.
+   * - Reveals off: the tile returns to the blue card. Unconditionally, unlike
+   *   resetTimer's own handling — which is why the video is skipped there and
+   *   decided here. That gate exists because resetTimer also runs on every
+   *   speaker and role change, where pushing an overlay nothing is displaying
+   *   would spend a multi-MB bridge transfer for no visible effect. A button
+   *   press is exactly the ask it withholds it for: after the eraser, or before
+   *   the meeting's first speech, RESET is how the card comes back.
    */
-  const handleReset = () => {
+  const handleReset = async () => {
     const previousElapsedTime = elapsedTime;
     const previousStatus = currentStatus;
-    // A held swatch outranks the timer's own status everywhere the color is
-    // decided, so a preview left up would paint straight back over the blue card
-    // below. RESET is a return to the starting state; a swatch does not survive it.
-    setPreviewColor(null);
-    resetTimer();
+    // Either branch below owns the video, so resetTimer must not also reach for
+    // it: two removals in flight at once is a confirmation dialog for a
+    // background that has already gone.
+    resetTimer({ skipVideo: true });
     setSpeakerName('');
-    if (!revealFaceWhenIdle && isVideoOverlayMode(overlayMode)) {
-      addDebugLog('Reset with reveal-when-idle off: returning the tile to blue', 'info');
-      applyOverlay(getBackgroundUrl('blue'));
-    }
     // Track timer reset
     (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
       previous_status: previousStatus,
       reveal_face_when_idle: revealFaceWhenIdle
     }));
+    if (!revealFaceWhenIdle) {
+      // A held swatch outranks the timer's own status everywhere the color is
+      // decided, so a preview left up would paint straight back over the card.
+      // RESET is a return to the starting state; a swatch does not survive it.
+      setPreviewColor(null);
+      if (isVideoOverlayMode(overlayMode)) {
+        addDebugLog('Reset with reveal-when-idle off: returning the tile to blue', 'info');
+        applyOverlay(getBackgroundUrl('blue'));
+      }
+      return;
+    }
+    // Silent when it works: the timer reading 00:00 with the tile back to normal
+    // is its own confirmation, and RESET is pressed often enough that a toast per
+    // press is noise. Anything that went wrong, or that the organizer has to fix
+    // in Zoom themselves, is still reported.
+    await clearTimerFromVideo({ announceSuccess: false });
   };
 
   // Says what RESET will do to the video, because that half of it now depends on
@@ -547,10 +650,15 @@ export default memo(function LiveTab() {
 
   const handleFinish = () => {
     const currentAgendaId = activeSpeakerId;
+    // Captured before finishing resets the speaker: a break ending is the
+    // meeting pausing, not advancing, so the next speaker is never auto-loaded
+    // off the back of one — the organizer resumes the agenda when the room is
+    // back.
+    const wasBreak = Boolean(currentSpeaker?.rules?.countdown);
     finishCurrentSpeech();
 
     // Auto-load next uncompleted speaker from agenda
-    if (currentAgendaId) {
+    if (currentAgendaId && !wasBreak) {
       const currentIndex = agenda.findIndex(item => item.id === currentAgendaId);
       const nextSpeaker = agenda.slice(currentIndex + 1).find(item => !item.completed);
       if (nextSpeaker) {
@@ -582,8 +690,15 @@ export default memo(function LiveTab() {
    * legitimately wants a color on the tile — starting a speech, a status change,
    * a mode switch. Notably it does not touch the display preference: pressing
    * clear is a one-time act, not a decision to reveal after every speech.
+   *
+   * Shared with RESET, which owes the organizer the same thing: the two must not
+   * disagree about what taking the timer off the video means, or about what to
+   * say when Zoom will not do it.
+   *
+   * @param {{announceSuccess?: boolean}} [options] - announceSuccess false keeps
+   *   quiet when it worked, for a caller whose own effect is already visible.
    */
-  const handleClearVideo = async () => {
+  const clearTimerFromVideo = async ({ announceSuccess = true } = {}) => {
     setIsClearingVideo(true);
     setPreviewColor(null);
     setClearGeneration((n) => n + 1);
@@ -607,14 +722,20 @@ export default memo(function LiveTab() {
         showToast('Zoom would not clear your video. Check Zoom\'s own background and filter settings.', 'error', 6000);
       } else if (lostBackground) {
         // Zoom offers no way to put a saved background back, so say so rather
-        // than leaving them to notice their own image is gone.
+        // than leaving them to notice their own image is gone. Said even when the
+        // caller wanted silence: losing your own background is not a success.
         showToast('Cleared the timer. Zoom can\'t restore your own background — pick it again in Background & Effects.', 'info', 7000);
-      } else {
+      } else if (announceSuccess) {
         showToast('Cleared the timer from your video.', 'success');
       }
     } finally {
       setIsClearingVideo(false);
     }
+  };
+
+  /** The eraser button. Tracked separately from the resets that clear as well. */
+  const handleClearVideo = async () => {
+    await clearTimerFromVideo();
     (window.requestIdleCallback || setTimeout)(() => trackEvent('video_cleared', {
       overlay_mode: overlayMode,
       current_timer_status: currentStatus,
@@ -747,7 +868,7 @@ export default memo(function LiveTab() {
         />
       )}
 
-      {/* Clear-video escape hatch + overlay mode menu.
+      {/* Clear-background escape hatch + overlay mode menu.
           In the flow rather than floating: these carry their labels now, and two
           labelled buttons pinned over the top-right corner sit on whatever the
           panel is showing underneath. Invisible in the stage modes regardless,
@@ -764,10 +885,10 @@ export default memo(function LiveTab() {
           onClick={handleClearVideo}
           disabled={isClearingVideo}
           className="flex items-center gap-1.5 pl-2 pr-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-sm font-medium transition-colors"
-          aria-label="Clear the timer from my video"
+          aria-label="Clear the timer background from my video"
         >
           <Eraser className="h-4 w-4 flex-shrink-0" />
-          {isClearingVideo ? 'Clearing…' : 'Clear video'}
+          {isClearingVideo ? 'Clearing…' : 'Clear Background'}
         </button>
         <OverlayModeMenu
           value={overlayMode}
@@ -783,7 +904,7 @@ export default memo(function LiveTab() {
           <div className="flex items-center gap-3 flex-1">
             <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
             <p className="text-sm text-yellow-800 font-medium">
-              Your video is turned off. Please turn on your video to use the Timer Card.
+              Your video is turned off. Please turn on your video to show the timer on it.
             </p>
           </div>
           <button
@@ -959,10 +1080,38 @@ export default memo(function LiveTab() {
         onRenameSpeaker={handleRenameSpeaker}
       />
 
-      {selectedRole !== 'Custom' && (
+      {selectedRole !== 'Custom' && selectedRole !== BREAK_ROLE && (
         <p className="text-xs text-gray-500 mt-1">
           Timing rules: {roleExplanation}
         </p>
+      )}
+
+      {selectedRole === BREAK_ROLE && (
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">Break Length</h3>
+            <TimeInputModeToggle mode={timeInputMode} onModeChange={(m) => { saveTimeInputMode(m); setTimeInputMode(m); }} />
+          </div>
+          <div className="flex justify-center gap-2">
+            {BREAK_QUICK_PICKS.map((seconds) => (
+              <button
+                key={seconds}
+                onClick={() => handleBreakDurationChange(seconds)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  breakSeconds === seconds
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {Math.round(seconds / 60)} min
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <TimeInput layout="inline" label="Custom" value={breakSeconds} onChange={handleBreakDurationChange} />
+          </div>
+          <p className="text-xs text-gray-500 text-center">{breakExplanation}</p>
+        </div>
       )}
 
       {selectedRole === 'Custom' && (
@@ -994,6 +1143,11 @@ export default memo(function LiveTab() {
         elapsedTime={elapsedTime}
         status={previewColor || currentStatus}
         rules={currentSpeaker?.rules}
+        readoutPosition={isVideoOverlayMode(overlayMode) ? readoutPosition : null}
+        onReadoutPositionChange={handleReadoutPositionChange}
+        readoutVisible={readoutVisible}
+        onToggleReadoutVisible={handleToggleReadoutVisible}
+        onAdjustReadoutScale={handleAdjustReadoutScale}
       />
 
       {!isRunning && (
@@ -1057,9 +1211,10 @@ export default memo(function LiveTab() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
+                  disabled={isClearingVideo}
                   data-tooltip={resetTooltip}
                   data-tooltip-direction="down"
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="h-4 w-4" />
                   RESET
@@ -1088,9 +1243,10 @@ export default memo(function LiveTab() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
+                  disabled={isClearingVideo}
                   data-tooltip={resetTooltip}
                   data-tooltip-direction="down"
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="h-4 w-4" />
                   RESET

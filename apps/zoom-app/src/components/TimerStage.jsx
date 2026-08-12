@@ -11,7 +11,7 @@ import {
   PictureInPicture2,
   Minimize2,
 } from 'lucide-react';
-import { formatTime, getPhaseInfo, formatPhaseText } from '@toastmaster-timer/shared';
+import { formatTime, getPhaseInfo, formatPhaseTextFor, getDisplaySeconds } from '@toastmaster-timer/shared';
 import { getBackgroundUrl } from '../utils/zoomSdk';
 import StageSpeakerPicker from './StageSpeakerPicker';
 
@@ -78,7 +78,7 @@ export default memo(function TimerStage({
   onRenameSpeaker,
 }) {
   const phaseInfo = rules ? getPhaseInfo(elapsedTime, rules, status) : null;
-  const phaseText = phaseInfo ? formatPhaseText(phaseInfo) : '';
+  const phaseText = phaseInfo ? formatPhaseTextFor(phaseInfo, rules) : '';
   const bgColor = STATUS_COLORS[status] || STATUS_COLORS.blue;
 
   const textShadow = { textShadow: '0 2px 4px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3)' };
@@ -128,6 +128,7 @@ export default memo(function TimerStage({
             <StageSpeakerPicker
               value={speakerName}
               onChange={onSpeakerNameChange}
+              role={role}
               agendaItems={agendaItems}
               activeSpeakerId={activeSpeakerId}
               onSelectSpeaker={onSelectSpeaker}
@@ -230,7 +231,7 @@ export default memo(function TimerStage({
               style={textShadow}
               aria-hidden={clockHidden}
             >
-              {formatTime(elapsedTime)}
+              {formatTime(getDisplaySeconds(elapsedTime, rules))}
             </span>
           </div>
           {phaseText && (

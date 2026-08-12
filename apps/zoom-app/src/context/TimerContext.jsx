@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed } from '@toastmaster-timer/shared';
-import { calculateStatus, formatTime } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, detectRoleFromText, getDefaultGraceAfterRed, BREAK_ROLE, DEFAULT_BREAK_SECONDS, deriveBreakRules } from '@toastmaster-timer/shared';
+import { calculateStatus, formatTime, getDisplaySeconds } from '@toastmaster-timer/shared';
 import { saveAgenda, loadAgenda, saveReports, loadReports, saveRoleRules, loadRoleRules, saveRoleOrder, loadRoleOrder, loadHiddenBuiltinRoles, saveHiddenBuiltinRoles, clearAgenda, clearReports, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
-import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
+import { applyOverlay, removeOverlay, getBackgroundUrl, isOverlayActive, getOverlayMode, isVideoOverlayMode, setOverlayTimeLabel, OVERLAY_MODE_CARD } from '../utils/zoomSdk';
 import { parseEasySpeakText } from '@toastmaster-timer/shared';
 import { recordSpeechFinished } from '@toastmaster-timer/shared';
 import { useToast } from './ToastContext';
@@ -70,6 +70,13 @@ export function TimerProvider({ children }) {
     const savedHidden = loadHiddenBuiltinRoles();
     const merged = savedRules ? { ...DEFAULT_ROLE_RULES, ...savedRules } : { ...DEFAULT_ROLE_RULES };
     (savedHidden || []).forEach((r) => delete merged[r]);
+    // An interim build briefly shipped the break role under the name 'Break';
+    // drop any saved copy so it does not linger as a stray custom role.
+    delete merged['Break'];
+    // After the saved rules on purpose: Break's thresholds are derived from
+    // the length picked on the Live tab, never edited number by number, so a
+    // stale copy that leaked into saved rules must not shadow the derivation.
+    merged[BREAK_ROLE] = deriveBreakRules(DEFAULT_BREAK_SECONDS);
     return merged;
   });
 
@@ -120,8 +127,15 @@ export function TimerProvider({ children }) {
         setElapsedTime(rounded);
         liveElapsedRef.current = rounded;
 
-        // --- batch status update (1c) ---
         const speaker = currentSpeakerRef.current;
+
+        // Zoom-specific: once a second, repaint the readout participants see
+        // on the card — counting up for a speech, down for a break. The SDK
+        // ignores this in every mode that does not render a card frame, and
+        // coalesces pushes a slow client cannot keep up with.
+        setOverlayTimeLabel(formatTime(getDisplaySeconds(rounded, speaker?.rules)));
+
+        // --- batch status update (1c) ---
         if (speaker && speaker.rules) {
           const newStatus = calculateStatus(rounded, speaker.rules);
           if (newStatus !== previousStatusRef.current) {
@@ -155,6 +169,9 @@ export function TimerProvider({ children }) {
     }
     // baseElapsedRef is already set to current elapsed (from stopTimer or initial 0)
     const initialStatus = calculateStatus(baseElapsedRef.current, currentSpeakerRef.current.rules);
+    // Before the push, so the first frame already carries the readout — the
+    // full break length for a countdown, the elapsed time for a speech.
+    setOverlayTimeLabel(formatTime(getDisplaySeconds(baseElapsedRef.current, currentSpeakerRef.current.rules)));
     applyOverlay(getBackgroundUrl(initialStatus));
     previousStatusRef.current = initialStatus;
     setIsRunning(true);
@@ -165,13 +182,25 @@ export function TimerProvider({ children }) {
     setIsRunning(false);
   }, []);
 
-  const resetTimer = useCallback(() => {
+  /**
+   * @param {{skipVideo?: boolean}} [options] - skipVideo leaves the pipelines
+   *   completely alone because the caller is clearing them itself. Pressing RESET
+   *   strips the tile outright rather than following the reveal-when-idle
+   *   preference, and two removals in flight at once — one queued here, one
+   *   bypassing the queue — is a confirmation dialog for a background that has
+   *   already gone.
+   */
+  const resetTimer = useCallback((options) => {
     setIsRunning(false);
     baseElapsedRef.current = 0;
     liveElapsedRef.current = 0;
     setElapsedTime(0);
     setCurrentStatus('blue');
     previousStatusRef.current = 'blue';
+    // Before any overlay call below: the speech is over, so nothing pushed
+    // from here on may carry its readout. Clearing never re-pushes on its own.
+    setOverlayTimeLabel(null);
+    if (options?.skipVideo) return;
     // Stage modes are skipped entirely: removeOverlay there would stop the share
     // or dock the timer window.
     //
@@ -190,9 +219,9 @@ export function TimerProvider({ children }) {
       return;
     }
 
-    // A finished or reset speech hands the organizer their video back —
-    // whichever pipeline is holding the card, since to the organizer there is no
-    // difference between the two. Gated on something of ours actually being up:
+    // A finished speech hands the organizer their video back — whichever pipeline
+    // is holding the card, since to the organizer there is no difference between
+    // the two. Gated on something of ours actually being up:
     // resetTimer also runs on every speaker and role change, and a removal aimed
     // at an empty pipeline costs a confirmation dialog in camera mode and reaches
     // into the user's own Video Filters setting in card mode.
@@ -204,6 +233,18 @@ export function TimerProvider({ children }) {
   // Lightweight name-only update (no timer reset, no overlay call)
   const updateSpeakerName = useCallback((name) => {
     setCurrentSpeaker(prev => prev ? { ...prev, name } : null);
+  }, []);
+
+  /**
+   * Detach the timer from the agenda without touching the agenda itself.
+   *
+   * For sessions that interrupt the running order rather than advance it — an
+   * ad-hoc break called while a speaker was loaded. Without this, finishing
+   * the break would mark that speaker's agenda item completed and advance past
+   * them, consuming a slot nobody spoke in.
+   */
+  const clearActiveSpeaker = useCallback(() => {
+    setActiveSpeakerId(null);
   }, []);
 
   const setCurrentSpeakerAction = useCallback((speaker) => {
@@ -354,9 +395,11 @@ export function TimerProvider({ children }) {
     if (currentSpeaker && elapsedTime > 0) {
       const rules = currentSpeaker.rules;
       const grace = rules ? (rules.graceAfterRed ?? getDefaultGraceAfterRed(currentSpeaker.role)) : 30;
-      const disqualified = rules ? elapsedTime > rules.red + grace : false;
+      // A break has no disqualification and no under/over commentary: nobody
+      // "runs over" a break, the meeting just resumes.
+      const disqualified = rules && !rules.countdown ? elapsedTime > rules.red + grace : false;
       let comment = '';
-      if (rules) {
+      if (rules && !rules.countdown) {
         if (elapsedTime > rules.red) {
           comment = formatPassedRedComment(elapsedTime, rules.red);
           if (disqualified) comment += ' (Disqualified)';
@@ -452,6 +495,7 @@ export function TimerProvider({ children }) {
     resetTimer,
     setCurrentSpeaker: setCurrentSpeakerAction,
     updateSpeakerName,
+    clearActiveSpeaker,
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
@@ -480,6 +524,7 @@ export function TimerProvider({ children }) {
     resetTimer,
     setCurrentSpeakerAction,
     updateSpeakerName,
+    clearActiveSpeaker,
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,

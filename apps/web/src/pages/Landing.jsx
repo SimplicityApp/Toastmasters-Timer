@@ -183,11 +183,114 @@ const TIPS = [
   },
   {
     title: 'Clear the timer from your video',
-    body: 'One button takes the timer off your video and puts your camera back the way it was. Handy when you hand the role to someone else, or if anything looks stuck.',
+    body: 'Clear Background takes the timer off your video and puts your camera back the way it was. RESET does the same on its way to zeroing the clock, so this is the one to reach for when you hand the role to someone else, or if anything looks stuck.',
     src: '/zoom/tutorial/tip-clear-video.jpg',
-    hint: 'Live tab with the clear video button',
+    hint: 'Live tab with the Clear Background button',
   },
 ]
+
+// The rail's entries, in the order the sections appear. Kept next to the page
+// rather than derived from the DOM so the labels can be shorter than the
+// headings they point at — "Tutorial" reads better in a narrow rail than "How to
+// Use the Timer in Zoom".
+const NAV_SECTIONS = [
+  { id: 'top', label: 'Overview' },
+  { id: 'features', label: 'Features' },
+  { id: 'display-modes', label: 'Three Ways' },
+  { id: 'tips', label: 'Worth Knowing' },
+  { id: 'how-to-zoom', label: 'Tutorial' },
+  { id: 'demos', label: 'Demos' },
+  { id: 'timer-role', label: 'Timer Role' },
+]
+
+/**
+ * The section rail down the left of the page.
+ *
+ * Follows the scroll by being fixed rather than sticky: the page content is a
+ * centered max-w-4xl column, and a sticky rail inside that column would either
+ * eat into the reading width or knock the column off center. Fixed and outside
+ * the column, it costs the content nothing.
+ *
+ * Only appears from xl up, where there is empty gutter to put it in. Below that
+ * the page is short enough on headings that scrolling is no hardship, and a rail
+ * would sit on top of the text.
+ */
+function SectionRail() {
+  const [activeId, setActiveId] = useState(NAV_SECTIONS[0].id)
+
+  useEffect(() => {
+    // The heading nearest the top of the viewport wins, so the rail marks the
+    // section you are reading rather than whichever one happens to be biggest.
+    // An IntersectionObserver would flip on the section leaving the bottom of a
+    // tall viewport; measuring against a line near the top does not.
+    const ACTIVE_LINE = 140
+    let frame = 0
+
+    const update = () => {
+      frame = 0
+      let current = NAV_SECTIONS[0].id
+      for (const section of NAV_SECTIONS) {
+        const el = document.getElementById(section.id)
+        if (!el) continue
+        if (el.getBoundingClientRect().top <= ACTIVE_LINE) current = section.id
+      }
+      // At the very bottom the last section may never cross the line — for
+      // instance when it is shorter than the space left below it — so claim it.
+      const atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 2
+      if (atBottom) current = NAV_SECTIONS[NAV_SECTIONS.length - 1].id
+      setActiveId(current)
+    }
+
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(update) }
+
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
+  }, [])
+
+  return (
+    // The rail wears the same blurred dark card the page's sections do. Without
+    // it the rail sits straight on the cover photo, and the labels are only as
+    // legible as whatever part of the picture happens to be behind them.
+    <nav
+      aria-label="Page sections"
+      className="hidden xl:block fixed left-6 top-1/2 -translate-y-1/2 z-20 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-4 py-4"
+    >
+      <ul className="relative border-l border-white/15 pl-4 space-y-1">
+        {NAV_SECTIONS.map((section) => {
+          const isActive = section.id === activeId
+          return (
+            <li key={section.id} className="relative">
+              {/* The rail's marker: a segment of the track lit up beside the
+                  current section, rather than a dot, so the line itself reads
+                  as a progress indicator. */}
+              <span
+                aria-hidden
+                className={`absolute -left-4 top-1/2 -translate-y-1/2 h-6 w-px transition-colors duration-200 ${
+                  isActive ? 'bg-blue-400' : 'bg-transparent'
+                }`}
+              />
+              <a
+                href={`#${section.id}`}
+                aria-current={isActive ? 'true' : undefined}
+                className={`block py-1 text-sm transition-colors ${
+                  isActive ? 'text-white font-medium' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {section.label}
+              </a>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
 
 export default function Landing() {
   const ADD_TO_ZOOM_URL = import.meta.env.VITE_ZOOM_OAUTH_REDIRECT
@@ -218,8 +321,10 @@ export default function Landing() {
         </div>
       </header>
 
+      <SectionRail />
+
       <main className="relative z-10 max-w-4xl mx-auto px-4">
-        <section className="relative overflow-hidden rounded-2xl mt-6 mb-12 bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20">
+        <section id="top" className="relative overflow-hidden rounded-2xl mt-6 mb-12 bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20">
           <div
             className="h-1.5 w-full rounded-full opacity-90"
             style={{
@@ -263,7 +368,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8">
+        <section id="features" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8">
           <h3 className="text-lg font-semibold text-white mb-4">Features</h3>
           <ul className="space-y-3 text-gray-300">
             <li className="flex items-start gap-2">
@@ -298,7 +403,7 @@ export default function Landing() {
             before installing anything; the steps answer "how do I drive it?",
             which only matters once they have decided. Three cards also scan in
             a fraction of the space six steps take. */}
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+        <section id="display-modes" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h2 className="text-lg font-semibold text-white mb-2">Three Ways to Show the Timer</h2>
           <p className="text-gray-300 mb-6">
             Pick the one that fits your club. Switching modes takes one click, and the app remembers your choice for next time.
@@ -316,7 +421,26 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+        {/* Sits with the display modes, not after the steps: both answer "what
+            will this look like in my meeting?", and these options are choices
+            about the modes above. The steps below are the separate question of
+            how to drive it. */}
+        <section id="tips" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Small Things Worth Knowing</h2>
+          <p className="text-gray-300 mb-6">Options that are easy to miss and change how the meeting feels.</p>
+
+          <div className="grid gap-6 sm:grid-cols-3">
+            {TIPS.map((tip) => (
+              <div key={tip.title}>
+                <Shot src={tip.src} alt={tip.title} hint={tip.hint} onZoom={setZoomedShot} />
+                <h3 className="mt-3 text-base font-semibold text-white">{tip.title}</h3>
+                <p className="mt-1 text-sm text-gray-300 leading-relaxed">{tip.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="how-to-zoom" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h2 className="text-lg font-semibold text-white mb-2">How to Use the Timer in Zoom</h2>
           <p className="text-gray-300 mb-6">Six steps from joining the meeting to sharing the report.</p>
 
@@ -338,22 +462,7 @@ export default function Landing() {
           </ol>
         </section>
 
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
-          <h2 className="text-lg font-semibold text-white mb-2">Small Things Worth Knowing</h2>
-          <p className="text-gray-300 mb-6">Options that are easy to miss and change how the meeting feels.</p>
-
-          <div className="grid gap-6 sm:grid-cols-3">
-            {TIPS.map((tip) => (
-              <div key={tip.title}>
-                <Shot src={tip.src} alt={tip.title} hint={tip.hint} onZoom={setZoomedShot} />
-                <h3 className="mt-3 text-base font-semibold text-white">{tip.title}</h3>
-                <p className="mt-1 text-sm text-gray-300 leading-relaxed">{tip.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+        <section id="demos" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h3 className="text-lg font-semibold text-white mb-4">Quick Demo: Using in Zoom</h3>
           <div className="rounded-xl overflow-hidden">
             <video
@@ -382,7 +491,7 @@ export default function Landing() {
           <a href="/toastmasters-timer-demo" className="inline-block mt-3 text-sm text-blue-300 hover:text-blue-200 transition-colors">Watch on dedicated page &rarr;</a>
         </section>
 
-        <section className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
+        <section id="timer-role" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h2 className="text-lg font-semibold text-white mb-3">What is the Timer Role in Toastmasters?</h2>
           <p className="text-gray-300 mb-4">
             The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice.

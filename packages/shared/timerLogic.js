@@ -84,3 +84,37 @@ export function formatPhaseText(phaseInfo) {
     return phaseInfo.phase;
   }
 }
+
+/**
+ * The seconds a clock should display for these rules: elapsed time for a
+ * speech, time remaining for a countdown (a break). Remaining never goes
+ * negative — a break that has run over just sits on 00:00, red.
+ *
+ * @param {number} elapsedSeconds - Elapsed time in seconds
+ * @param {Object} [rules] - Timing rules; countdown: true marks a break
+ * @returns {number} Seconds to display
+ */
+export function getDisplaySeconds(elapsedSeconds, rules) {
+  if (!rules?.countdown || typeof rules.red !== 'number') return elapsedSeconds;
+  return Math.max(0, rules.red - elapsedSeconds);
+}
+
+/**
+ * Phase text matching what the clock shows. A speech clock counts up, so its
+ * phases end "at 05:00"; a break clock counts down, so the same moment reads
+ * "when 02:00 left" — describing a countdown in elapsed time would contradict
+ * the number above it.
+ *
+ * @param {Object} phaseInfo - Phase info from getPhaseInfo
+ * @param {Object} [rules] - Timing rules; countdown: true marks a break
+ * @returns {string} Formatted phase string
+ */
+export function formatPhaseTextFor(phaseInfo, rules) {
+  if (!phaseInfo) return '';
+  if (!rules?.countdown) return formatPhaseText(phaseInfo);
+  if (phaseInfo.endsAt === null) return 'Time is up';
+  const left = Math.max(0, rules.red - phaseInfo.endsAt);
+  return left > 0
+    ? `${phaseInfo.nextPhase} when ${formatTime(left)} left`
+    : `${phaseInfo.nextPhase} at 00:00`;
+}
