@@ -495,17 +495,55 @@ export default memo(function LiveTab() {
     }));
   };
 
+  /**
+   * Put the timer back to zero, and put the tile back to whatever this organizer
+   * has said idle should look like.
+   *
+   * Which of the two that is belongs to "Show my own background", not to RESET.
+   * An organizer who asked to be handed their face back between speeches means it
+   * here most of all — a reset speech is the most idle the meeting gets — while
+   * one who turned it off wants the color up for the whole meeting, so the tile
+   * returns to the blue card rather than going bare. Pressing RESET is not a
+   * decision about that preference; it is one more moment governed by it.
+   *
+   * resetTimer applies the preference itself, since the speaker and role changes
+   * that also run through it owe the organizer the same thing. The push below
+   * covers the one case it deliberately skips: with the preference off and
+   * nothing of ours on the tile — after the eraser, or before the first speech of
+   * the meeting — it will not spend a multi-MB bridge transfer on an overlay
+   * nobody asked for. A button press is that ask, and "the timer is off my video
+   * even though I opted out of that" is the state this is here to end.
+   */
   const handleReset = () => {
     const previousElapsedTime = elapsedTime;
     const previousStatus = currentStatus;
+    // A held swatch outranks the timer's own status everywhere the color is
+    // decided, so a preview left up would paint straight back over the blue card
+    // below. RESET is a return to the starting state; a swatch does not survive it.
+    setPreviewColor(null);
     resetTimer();
     setSpeakerName('');
+    if (!revealFaceWhenIdle && isVideoOverlayMode(overlayMode)) {
+      addDebugLog('Reset with reveal-when-idle off: returning the tile to blue', 'info');
+      applyOverlay(getBackgroundUrl('blue'));
+    }
     // Track timer reset
     (window.requestIdleCallback || setTimeout)(() => trackEvent('timer_reset', {
       previous_elapsed_time: previousElapsedTime,
-      previous_status: previousStatus
+      previous_status: previousStatus,
+      reveal_face_when_idle: revealFaceWhenIdle
     }));
   };
+
+  // Says what RESET will do to the video, because that half of it now depends on
+  // a preference set two clicks away in the mode menu — and the two outcomes are
+  // opposites. Stage modes leave the camera alone entirely, so they get neither
+  // promise.
+  const resetTooltip = isVideoOverlayMode(overlayMode)
+    ? `Reset the timer to 00:00, clear the current speaker, and ${
+        revealFaceWhenIdle ? 'hand your own background back' : 'put the blue timer card back on your video'
+      }`
+    : 'Reset the timer to 00:00 and clear the current speaker';
 
   const handleFinish = () => {
     const currentAgendaId = activeSpeakerId;
@@ -1019,7 +1057,7 @@ export default memo(function LiveTab() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
-                  data-tooltip="Reset the timer to 00:00 and clear the current speaker"
+                  data-tooltip={resetTooltip}
                   data-tooltip-direction="down"
                   className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
@@ -1050,7 +1088,7 @@ export default memo(function LiveTab() {
               <div className="flex gap-2">
                 <button
                   onClick={handleReset}
-                  data-tooltip="Reset the timer to 00:00 and clear the current speaker"
+                  data-tooltip={resetTooltip}
                   data-tooltip-direction="down"
                   className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
