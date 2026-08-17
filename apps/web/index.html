@@ -21,20 +21,67 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta property="og:locale" content="en_US" />
     <!-- Structured data -->
+    <!--
+      Entity graph. One @id per entity, cross-referenced, so search and answer
+      engines resolve "Toastmasters Timer" to a single thing rather than three
+      loosely related blobs. Keep the name string identical everywhere it
+      appears (site, Zoom Marketplace listing, llms.txt) — inconsistent naming
+      is what splits an entity.
+    -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "Toastmasters Timer",
-      "description": "Free timer tool for the Timer role in Toastmasters meetings. Tracks speech times with green/yellow/red signals. Works in browser or as a Zoom app.",
-      "url": "https://www.timer.simple-tech.app/",
-      "applicationCategory": "UtilitiesApplication",
-      "operatingSystem": "Web",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://www.timer.simple-tech.app/#organization",
+          "name": "Simple Tech",
+          "url": "https://www.timer.simple-tech.app/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.timer.simple-tech.app/Toastmasters-Timer-logo.jpg"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://www.timer.simple-tech.app/#website",
+          "name": "Toastmasters Timer",
+          "url": "https://www.timer.simple-tech.app/",
+          "inLanguage": "en-US",
+          "publisher": { "@id": "https://www.timer.simple-tech.app/#organization" }
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://www.timer.simple-tech.app/#webapp",
+          "name": "Toastmasters Timer",
+          "alternateName": "Toastmasters Speech Timer",
+          "description": "Free timer tool for the Timer role in Toastmasters meetings. Tracks speech times with green/yellow/red signals. Works in browser or as a Zoom app with automatic virtual backgrounds.",
+          "url": "https://www.timer.simple-tech.app/",
+          "applicationCategory": "UtilitiesApplication",
+          "applicationSubCategory": "Speech Timer",
+          "operatingSystem": "Web browser, Zoom",
+          "browserRequirements": "Requires a modern web browser with JavaScript enabled",
+          "isAccessibleForFree": true,
+          "inLanguage": "en-US",
+          "image": "https://www.timer.simple-tech.app/Toastmasters-Timer-cover-page.png",
+          "publisher": { "@id": "https://www.timer.simple-tech.app/#organization" },
+          "featureList": [
+            "Green, yellow, and red timing signals for every Toastmasters speech type",
+            "Built-in timing rules: Standard Speech 5-7 min, Table Topics 1-2 min, Evaluation 2-3 min, Longer Speech 7-9 min",
+            "Automatic Zoom virtual background colour changes",
+            "Full-screen, overlay, and Zoom background display modes",
+            "Agenda list with per-speaker timing log",
+            "End-of-meeting timing report",
+            "No account or sign-up required"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+          }
+        }
+      ]
     }
     </script>
     <script type="application/ld+json">
@@ -198,9 +245,14 @@
               <h4>Resources</h4>
               <ul class="static-footer-links">
                 <li><a href="/toastmasters-timer-role-guide">Timer Role Guide</a></li>
+                <li><a href="/toastmasters-timer-script">Timer Script</a></li>
                 <li><a href="/toastmasters-speech-types-and-timing">Speech Types &amp; Timing</a></li>
                 <li><a href="/toastmasters-timing-chart">Timing Chart</a></li>
+                <li><a href="/table-topics-timer">Table Topics Timer</a></li>
+                <li><a href="/toastmasters-speech-contest-timing-rules">Contest Timing Rules</a></li>
                 <li><a href="/how-to-use-zoom-for-toastmasters">Zoom for Toastmasters</a></li>
+                <li><a href="/toastmasters-zoom-timer-backgrounds">Free Zoom Backgrounds</a></li>
+                <li><a href="/best-toastmasters-timer-apps">Timer Apps Compared</a></li>
                 <li><a href="/toastmasters-timer-demo">Product Demo</a></li>
                 <li><a href="/toastmasters-timer-zoom-demo">Zoom Demo</a></li>
               </ul>

@@ -10,6 +10,10 @@ import zoomSdkSource from './zoomSdk.js?raw';
 const { sdkMock } = vi.hoisted(() => ({
   sdkMock: {
     config: vi.fn(),
+    // The generic dispatcher, which the real SDK does define. It is how the
+    // module reaches the virtual-background getters that have no wrapper method,
+    // so leaving it off would make every one of them read as ungranted.
+    callZoomApi: vi.fn(),
     setVideoFilter: vi.fn(),
     deleteVideoFilter: vi.fn(),
     setVirtualBackground: vi.fn(),
@@ -133,6 +137,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   sdkMock.config.mockReset();
+  sdkMock.callZoomApi.mockReset();
   sdkMock.setVideoFilter.mockReset();
   sdkMock.deleteVideoFilter.mockReset();
   sdkMock.setVirtualBackground.mockReset();
@@ -1278,9 +1283,13 @@ describe('entering a stage mode leaves the camera untouched', () => {
 
 describe('the debug panel reports on every API the app uses', () => {
   it('covers every zoomSdk call in the module', async () => {
-    const called = new Set(
-      [...zoomSdkSource.matchAll(/zoomSdk\.([a-zA-Z]+)\s*(?:\(|\?\.\()/g)].map(([, name]) => name)
-    );
+    const called = new Set([
+      ...[...zoomSdkSource.matchAll(/zoomSdk\.([a-zA-Z]+)\s*(?:\(|\?\.\()/g)].map(([, name]) => name),
+      // Reached by name through callSdkApi rather than as a property, because the
+      // npm SDK defines no wrapper for them. Invisible to the pattern above, and
+      // just as much a call the debug panel has to report on.
+      ...[...zoomSdkSource.matchAll(/callSdkApi\(\s*'([a-zA-Z]+)'/g)].map(([, name]) => name),
+    ]);
     const { USED_SDK_APIS } = await loadModule();
     const declared = new Set(USED_SDK_APIS.map((api) => api.name));
 
@@ -1292,13 +1301,17 @@ describe('the debug panel reports on every API the app uses', () => {
   });
 
   // Grantable in the Marketplace, absent from the npm typings — checked against
-  // @zoom/appssdk 0.16.36, 0.16.40 and the CDN bundle in July 2026. Requesting
-  // them is what makes the grant arrive on a client that has them, so the app
-  // asks ahead of the SDK on purpose; config() lists any refusal in
-  // unsupportedApis and isApiAvailable keeps every call site honest until then.
+  // @zoom/appssdk 0.16.36, 0.16.40, 0.16.41 (latest) and the CDN bundle in
+  // August 2026. Requesting them is what makes the grant arrive on a client that
+  // has them, so the app asks ahead of the SDK on purpose; config() lists any
+  // refusal in unsupportedApis and isApiAvailable keeps every call site honest.
   // Delete an entry once the typings catch up — the assertion below covers it
   // again from that moment.
-  const AHEAD_OF_SDK_CAPABILITIES = ['getCurrentVirtualBackground', 'getVirtualBackgrounds'];
+  const AHEAD_OF_SDK_CAPABILITIES = [
+    'getCurrentVirtualBackground',
+    'getVirtualBackgrounds',
+    'getVirtualBackgroundData',
+  ];
 
   it('requests capabilities the SDK actually defines', async () => {
     // A capability is the exact API or event name. "videoFilter" and
@@ -1709,21 +1722,481 @@ describe('putting the user back on their own background', () => {
     expect(result.lostBackground).toBe(false);
   });
 
-  it('says so when the user had an image Zoom cannot put back', async () => {
+  /** An ImageData-shaped payload, as getVirtualBackgroundData returns. */
+  function fakePixels(width = 1920, height = 1080) {
+    return { width, height, data: new Uint8ClampedArray(4) };
+  }
+
+  it('puts the user back on their own background image', async () => {
+    // The report that prompted this: someone joins on a bookshelf, times a
+    // speech, and the last color hands them back their bare office.
     const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
       await loadModule();
     await initializeZoomSdk();
     stubImage();
-    const read = withBackgroundReader({ id: 'vb-77', name: 'beach.png' });
+    const read = withBackgroundReader({ id: 'vb-77', name: 'bookshelf.png' });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
 
     await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
     read.mockResolvedValue({ id: 'timer-green' });
     const result = await clearVideoPipelines();
 
-    // setVirtualBackground takes imageData, a fileUrl or blur — never an id —
-    // so removal is the closest available and the caller has to be told.
+    // getVirtualBackgroundData turns the snapshotted id into pixels, which is the
+    // only input setVirtualBackground accepts for an image.
+    expect(sdkMock.callZoomApi).toHaveBeenCalledWith('getVirtualBackgroundData', { backgroundId: 'vb-77' }, expect.any(Number));
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    // Removal is what used to strip them bare, and it is also the one call here
+    // that costs a confirmation dialog.
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('accepts a bare ImageData response, not only a wrapped one', async () => {
+    // An ImageData has a `data` property of its own, so unwrapping by key order
+    // would reach past the ImageData to its byte array and then reject that as
+    // unusable — dropping the background for a response that was perfectly good.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'vb-77', name: 'bookshelf.png' });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue(pixels);
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ id: 'timer-green' });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('restores from the stored id after the webview reloads', async () => {
+    // Zoom reloads the app whenever the panel is reopened, which drops the pixel
+    // cache. The id is persisted precisely so the pixels can be fetched again.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'image', id: 'vb-77', name: 'bookshelf.png' })
+    );
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    withBackgroundReader({ id: 'timer-red' });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.callZoomApi).toHaveBeenCalledWith('getVirtualBackgroundData', { backgroundId: 'vb-77' }, expect.any(Number));
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('removes and says so when Zoom will not hand the pixels over', async () => {
+    // A stock background the client declines, or an id it no longer knows. The
+    // color still has to come off, so removal stays the fallback — and the
+    // organizer is told rather than left to notice on their own tile.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'vb-77', name: 'beach.png' });
+    sdkMock.callZoomApi.mockRejectedValue(new Error('not available'));
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ id: 'timer-green' });
+    const result = await clearVideoPipelines();
+
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
     expect(result).toMatchObject({ ok: true, lostBackground: true });
+  });
+
+  it('removes rather than restoring a response it cannot read as pixels', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'vb-77', name: 'beach.png' });
+    // Neither an ImageData nor anything wrapping one. Guessing here would push
+    // rubbish onto the user's video.
+    sdkMock.callZoomApi.mockResolvedValue({ status: 'ok' });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ id: 'timer-green' });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalledWith(
+      expect.objectContaining({ imageData: expect.anything() })
+    );
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: true });
+  });
+
+  /** How many times the pixels were asked for, across every id. */
+  function pixelFetches() {
+    return sdkMock.callZoomApi.mock.calls.filter(([api]) => api === 'getVirtualBackgroundData').length;
+  }
+
+  it('keeps the record so a later speech restores even after the read stops working', async () => {
+    // The record used to be cleared once spent, on the grounds that the next
+    // speech could always re-read it. It cannot: the read needs a getter not
+    // every client grants, and one failure then dropped the organizer to a bare
+    // camera for the rest of the meeting.
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'vb-77', name: 'bookshelf.png' });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ id: 'timer-green' });
+    await clearVideoPipelines();
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+
+    // Second speaker, with the client no longer answering at all. Pushed through
+    // applyOverlay rather than setOverlayMode, which returns early once the mode
+    // is already camera and would leave this asserting on the first speech.
+    read.mockRejectedValue(new Error('not supported'));
+    sdkMock.setVirtualBackground.mockClear();
+    await applyOverlay('https://zoom.example/backgrounds/red.png');
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('does not re-fetch the pixels for a background that has not changed', async () => {
+    // The organizer keeps one background all meeting, so the re-read before every
+    // push finds the same one. Dropping the cache on each would ship megabytes
+    // across the bridge once per speaker for no gain.
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const bookshelf = { id: 'vb-77', name: 'bookshelf.png' };
+    const read = withBackgroundReader(bookshelf);
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    // The reader has to move with the video, or the second clear correctly
+    // decides the background is already theirs and skips — which is what made an
+    // earlier version of this test pass while proving nothing.
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ id: 'timer-green' });
+    await clearVideoPipelines();
+
+    // Second speaker, back on the same bookshelf the restore just put up.
+    read.mockResolvedValue(bookshelf);
+    await applyOverlay('https://zoom.example/backgrounds/red.png');
+    read.mockResolvedValue({ id: 'timer-red' });
+    await clearVideoPipelines();
+
+    // Both speeches genuinely restored, so the single fetch is a cache hit and
+    // not a clear that quietly did nothing.
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(pixelFetches()).toBe(1);
+  });
+
+  it('re-fetches once the user picks a different background themselves', async () => {
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'vb-77', name: 'bookshelf.png' });
+    const kitchen = fakePixels(1280, 720);
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: fakePixels() });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ id: 'timer-green' });
+    await clearVideoPipelines();
+
+    // They visited Background & Effects between speakers. Nothing reports that,
+    // so the next snapshot is the only thing that can notice.
+    read.mockResolvedValue({ id: 'vb-99', name: 'kitchen.png' });
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: kitchen });
+    await applyOverlay('https://zoom.example/backgrounds/red.png');
+    read.mockResolvedValue({ id: 'timer-red' });
+    await clearVideoPipelines();
+
+    // The kitchen goes back, not the cached bookshelf.
+    expect(sdkMock.callZoomApi).toHaveBeenLastCalledWith('getVirtualBackgroundData', { backgroundId: 'vb-99' }, expect.any(Number));
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: kitchen });
+    expect(pixelFetches()).toBe(2);
+  });
+
+  it('restores an image on a client that granted the setter but not the remover', async () => {
+    // The two capabilities are granted independently, and putting an image back
+    // is a set. Gating it on the remover reported the pipeline ungranted and left
+    // the last speech color on the tile.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'image', id: 'vb-77', name: 'bookshelf.png' })
+    );
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['removeVirtualBackground'] });
+    await initializeZoomSdk();
+    withBackgroundReader({ id: 'timer-red' });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: pixels });
+    expect(result).toMatchObject({ ok: true, ungranted: [], lostBackground: false });
+  });
+
+  it('records a bare camera as theirs, so a later clear aims at bare rather than nothing', async () => {
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    withBackgroundReader({ id: 'None' });
+
+    await clearVideoPipelines();
+
+    expect(JSON.parse(localStorage.getItem('toastmaster_zoom_previous_background'))).toEqual({
+      type: 'none',
+    });
+  });
+
+  it('bounds the pixel fetch well under the SDK default, so FINISH cannot stall on it', async () => {
+    // A client that takes the call and never answers is what an apiName it does
+    // not recognise looks like from here. callZoomApi gives up on its own after
+    // 10s, which would freeze the handover between pressing FINISH and the video
+    // coming back, then remove anyway.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'image', id: 'vb-77', name: 'bookshelf.png' })
+    );
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    withBackgroundReader({ id: 'timer-red' });
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: fakePixels() });
+
+    await clearVideoPipelines();
+
+    const [, , timeout] = sdkMock.callZoomApi.mock.calls.find(
+      ([api]) => api === 'getVirtualBackgroundData'
+    );
+    expect(timeout).toBeGreaterThan(0);
+    expect(timeout).toBeLessThan(10000);
+  });
+
+  /** Reject like a client that dislikes the payload, not the id. */
+  function validationError() {
+    return Object.assign(new Error('Validation error, please check API parameters.'), { code: -1 });
+  }
+
+  it('decodes the base64 JPEG a real client returns, not a bare ImageData', async () => {
+    // What a 7.1.5 desktop client sends is { imageData: { data: "/9j/4AAQ…" } } —
+    // a base64 JPEG, despite the field being called imageData. Reading it as the
+    // ImageData that setVirtualBackground takes is what turned a call that had
+    // genuinely succeeded into "returned no usable pixels".
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    // 2560x1440 source, so the 1920x1080 ceiling is exercised: an ImageData that
+    // large would pass setVirtualBackground's documented 15MB limit.
+    stubImage(2560, 1440);
+    const read = withBackgroundReader({
+      currentBackground: { id: 'AD3E044A', name: 'San Francisco' },
+      currentBackgroundSetting: 'background',
+    });
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: { data: '/9j/4AAQSkZJRgABAQAASABIAAD' } });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'background' });
+    const result = await clearVideoPipelines();
+
+    const [applied] = sdkMock.setVirtualBackground.mock.lastCall;
+    expect(applied.imageData).toMatchObject({ width: 1920, height: 1080 });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('does not shrink a restored background to the overlay ceiling', async () => {
+    // The overlay path clamps to 640x360, which is right for a card overwritten
+    // every second and wrong for handing someone their own background back.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage(1280, 720);
+    const read = withBackgroundReader({
+      currentBackground: { id: 'AD3E044A', name: 'San Francisco' },
+      currentBackgroundSetting: 'background',
+    });
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: { data: '/9j/4AAQSkZJRg' } });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'background' });
+    await clearVideoPipelines();
+
+    // Under the ceiling, so it comes back at its own size rather than upscaled.
+    const [applied] = sdkMock.setVirtualBackground.mock.lastCall;
+    expect(applied.imageData).toMatchObject({ width: 1280, height: 720 });
+  });
+
+  it('reads the id from the saved-list response, which names it differently', async () => {
+    // getVirtualBackgrounds answers { backgrounds, currentBackgroundId,
+    // currentBackgroundSetting } — no applied-background object at all. A client
+    // granting only this getter used to read as "did not say".
+    const { normalizeVirtualBackground } = await loadModule();
+
+    expect(
+      normalizeVirtualBackground({
+        backgrounds: [
+          { id: '732EE50D', name: 'Golden Gate' },
+          { id: 'AD3E044A', name: 'San Francisco' },
+        ],
+        currentBackgroundId: 'AD3E044A',
+        currentBackgroundSetting: 'background',
+      })
+    ).toEqual({ type: 'image', id: 'AD3E044A', name: 'San Francisco' });
+
+    // 'background' is the client's word for "an image is up", and it must not be
+    // mistaken for none or blur.
+    expect(
+      normalizeVirtualBackground({ currentBackgroundId: 'AD3E044A', currentBackgroundSetting: 'background' })
+    ).toEqual({ type: 'image', id: 'AD3E044A' });
+  });
+
+  it('names the payload it sent when the client rejects it', async () => {
+    // "Validation error, please check API parameters" with no record of what was
+    // sent leaves nothing to act on. The log has to decompose the call.
+    const { initializeZoomSdk, setLogCallback, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    const lines = [];
+    setLogCallback((message) => lines.push(message));
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    sdkMock.callZoomApi.mockRejectedValue(validationError());
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    await clearVideoPipelines();
+
+    expect(lines.some((line) => line.includes('getVirtualBackgroundData({ id: "vb-77" }) failed'))).toBe(true);
+  });
+
+  it('tries other payload spellings before giving up', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    const pixels = fakePixels();
+    // This client wants virtualBackgroundId, not id.
+    sdkMock.callZoomApi.mockImplementation((api, payload) => {
+      if (api !== 'getVirtualBackgroundData') return Promise.resolve({});
+      if (payload?.virtualBackgroundId === 'vb-77') return Promise.resolve({ imageData: pixels });
+      return Promise.reject(validationError());
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'image' });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('falls back to the id the saved list uses for the same background', async () => {
+    // The docs say ids for getVirtualBackgroundData come from getVirtualBackgrounds,
+    // not from getCurrentVirtualBackground. The two need not agree, and a stock
+    // background is where they would not.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'current-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockImplementation((api, payload) => {
+      if (api === 'getVirtualBackgrounds') {
+        return Promise.resolve({
+          virtualBackgrounds: [
+            { id: 'list-99', name: 'San Francisco' },
+            { id: 'list-11', name: 'Golden Gate' },
+          ],
+        });
+      }
+      if (payload?.backgroundId === 'list-99') return Promise.resolve({ imageData: pixels });
+      return Promise.reject(validationError());
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'image' });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    // Only the entry that matches by name. Feeding every saved background to the
+    // getter in turn would be a lot of calls to land on one the user never had up.
+    expect(sdkMock.callZoomApi).not.toHaveBeenCalledWith(
+      'getVirtualBackgroundData',
+      { backgroundId: 'list-11' },
+      expect.any(Number)
+    );
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('does not repeat a failed run of calls while the organizer waits', async () => {
+    // The prefetch at speech start has already established the answer. Repeating
+    // it on the restore path stalls the handover to learn nothing new.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'San Francisco' },
+      currentBackgroundSetting: 'image',
+    });
+    sdkMock.callZoomApi.mockRejectedValue(validationError());
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    const afterPrefetch = pixelFetches();
+    expect(afterPrefetch).toBeGreaterThan(0);
+
+    read.mockResolvedValue({ currentBackground: { id: 'timer-green' }, currentBackgroundSetting: 'image' });
+    const result = await clearVideoPipelines();
+
+    expect(pixelFetches()).toBe(afterPrefetch);
+    // Still removes, so the speech color cannot outlive the speech.
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: true });
+  });
+
+  it('reaches the getters that have no wrapper method through the bridge', async () => {
+    // The bug this whole path had: isApiAvailable demanded typeof
+    // zoomSdk[name] === 'function', which no client can satisfy for an API the
+    // npm SDK never defines. Every read below was dead code as a result.
+    const { initializeZoomSdk, isApiAvailable } = await loadModule();
+    await initializeZoomSdk();
+
+    expect(typeof sdkMock.getVirtualBackgroundData).not.toBe('function');
+    expect(isApiAvailable('getVirtualBackgroundData')).toBe(true);
+    expect(isApiAvailable('getVirtualBackgrounds')).toBe(true);
+  });
+
+  it('treats a refused getter as refused even though it has no wrapper', async () => {
+    const { initializeZoomSdk, isApiAvailable } = await loadModule();
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['getVirtualBackgroundData'] });
+    await initializeZoomSdk();
+
+    expect(isApiAvailable('getVirtualBackgroundData')).toBe(false);
+    expect(isApiAvailable('getVirtualBackgrounds')).toBe(true);
   });
 
   it('leaves a background that is no longer ours completely alone', async () => {
@@ -1773,6 +2246,90 @@ describe('putting the user back on their own background', () => {
 
     expect(await clearVideoPipelines()).toMatchObject({ ok: true });
     expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('names the nested keys of a shape it cannot read, without dumping the pixels', async () => {
+    // Top-level keys alone cost a round-trip: they said "currentBackground,
+    // currentBackgroundSetting" without saying what was inside, which is the part
+    // that fixes the parser. An ImageData's byte array must stay out of it — the
+    // panel would be unreadable and the real answer buried.
+    const { initializeZoomSdk, setLogCallback, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    const lines = [];
+    setLogCallback((message) => lines.push(message));
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      unexpected: { deeper: 'value' },
+      pixels: { width: 4, height: 4, data: new Uint8ClampedArray(64) },
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    await clearVideoPipelines();
+
+    const complaint = lines.find((line) => line.includes('does not recognise'));
+    expect(complaint).toContain('unexpected: { deeper: "value" }');
+    expect(complaint).toContain('Uint8ClampedArray(64)');
+    expect(complaint).not.toMatch(/0, 0, 0/);
+  });
+
+  it('reads the shape a real client actually sends', async () => {
+    // Observed on a 5.17 desktop client, from the debug log of a restore that
+    // failed: getCurrentVirtualBackground answers with two fields, not one. The
+    // parser read only the object and called a perfectly good answer
+    // unrecognisable, so the clear removed the organizer's background instead of
+    // putting it back.
+    const { normalizeVirtualBackground } = await loadModule();
+
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+        currentBackgroundSetting: 'image',
+      })
+    ).toEqual({ type: 'image', id: 'vb-77', name: 'bookshelf.png' });
+
+    // The setting is the only field that separates "none" from "did not say".
+    expect(
+      normalizeVirtualBackground({ currentBackground: null, currentBackgroundSetting: 'none' })
+    ).toEqual({ type: 'none' });
+    expect(
+      normalizeVirtualBackground({ currentBackground: null, currentBackgroundSetting: 'blur' })
+    ).toEqual({ type: 'blur' });
+    // Case and padding are the client's business, not ours.
+    expect(
+      normalizeVirtualBackground({ currentBackground: null, currentBackgroundSetting: ' Blur ' })
+    ).toEqual({ type: 'blur' });
+    // It wins over an image left in the object, since it says what is applied.
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+        currentBackgroundSetting: 'None',
+      })
+    ).toEqual({ type: 'none' });
+  });
+
+  it('restores end to end from the real client shape', async () => {
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+      currentBackgroundSetting: 'image',
+    });
+    const pixels = fakePixels();
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    read.mockResolvedValue({
+      currentBackground: { id: 'timer-green' },
+      currentBackgroundSetting: 'image',
+    });
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenLastCalledWith({ imageData: pixels });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
   });
 
   it('gives up rather than guessing at a response it does not recognise', async () => {

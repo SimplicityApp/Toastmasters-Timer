@@ -2,22 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:web"],
-      "port": 3001
-    },
-    {
-      "name": "zoom",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:zoom"],
-      "port": 3000
-    },
-    {
-      "name": "cloudflare",
+      "name": "cf-worker",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", "--port", "8787"],
-      "port": 8787
+      "runtimeArgs": ["wrangler", "dev", "--port", "8788"],
+      "port": 8788
     }
   ]
 }

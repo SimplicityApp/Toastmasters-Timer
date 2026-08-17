@@ -721,10 +721,12 @@ export default memo(function LiveTab() {
       } else if (!ok) {
         showToast('Zoom would not clear your video. Check Zoom\'s own background and filter settings.', 'error', 6000);
       } else if (lostBackground) {
-        // Zoom offers no way to put a saved background back, so say so rather
-        // than leaving them to notice their own image is gone. Said even when the
-        // caller wanted silence: losing your own background is not a success.
-        showToast('Cleared the timer. Zoom can\'t restore your own background — pick it again in Background & Effects.', 'info', 7000);
+        // The app does put a saved background back, via getVirtualBackgroundData.
+        // This is the narrower case left over: the client refused those pixels,
+        // or no longer knows the id. Say so rather than leaving them to notice
+        // their own image is gone. Said even when the caller wanted silence:
+        // losing your own background is not a success.
+        showToast('Cleared the timer. Zoom wouldn\'t give your own background back — pick it again in Background & Effects.', 'info', 7000);
       } else if (announceSuccess) {
         showToast('Cleared the timer from your video.', 'success');
       }

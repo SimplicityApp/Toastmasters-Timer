@@ -83,12 +83,14 @@ const OVERLAY_CEILING_HEIGHT = 360;
  */
 export const USED_SDK_APIS = [
   { name: 'config', capability: null, required: true, purpose: 'Grants every capability below' },
+  { name: 'callZoomApi', capability: null, required: true, purpose: 'Reaching APIs the npm SDK has no wrapper for' },
   { name: 'setVideoFilter', capability: 'setVideoFilter', required: true, purpose: 'Timer Only' },
   { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Only' },
   { name: 'setVirtualBackground', capability: 'setVirtualBackground', required: false, purpose: 'Timer + Camera' },
   { name: 'removeVirtualBackground', capability: 'removeVirtualBackground', required: false, purpose: 'Clearing Timer + Camera' },
   { name: 'getCurrentVirtualBackground', capability: 'getCurrentVirtualBackground', required: false, purpose: 'Leaving the user\'s own background alone' },
   { name: 'getVirtualBackgrounds', capability: 'getVirtualBackgrounds', required: false, purpose: 'Naming the background being restored' },
+  { name: 'getVirtualBackgroundData', capability: 'getVirtualBackgroundData', required: false, purpose: 'Putting the user\'s own background image back' },
   { name: 'getVideoState', capability: 'getVideoState', required: false, purpose: 'Video-off warning' },
   { name: 'setVideoState', capability: 'setVideoState', required: false, purpose: 'Turn my video on' },
   { name: 'getMeetingParticipants', capability: 'getMeetingParticipants', required: false, purpose: 'Speaker suggestions' },
@@ -126,6 +128,25 @@ const OPTIONAL_CAPABILITIES = capabilitiesWhere(false);
 // removeVirtualBackground in the first place.
 let unsupportedApis = new Set();
 
+// APIs the Zoom client supports and the Marketplace grants, but that the npm SDK
+// ships no wrapper method for. Checked against @zoom/appssdk 0.16.36 (installed)
+// and 0.16.41 (latest): absent from the `Apis` union and from the runtime bundle
+// alike, while the Marketplace lists all three under Add API.
+//
+// The typings lagging is not the same as the client not supporting them, and
+// treating it as the same is what made every read below dead code:
+// isApiAvailable required `typeof zoomSdk[name] === 'function'`, which no client
+// could ever satisfy for these, so readCurrentVirtualBackground always answered
+// "cannot say" and the blur-restore branch never once ran in production.
+//
+// Delete a name from here the moment the SDK defines it; callSdkApi then routes
+// it through the real wrapper with no other change.
+const BRIDGE_ONLY_APIS = new Set([
+  'getCurrentVirtualBackground',
+  'getVirtualBackgrounds',
+  'getVirtualBackgroundData',
+]);
+
 /**
  * Whether this client actually granted an API, as opposed to the SDK merely
  * defining it. Optimistic before config() resolves, which only affects calls
@@ -135,9 +156,52 @@ let unsupportedApis = new Set();
  * @returns {boolean}
  */
 export function isApiAvailable(name) {
-  if (!zoomSdk || typeof zoomSdk[name] !== 'function') return false;
+  if (!zoomSdk) return false;
+  // A bridge-only API has no wrapper to look for, so the generic dispatcher is
+  // what has to exist. config() still gets the last word through unsupportedApis.
+  if (BRIDGE_ONLY_APIS.has(name)) {
+    if (typeof zoomSdk.callZoomApi !== 'function') return false;
+  } else if (typeof zoomSdk[name] !== 'function') {
+    return false;
+  }
   return !unsupportedApis.has(name);
 }
+
+/**
+ * Call an SDK method by name, through its wrapper where one exists and through
+ * the generic bridge where one does not.
+ *
+ * callZoomApi(apiName, data) is public on the SDK prototype. It stamps a call id
+ * onto `{apiName, data}` and posts it to the native client; an apiName with no
+ * compatibility entry passes through untouched rather than being rejected. So a
+ * granted capability is callable whether or not the npm package caught up.
+ *
+ * Callers must still gate on isApiAvailable. This only makes the call possible,
+ * not safe: an ungranted API rejects at the bridge exactly as it always did.
+ *
+ * @param {string} name - SDK method name
+ * @param {object} [data] - Request payload, omitted for the getters that take none
+ * @param {number} [timeoutMs] - Bridge path only; the wrappers take no timeout
+ * @returns {Promise<any>}
+ */
+function callSdkApi(name, data, timeoutMs) {
+  if (typeof zoomSdk[name] === 'function') {
+    return data === undefined ? zoomSdk[name]() : zoomSdk[name](data);
+  }
+  return zoomSdk.callZoomApi(name, data, timeoutMs);
+}
+
+// How long to wait for the pixels of the user's own background.
+//
+// callZoomApi rejects on its own after 10s, which is correct for a call the user
+// is waiting on and far too long for this one: it sits between pressing FINISH
+// and the video coming back. A client that takes the call but never answers —
+// which is what an unrecognised apiName looks like from here — would freeze the
+// handover for ten seconds and then remove anyway.
+//
+// Short is safe because this is almost always a cache hit: the prefetch starts
+// when the speech starts, minutes before any restore needs it.
+const BACKGROUND_PIXELS_TIMEOUT_MS = 4000;
 
 // Overlay mode constants.
 //
@@ -446,6 +510,21 @@ function markVirtualBackgroundApplied(applied) {
 // the old remove-and-hope path runs unchanged.
 const PREVIOUS_BACKGROUND_KEY = 'toastmaster_zoom_previous_background';
 
+// The user's own background image as pixels, keyed by the id it came from.
+//
+// Not persisted, and deliberately so. An ImageData is megabytes — a 1920x1080
+// frame is about 8MB of RGBA — which is past what localStorage takes at all and
+// enough to make IndexedDB a real cost for something re-fetchable. The id under
+// PREVIOUS_BACKGROUND_KEY is the durable half; this is only a cache in front of
+// it, so a webview reload costs one more getVirtualBackgroundData call and
+// nothing else.
+let previousBackgroundPixels = null;
+
+// The id whose pixels this client refused, so the restore path does not repeat a
+// run of failed calls while the organizer waits for their video back. Discarded
+// with the record it belongs to, since a new background deserves a fresh try.
+let unfetchableBackgroundId = null;
+
 function readPreviousBackground() {
   try {
     const raw = localStorage.getItem(PREVIOUS_BACKGROUND_KEY);
@@ -456,6 +535,16 @@ function readPreviousBackground() {
 }
 
 function writePreviousBackground(background) {
+  // Drop the pixels only when they stop describing what is recorded. Re-reading
+  // the same background before every speech is the normal case — the organizer
+  // keeps one background all meeting — and dropping the cache on each of those
+  // would re-fetch megabytes for the image we just put back.
+  if (background?.type !== 'image' || previousBackgroundPixels?.id !== background.id) {
+    previousBackgroundPixels = null;
+  }
+  if (background?.type !== 'image' || unfetchableBackgroundId !== background.id) {
+    unfetchableBackgroundId = null;
+  }
   try {
     if (background) localStorage.setItem(PREVIOUS_BACKGROUND_KEY, JSON.stringify(background));
     else localStorage.removeItem(PREVIOUS_BACKGROUND_KEY);
@@ -464,39 +553,71 @@ function writePreviousBackground(background) {
   }
 }
 
+/** The first of these that is a usable, non-empty string. */
+function firstString(...values) {
+  return values.find((value) => typeof value === 'string' && value.trim())?.trim();
+}
+
 /**
  * Reduce whatever the client reports to { type, id, name }.
  *
- * Deliberately tolerant, and deliberately gives up rather than guesses. These
- * two APIs are grantable in the Marketplace but absent from @zoom/appssdk
- * 0.16.36, 0.16.40 and the CDN bundle, so their exact response shape cannot be
- * pinned down here — checked, not assumed. Returning null means "the client did
- * not tell us", which every caller treats as the old behaviour rather than as
- * an answer. A wrong guess would be worse than no guess: it decides whether the
- * user gets a confirmation dialog they did not need.
+ * The real shape, from a 5.17 desktop client, is:
+ *
+ *   { currentBackground: {...} | null, currentBackgroundSetting: 'none' | 'blur' | ... }
+ *
+ * with currentBackgroundSetting saying which of the three states applies and
+ * currentBackground identifying the image when one is up. That is what the
+ * documentation describes in prose — "the virtual background that is currently
+ * applied, or if the current background setting is None or Blur" — and it is two
+ * fields, not one. Reading only the object was what made a real answer look
+ * unrecognisable, and the clear then removed the organizer's bookshelf instead of
+ * putting it back.
+ *
+ * Still deliberately tolerant, and still gives up rather than guesses. These APIs
+ * are grantable in the Marketplace but absent from @zoom/appssdk 0.16.36,
+ * 0.16.40, 0.16.41 and the CDN bundle, so nothing here can be pinned to a typing
+ * — the shape above is what a client was observed to send, not what a contract
+ * promises. The older key spellings stay accepted for that reason. Returning null
+ * means "the client did not tell us", which every caller treats as the old
+ * behaviour rather than as an answer. A wrong guess would be worse than no guess:
+ * it decides whether the user gets a confirmation dialog they did not need.
  *
  * @param {any} raw
  * @returns {{type: string, id?: string, name?: string}|null}
  */
 export function normalizeVirtualBackground(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  // getVirtualBackgrounds returns the list plus the applied one; the single
-  // getter returns the applied one alone. Accept either, under any of the names
-  // the response might carry it as.
-  const current = raw.currentVirtualBackground || raw.current || raw.virtualBackground || raw;
-  if (!current || typeof current !== 'object') return null;
 
-  const label = [current.type, current.id, current.name]
-    .find((value) => typeof value === 'string' && value.trim());
-  if (!label) return null;
+  // getVirtualBackgrounds returns the saved list alongside the applied one; the
+  // single getter returns the applied one alone. Both carry it under these keys.
+  const applied =
+    raw.currentBackground ?? raw.currentVirtualBackground ?? raw.current ?? raw.virtualBackground ?? raw;
+  // Zoom may name the applied background by object or by bare id.
+  const asObject = applied && typeof applied === 'object' ? applied : null;
+  // currentBackgroundId is how getVirtualBackgrounds names it — that response has
+  // no applied-background object at all, only an id beside the saved list. Without
+  // this, a client granting only that getter reads as "did not say".
+  const id = firstString(
+    asObject?.id,
+    typeof applied === 'string' ? applied : undefined,
+    raw.currentBackgroundId
+  );
+  // The list is the only place a name for that id exists, and a name is what the
+  // organizer is told about when a restore cannot happen.
+  const listed = [raw.backgrounds, raw.virtualBackgrounds, raw.list]
+    .find(Array.isArray)
+    ?.find((entry) => entry && typeof entry === 'object' && firstString(entry.id) === id);
+  const name = firstString(asObject?.name, asObject?.fileName, listed?.name, listed?.fileName);
 
-  const lowered = label.trim().toLowerCase();
-  if (lowered === 'none') return { type: 'none' };
-  if (lowered === 'blur') return { type: 'blur' };
-  // Anything else names an actual image: the id identifies it, the name is for
+  // The setting is the authority on which of the three states is up, because it
+  // is the only field that distinguishes "none" from "the client did not say".
+  const setting = firstString(raw.currentBackgroundSetting, raw.backgroundSetting, raw.setting);
+  const state = (setting || firstString(asObject?.type, id, name) || '').toLowerCase();
+  if (state === 'none') return { type: 'none' };
+  if (state === 'blur') return { type: 'blur' };
+
+  // Anything else is an actual image: the id identifies it, the name is for
   // telling the user which one we could not put back.
-  const id = typeof current.id === 'string' ? current.id : undefined;
-  const name = typeof current.name === 'string' ? current.name : undefined;
   if (!id && !name) return null;
   return { type: 'image', ...(id && { id }), ...(name && { name }) };
 }
@@ -509,6 +630,53 @@ function sameBackground(a, b) {
 }
 
 /**
+ * Normalize a getter's response, and say what it was when that fails.
+ *
+ * The shape is not in any shipped typing, so a response we do not recognise is a
+ * real possibility rather than a theoretical one — and it is indistinguishable
+ * from an ungranted API at the call site. Naming the keys turns one debug-panel
+ * read into the answer, without dumping an ImageData into the log.
+ *
+ * @param {string} api - Which getter answered, for the message
+ * @param {any} raw
+ * @returns {{type: string, id?: string, name?: string}|null}
+ */
+function readingFrom(api, raw) {
+  const reading = normalizeVirtualBackground(raw);
+  if (!reading) {
+    log(`${api} answered in a shape this app does not recognise: ${describeShape(raw)}`, 'warn');
+  }
+  return reading;
+}
+
+/**
+ * A one-line sketch of a response: keys and leaf values, two levels deep.
+ *
+ * Top-level keys alone are not enough. They said `currentBackground,
+ * currentBackgroundSetting` and cost a second round-trip to learn what was inside
+ * them — which is exactly the information needed to fix the parser.
+ *
+ * Bounded on purpose. Typed arrays are named rather than walked, because an
+ * ImageData's `data` holds millions of entries and would bury the panel; strings
+ * are cut short, because a data URI is not worth a screenful.
+ */
+function describeShape(value, depth = 0) {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'string') return JSON.stringify(value.length > 40 ? `${value.slice(0, 40)}…` : value);
+  if (typeof value !== 'object') return String(value);
+  if (ArrayBuffer.isView(value)) return `${value.constructor?.name || 'TypedArray'}(${value.length})`;
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    return depth >= 1 ? `array(${value.length})` : `[${describeShape(value[0], depth + 1)}, …${value.length}]`;
+  }
+  const keys = Object.keys(value);
+  if (!keys.length) return '{}';
+  if (depth >= 2) return `{${keys.join(', ')}}`;
+  return `{ ${keys.map((key) => `${key}: ${describeShape(value[key], depth + 1)}`).join(', ')} }`;
+}
+
+/**
  * What is on the user's video right now, or null when the client cannot say.
  * @returns {Promise<{type: string, id?: string, name?: string}|null>}
  */
@@ -517,11 +685,15 @@ async function readCurrentVirtualBackground() {
     // Spelled out rather than indexed, so a test can see which methods this
     // module calls and hold USED_SDK_APIS to them.
     if (isApiAvailable('getCurrentVirtualBackground')) {
-      return normalizeVirtualBackground(await zoomSdk.getCurrentVirtualBackground());
+      return readingFrom('getCurrentVirtualBackground', await callSdkApi('getCurrentVirtualBackground'));
     }
     if (isApiAvailable('getVirtualBackgrounds')) {
-      return normalizeVirtualBackground(await zoomSdk.getVirtualBackgrounds());
+      return readingFrom('getVirtualBackgrounds', await callSdkApi('getVirtualBackgrounds'));
     }
+    log(
+      'Client granted neither getCurrentVirtualBackground nor getVirtualBackgrounds; what the user had cannot be read at all',
+      'warn'
+    );
     return null;
   } catch (error) {
     log(`Could not read the current virtual background: ${error.message || error.name}`, 'warn');
@@ -530,15 +702,223 @@ async function readCurrentVirtualBackground() {
 }
 
 /**
+ * Turn a background id into the pixels needed to re-apply it.
+ *
+ * This is the call that makes restoring an image possible at all.
+ * setVirtualBackground takes imageData, a fileUrl or blur, and never an id, so
+ * without this step an id names a background we cannot put back.
+ *
+ * @param {string} id - Identifier from the current-background read
+ * @param {string} [name] - Its display name, used to find it in the saved list
+ * @returns {Promise<ImageData|null>} null when the client cannot supply them
+ */
+async function readBackgroundPixels(id, name) {
+  if (!id) return null;
+  // Said out loud, because this is the difference between the organizer getting
+  // their bookshelf back and getting Zoom's "reset to none" dialog. It used to
+  // return null in silence, which made an un-ticked Marketplace capability look
+  // exactly like a broken restore.
+  if (!isApiAvailable('getVirtualBackgroundData')) {
+    log(
+      'Client did not grant getVirtualBackgroundData, so the pixels of the user\'s own background cannot be read. Enable it for the app in the Zoom Marketplace; without it a clear can only remove.',
+      'warn'
+    );
+    return null;
+  }
+  if (previousBackgroundPixels?.id === id) return previousBackgroundPixels.imageData;
+  // A failure is cached as firmly as a success. Without this, the run of attempts
+  // below repeats on the restore path — at the one moment the organizer is waiting
+  // for their video back, and to reach the same answer it already had.
+  if (unfetchableBackgroundId === id) return null;
+
+  const tryCandidate = async (candidate) => {
+    for (const build of BACKGROUND_DATA_PAYLOADS) {
+      const payload = build(candidate);
+      const imageData = await fetchBackgroundPixels(payload);
+      if (!imageData) continue;
+      previousBackgroundPixels = { id, imageData };
+      log(
+        `Fetched pixels for the user's own background (${imageData.width}x${imageData.height}) using ${describeShape(payload)}`,
+        'info'
+      );
+      return imageData;
+    }
+    return null;
+  };
+
+  // The id from the current-background read first, so a client that accepts it
+  // costs exactly one call. The saved list is consulted only once that is refused.
+  const direct = await tryCandidate(id);
+  if (direct) return direct;
+
+  for (const candidate of await otherIdsFor(name, id)) {
+    log(`Retrying with the id the saved list uses for "${name}": ${candidate}`, 'info');
+    const viaList = await tryCandidate(candidate);
+    if (viaList) return viaList;
+  }
+
+  unfetchableBackgroundId = id;
+  return null;
+}
+
+// Payload spellings to try for getVirtualBackgroundData, best first.
+//
+// backgroundId is the one a 7.1.5 desktop client accepts; id and
+// virtualBackgroundId are both refused with code 10002, "Validation error, please
+// check API parameters". No shipped typing names the field, so the others stay as
+// fallbacks rather than being deleted — a wrong key on a getter errors and
+// changes nothing, and the log names whichever one answered.
+const BACKGROUND_DATA_PAYLOADS = [
+  (id) => ({ backgroundId: id }),
+  (id) => ({ id }),
+  (id) => ({ virtualBackgroundId: id }),
+];
+
+// Ceiling for a restored background, in pixels per side.
+//
+// setVirtualBackground documents imageData as "limited to 15MB after encoding",
+// and RGBA costs 4 bytes a pixel: 1920x1080 is 8.3MB, and 2560x1440 would be
+// 14.7MB with nothing to spare. The overlay budget is not used here — it is
+// 640x360, sized for a card that is about to be overwritten every second, and
+// handing someone's own background back at that size would visibly degrade it.
+const RESTORED_BACKGROUND_MAX = { width: 1920, height: 1080 };
+
+/**
+ * One attempt at the pixels. Logs exactly what it sent, so a rejection says which
+ * payload was rejected rather than only that something was.
+ *
+ * @param {object} payload
+ * @returns {Promise<ImageData|null>}
+ */
+async function fetchBackgroundPixels(payload) {
+  try {
+    const raw = await callSdkApi('getVirtualBackgroundData', payload, BACKGROUND_PIXELS_TIMEOUT_MS);
+
+    // What a 7.1.5 desktop client actually sends back is an encoded image, not
+    // pixels: { imageData: { data: "/9j/4AAQSkZJRgABAQAASABIAAD…" } }, which is a
+    // base64 JPEG. The name `imageData` is misleading — it is not the ImageData
+    // that setVirtualBackground takes, and reading it as one is what turned a
+    // successful call into "returned no usable pixels".
+    const encoded = firstString(
+      raw?.imageData?.data,
+      raw?.imageData,
+      raw?.data?.data,
+      raw?.data,
+      typeof raw === 'string' ? raw : undefined
+    );
+    if (encoded) return await decodeEncodedBackground(encoded);
+
+    // Still accepted, in case another client answers with real pixels. Shape-tested
+    // rather than picked by key order, because an ImageData has a `data` property
+    // of its own: reaching for `raw.data` first would unwrap a good ImageData down
+    // to its byte array and then reject it as unusable.
+    const isImageData = (value) =>
+      !!value && typeof value.width === 'number' && typeof value.height === 'number' && !!value.data;
+    const imageData = [raw, raw?.imageData, raw?.virtualBackgroundData].find(isImageData);
+    if (imageData) return imageData;
+
+    log(
+      `getVirtualBackgroundData(${describeShape(payload)}) returned no usable pixels: ${describeShape(raw)}`,
+      'warn'
+    );
+    return null;
+  } catch (error) {
+    const code = error.code ? ` (code ${error.code})` : '';
+    log(
+      `getVirtualBackgroundData(${describeShape(payload)}) failed${code}: ${error.message || error.name}`,
+      'warn'
+    );
+    return null;
+  }
+}
+
+/**
+ * Turn the client's encoded image into the ImageData setVirtualBackground needs.
+ *
+ * Accepts a bare base64 payload or a full data URI, since only the former was
+ * observed and the difference is one prefix. The format is sniffed from the base64
+ * signature rather than assumed: "/9j/" is JPEG, "iVBORw0" is PNG. An Image
+ * element decodes either, and the existing canvas helper reads the pixels out.
+ *
+ * @param {string} encoded - base64 image data, with or without a data: prefix
+ * @returns {Promise<ImageData|null>}
+ */
+async function decodeEncodedBackground(encoded) {
+  const uri = encoded.startsWith('data:')
+    ? encoded
+    : `data:${encoded.startsWith('iVBORw0') ? 'image/png' : 'image/jpeg'};base64,${encoded}`;
+  try {
+    const imageData = await decodeToImageData(uri, RESTORED_BACKGROUND_MAX);
+    log(`Decoded the user's background from ${encoded.length} base64 chars`, 'info');
+    return imageData;
+  } catch (error) {
+    log(`Could not decode the user's background image: ${error.message || error.name}`, 'warn');
+    return null;
+  }
+}
+
+/**
+ * Other identifiers the same background might be known by, from the saved list.
+ *
+ * The documentation is explicit that ids for getVirtualBackgroundData "are
+ * obtained through the getVirtualBackgrounds response" — not from
+ * getCurrentVirtualBackground, which is where ours comes from. Those two need not
+ * agree, and a stock background like "San Francisco" is exactly where they would
+ * not. So when the id in hand is rejected, ask the list what it calls the same
+ * background and try that instead.
+ *
+ * Logs the list's shape either way. It is the one response nothing has inspected
+ * yet, and its entries are where the correct id field is named.
+ *
+ * @param {string} [name] - What the current background is called
+ * @param {string} tried - The id already attempted, so it is not repeated
+ * @returns {Promise<string[]>}
+ */
+async function otherIdsFor(name, tried) {
+  if (!isApiAvailable('getVirtualBackgrounds')) return [];
+  try {
+    const raw = await callSdkApi('getVirtualBackgrounds', undefined, BACKGROUND_PIXELS_TIMEOUT_MS);
+    log(`getVirtualBackgrounds answered: ${describeShape(raw)}`, 'info');
+    const list = [raw?.virtualBackgrounds, raw?.backgrounds, raw?.list, raw].find(Array.isArray) || [];
+    return list
+      .filter((entry) => entry && typeof entry === 'object')
+      // Only the matching one, by name. Feeding every saved background to a
+      // getter in turn would be a lot of calls to land on a background the user
+      // never had up.
+      .filter((entry) => !name || firstString(entry.name, entry.fileName) === name)
+      .flatMap((entry) => [entry.id, entry.backgroundId, entry.virtualBackgroundId])
+      .filter((value) => typeof value === 'string' && value.trim() && value !== tried);
+  } catch (error) {
+    log(`Could not read the saved background list: ${error.message || error.name}`, 'warn');
+    return [];
+  }
+}
+
+/**
  * Remember what the user had, just before ours goes over the top of it.
  *
  * Only ever called when we do not believe one of ours is already applied, so
  * the snapshot is always of theirs and never of our own branded image.
+ *
+ * The pixel fetch is started but not awaited. It is several megabytes across the
+ * bridge, and this runs immediately before the tile turns blue — making the
+ * speaker wait for it would trade the thing the timer is for against a tidier
+ * finish. Restoring re-fetches from the persisted id if this has not landed yet.
  */
 async function snapshotUserBackground() {
   const current = await readCurrentVirtualBackground();
-  if (!current) return;
+  if (!current) {
+    // Also said out loud. With no snapshot there is nothing to restore to, and
+    // every clear from here can only remove — which reads to the organizer as the
+    // restore being broken rather than as the read never having happened.
+    log('Could not read what the user had, so a clear will only be able to remove', 'warn');
+    return;
+  }
   writePreviousBackground(current);
+  if (current.type === 'image') {
+    if (current.id) readBackgroundPixels(current.id, current.name).catch(() => {});
+    else log(`Zoom named the user's background "${current.name}" but gave no id, so its pixels cannot be fetched`, 'warn');
+  }
   log(`Remembered the user's background before replacing it: ${current.name || current.type}`, 'info');
 }
 
@@ -551,13 +931,23 @@ async function snapshotUserBackground() {
  * refused for a background that was never there is what reported "Zoom would
  * not clear your video" over a video that was already fine.
  *
+ * Whenever the answer is "not ours", what is on the video is by definition the
+ * user's own, so it is recorded on the way past. This is the only place that
+ * learns about a background the user chose while ours was up — nothing reports
+ * that change — and it is free here, because the read has already happened.
+ *
  * @returns {Promise<boolean|null>} null when the client cannot say
  */
 async function isOurBackgroundApplied() {
   const current = await readCurrentVirtualBackground();
   if (!current) return null;
-  // Nothing at all is applied, so ours certainly is not.
-  if (current.type === 'none') return false;
+  // Nothing at all is applied, so ours certainly is not. Worth recording as
+  // theirs: someone who times a speech on a bare camera wants it bare again, and
+  // "none" restores as a removal.
+  if (current.type === 'none') {
+    writePreviousBackground(current);
+    return false;
+  }
   // Their own is back up — they changed it themselves, or ours never took.
   if (sameBackground(current, readPreviousBackground())) return false;
   return true;
@@ -1357,6 +1747,56 @@ export function imageToImageData(drawable, width, height) {
 }
 
 /**
+ * Decode an image to ImageData, fitting within `max` and never scaling up.
+ *
+ * Separate from loadImageAsImageData on purpose. That path clamps to the overlay
+ * ceiling of 640x360, which is right for a card about to be overwritten every
+ * second and wrong for handing someone their own background back — it would come
+ * back visibly softer than they left it.
+ *
+ * @param {string} uri - Any src an Image accepts, including a data: URI
+ * @param {{width: number, height: number}} max - Bounding box to fit within
+ * @returns {Promise<ImageData>}
+ */
+function decodeToImageData(uri, max) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(
+      () => finish(reject, new Error(`decode timed out after ${BACKGROUND_PIXELS_TIMEOUT_MS}ms`)),
+      BACKGROUND_PIXELS_TIMEOUT_MS
+    );
+
+    img.onload = () => {
+      const { naturalWidth: width, naturalHeight: height } = img;
+      if (!width || !height) {
+        finish(reject, new Error(`decoded to ${width}x${height}`));
+        return;
+      }
+      const scale = Math.min(1, max.width / width, max.height / height);
+      try {
+        finish(
+          resolve,
+          imageToImageData(img, Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale)))
+        );
+      } catch (error) {
+        finish(reject, error);
+      }
+    };
+    img.onerror = () => finish(reject, new Error('image failed to decode'));
+    // No crossOrigin: a data: URI is same-origin, and setting it on one is
+    // pointless rather than harmless on some clients.
+    img.src = uri;
+  });
+}
+
+/**
  * Load image from URL and convert to ImageData, sharing one download + decode
  * across concurrent callers. Exported for testing.
  * @param {string} imageUrl - URL of the image
@@ -1656,12 +2096,35 @@ export async function setOverlayMode(mode, currentImageUrl) {
 const ERROR_NOTHING_APPLIED = 10195;
 
 /**
+ * Which API putting the user's background back will actually need.
+ *
+ * Only "none" — and the case where we never learned what they had — is a
+ * removal. A blur or an image goes back with setVirtualBackground, so gating
+ * those on removeVirtualBackground refuses to restore anything on a client that
+ * granted the setter and not the remover. That gate is why the caller has to ask
+ * rather than assume: the two APIs are granted independently.
+ *
+ * @returns {'setVirtualBackground'|'removeVirtualBackground'}
+ */
+function restoreBackgroundApi() {
+  const previous = readPreviousBackground();
+  const bySet = previous?.type === 'blur' || (previous?.type === 'image' && previous.id);
+  return bySet && isApiAvailable('setVirtualBackground')
+    ? 'setVirtualBackground'
+    : 'removeVirtualBackground';
+}
+
+/**
  * Take our branded background off by putting the user's own back, rather than
  * stripping their video to a bare camera.
  *
  * Replacing beats removing wherever it can. Someone who joined the meeting
  * blurred wants to leave it blurred; wiping them to None is a change they never
  * asked for and have to undo themselves, in a panel, mid-meeting.
+ *
+ * Every caller reaches this — the eraser, RESET, a finished speech, the idle
+ * reveal, a mode switch — so all of them hand back the same video: whatever the
+ * organizer had before the timer touched it.
  *
  * What is actually restorable is narrower than it looks, and the ceiling is
  * Zoom's, not ours:
@@ -1670,14 +2133,20 @@ const ERROR_NOTHING_APPLIED = 10195;
  *   documents the same 10017-on-deny as removal does for blur: true — so this is
  *   a better outcome for the same price, not a cheaper one.
  * - None is removal, which is what removal already means.
- * - One of their own images cannot be put back at all. setVirtualBackground takes
- *   imageData, a fileUrl or blur — never an id — and getVirtualBackgroundData,
- *   which would turn the id into pixels, is not in any shipped SDK build. The
- *   caller is told, so the organizer hears it from us rather than discovering it
- *   on their own tile.
+ * - One of their own images goes back too, via getVirtualBackgroundData. That is
+ *   the API that turns the id we snapshotted into the pixels setVirtualBackground
+ *   needs, and it closes the case this function used to give up on: someone who
+ *   joined on a bookshelf was left staring at their own office the moment a
+ *   speech ended. It costs no confirmation dialog, where removal always does, so
+ *   the restore is cheaper than the giving-up it replaces.
+ *
+ * Removal remains the fallback for every case the client will not answer —
+ * getVirtualBackgroundData ungranted, an id the client no longer knows, a stock
+ * background it declines to hand over. The caller is told when that happens, so
+ * the organizer hears it from us rather than discovering it on their own tile.
  *
  * @returns {Promise<{lost: boolean}>} lost is true when the user's own image was
- *   dropped because Zoom offers no way to put it back.
+ *   dropped because Zoom would not give it back.
  */
 async function restoreOrRemoveBackground() {
   const previous = readPreviousBackground();
@@ -1686,6 +2155,22 @@ async function restoreOrRemoveBackground() {
     log('Restoring the blur the user had before', 'info');
     await zoomSdk.setVirtualBackground({ blur: true });
     return { lost: false };
+  }
+
+  if (previous?.type === 'image' && previous.id && isApiAvailable('setVirtualBackground')) {
+    // Falls through to removal on a null answer rather than throwing: a
+    // background we cannot restore must still come off, or the speech's last
+    // color stays on the tile for the rest of the meeting.
+    const imageData = await readBackgroundPixels(previous.id, previous.name);
+    if (imageData) {
+      try {
+        log(`Restoring the user's own background: ${previous.name || previous.id}`, 'info');
+        await zoomSdk.setVirtualBackground({ imageData });
+        return { lost: false };
+      } catch (error) {
+        log(`Could not re-apply "${previous.name || previous.id}": ${error.message || error.name}. Removing instead.`, 'warn');
+      }
+    }
   }
 
   const lost = previous?.type === 'image';
@@ -1762,7 +2247,6 @@ export async function clearVideoPipelines() {
   if (hadBackground && (await isOurBackgroundApplied()) === false) {
     log('Zoom reports nothing of ours on the video; leaving the background alone', 'info');
     markVirtualBackgroundApplied(false);
-    writePreviousBackground(null);
     hadBackground = false;
   }
 
@@ -1801,7 +2285,9 @@ export async function clearVideoPipelines() {
     attempts.push({
       what: 'virtual background',
       expected: true,
-      api: 'removeVirtualBackground',
+      // Whichever API the restore will genuinely use. Putting their blur or their
+      // own image back is a set, not a removal.
+      api: restoreBackgroundApi(),
       run: async () => { lostBackground = (await restoreOrRemoveBackground()).lost; },
     });
   }
@@ -1852,9 +2338,15 @@ export async function clearVideoPipelines() {
 
   if (backgroundGone) {
     markVirtualBackgroundApplied(false);
-    // Spent: the user is back on their own background, so there is nothing left
-    // to restore them to. Keeping it would restore a stale choice next time.
-    writePreviousBackground(null);
+    // The record is deliberately kept. It used to be cleared here, on the grounds
+    // that a background already restored is nothing left to restore to — which
+    // held only while the next speech could always re-read it. It cannot: the
+    // read needs getCurrentVirtualBackground, which not every client grants, and
+    // a single failed read then dropped the organizer to a bare camera for the
+    // rest of the meeting. Kept, it is the durable answer to "what is theirs",
+    // and staleness is covered from both ends: snapshotUserBackground refreshes
+    // it before every push, and isOurBackgroundApplied refreshes it whenever it
+    // finds the video is already their own.
   }
   if (filterGone) markVideoFilterApplied(false);
   return { ok, declined, ungranted, lostBackground };
@@ -1931,19 +2423,18 @@ async function removeOverlayInternal(pipelines, label) {
         log(`Nothing of ours on the video; nothing to remove (mode: ${mode})`, 'info');
       }
       if (hadBackground) {
-        if (!isApiAvailable('removeVirtualBackground')) {
-          log('Client did not grant removeVirtualBackground; leaving the background in place', 'warn');
+        const api = restoreBackgroundApi();
+        if (!isApiAvailable(api)) {
+          log(`Client did not grant ${api}; leaving the background in place`, 'warn');
         } else if ((await isOurBackgroundApplied()) === false) {
           // Must not put a dialog in front of someone whose background is
           // already their own.
           log('Zoom reports the background is not ours; leaving it alone', 'info');
           markVirtualBackgroundApplied(false);
-          writePreviousBackground(null);
         } else {
           log('Putting the user\'s own background back', 'info');
           await restoreOrRemoveBackground();
           markVirtualBackgroundApplied(false);
-          writePreviousBackground(null);
           log('Successfully cleared our virtual background', 'info');
         }
       }

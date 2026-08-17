@@ -531,9 +531,14 @@ export default function Landing() {
             <h4 className="text-sm font-semibold text-white mb-3">Resources</h4>
             <ul className="space-y-2">
               <li><a href="/toastmasters-timer-role-guide" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timer Role Guide</a></li>
+              <li><a href="/toastmasters-timer-script" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timer Script</a></li>
               <li><a href="/toastmasters-speech-types-and-timing" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Speech Types &amp; Timing</a></li>
               <li><a href="/toastmasters-timing-chart" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timing Chart</a></li>
+              <li><a href="/table-topics-timer" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Table Topics Timer</a></li>
+              <li><a href="/toastmasters-speech-contest-timing-rules" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Contest Timing Rules</a></li>
               <li><a href="/how-to-use-zoom-for-toastmasters" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Zoom for Toastmasters</a></li>
+              <li><a href="/toastmasters-zoom-timer-backgrounds" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Free Zoom Backgrounds</a></li>
+              <li><a href="/best-toastmasters-timer-apps" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Timer Apps Compared</a></li>
               <li><a href="/toastmasters-timer-demo" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Product Demo</a></li>
               <li><a href="/toastmasters-timer-zoom-demo" className="text-sm text-gray-400 hover:text-gray-200 transition-colors">Zoom Demo</a></li>
             </ul>
