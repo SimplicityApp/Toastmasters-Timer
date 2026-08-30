@@ -18,6 +18,8 @@ const { sdkMock } = vi.hoisted(() => ({
     deleteVideoFilter: vi.fn(),
     setVirtualBackground: vi.fn(),
     removeVirtualBackground: vi.fn(),
+    setVirtualForeground: vi.fn(),
+    removeVirtualForeground: vi.fn(),
     shareApp: vi.fn(),
     appPopout: vi.fn(),
     onAppPopout: vi.fn(),
@@ -142,6 +144,8 @@ afterEach(() => {
   sdkMock.deleteVideoFilter.mockReset();
   sdkMock.setVirtualBackground.mockReset();
   sdkMock.removeVirtualBackground.mockReset();
+  sdkMock.setVirtualForeground.mockReset();
+  sdkMock.removeVirtualForeground.mockReset();
   sdkMock.shareApp.mockReset();
   sdkMock.appPopout.mockReset();
   sdkMock.onAppPopout.mockReset();
@@ -2570,25 +2574,37 @@ describe('the count-up on the pushed card', () => {
     expect(sdkMock.setVideoFilter).toHaveBeenCalledTimes(1);
   });
 
-  it('bakes the readout into Timer + Camera frames too', async () => {
+  it('rides the Timer + Camera readout on a foreground layer, never a baked background', async () => {
     const { operations } = stubCanvas();
     saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
     const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
     await initializeZoomSdk();
 
     setOverlayTimeLabel('00:05');
     await applyOverlay('https://zoom.example/backgrounds/green.png');
 
-    // A frame carrying the time is different every second, so the fileUrl
-    // shortcut cannot serve it: the pixels have to cross the bridge.
+    // The Zoom client saves every image handed to setVirtualBackground to the
+    // user's disk, so a running speech must not turn the background into a
+    // new image every second. The color stays a fixed file the client fetches
+    // itself; the time crosses as a transparent foreground layer.
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/green.png',
+    });
+    expect(sdkMock.setVirtualForeground).toHaveBeenCalledWith({
+      imageData: expect.anything(),
+      // Zoom takes the layer down itself when the meeting ends, so a crashed
+      // app strands nothing on the user's video.
+      persistence: 'meeting',
+    });
     expect(renderedLabels(operations)).toContain('00:05');
-    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
     expect(sdkMock.setVideoFilter).not.toHaveBeenCalled();
   });
 
-  it('re-pushes the camera-mode frame when the readout advances', async () => {
+  it('advances the camera-mode readout without pushing a single new background', async () => {
     const { operations } = stubCanvas();
     saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
     const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
     await initializeZoomSdk();
     setOverlayTimeLabel('00:05');
@@ -2598,7 +2614,71 @@ describe('the count-up on the pushed card', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(renderedLabels(operations)).toContain('00:06');
-    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(2);
+    expect(sdkMock.setVirtualForeground).toHaveBeenCalledTimes(2);
+    // One push per color, however long the speech: each background the client
+    // is handed becomes a file saved on the user's machine.
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the color alone when the client refuses the foreground layer', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['setVirtualForeground'] });
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+    setOverlayTimeLabel('00:06');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Degrading to per-second background pushes is exactly the disk pollution
+    // the foreground exists to avoid, so the count-up is simply not shown.
+    expect(sdkMock.setVirtualForeground).not.toHaveBeenCalled();
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/green.png',
+    });
+  });
+
+  it('takes the readout layer down with the camera overlay', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay, removeOverlay } = await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    setOverlayTimeLabel(null);
+    await removeOverlay();
+
+    expect(sdkMock.removeVirtualForeground).toHaveBeenCalled();
+    // The layer belongs to the speech, and it comes off before the background
+    // goes back to its owner.
+    expect(sdkMock.removeVirtualForeground.mock.invocationCallOrder[0]).toBeLessThan(
+      sdkMock.removeVirtualBackground.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('hiding the readout removes the layer instead of re-pushing the background', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualForeground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, setOverlayTimeVisible, applyOverlay } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    setOverlayTimeVisible(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sdkMock.removeVirtualForeground).toHaveBeenCalledTimes(1);
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the cheap fileUrl push while camera mode is idle', async () => {

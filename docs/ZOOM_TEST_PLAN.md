@@ -46,9 +46,12 @@
 4. In the **Live** tab, select a speech type (e.g. "Table Topics: 1–1.5–2 min")
 5. Click **Start** to begin the timer
    - Verify the virtual background changes to **green**
+   - Verify the elapsed time appears over the video and counts up once per second (drawn as a virtual foreground layer, not baked into the background)
 6. Wait for the yellow threshold — verify the background changes to **yellow**
 7. Wait for the red threshold — verify the background changes to **red**
-8. Click **Finish** — verify the background is removed/reset
+8. Click **Finish** — verify the background is removed/reset and the count-up readout disappears
+9. After the meeting, check **Settings → Background & effects** in the Zoom client
+   - Verify the timer added at most the four fixed color backgrounds — **no** per-second backgrounds with timestamps baked in (earlier builds saved one image per second of speech)
 
 ---
 
