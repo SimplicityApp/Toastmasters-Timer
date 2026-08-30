@@ -2663,6 +2663,99 @@ describe('the count-up on the pushed card', () => {
     );
   });
 
+  it('sizes the readout layer to the camera stream, not the background budget', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay, handleMyMediaChange } =
+      await loadModule();
+    await initializeZoomSdk();
+    handleMyMediaChange({ media: { video: { width: 1280, height: 720 } }, timestamp: 1 });
+
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // The client composites the foreground onto the video 1:1 from the
+    // top-left. At the 640x360 background budget on a 720p stream, the layer
+    // covered only the top-left quadrant and the readout could never move
+    // past the video's center.
+    const [options] = sdkMock.setVirtualForeground.mock.calls.at(-1);
+    expect(options.imageData).toMatchObject({ width: 1280, height: 720 });
+  });
+
+  it('assumes a 720p stream until the camera reports its resolution', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay } = await loadModule();
+    await initializeZoomSdk();
+
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    const [options] = sdkMock.setVirtualForeground.mock.calls.at(-1);
+    expect(options.imageData).toMatchObject({ width: 1280, height: 720 });
+  });
+
+  it('re-renders the readout layer when the camera resolution changes', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay, handleMyMediaChange } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    handleMyMediaChange({ media: { video: { width: 1920, height: 1080 } }, timestamp: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Composited 1:1, a layer of the wrong size puts the readout in the
+    // wrong place — but the fileUrl background still needs no re-push.
+    const [options] = sdkMock.setVirtualForeground.mock.calls.at(-1);
+    expect(options.imageData).toMatchObject({ width: 1920, height: 1080 });
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
+  });
+
+  it('still repaints the readout after a webview reload wiped the in-memory record', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    // A background of ours is on the video from before the panel was closed;
+    // only the persisted flag knows it.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, setOverlayTimePosition } = await loadModule();
+    await initializeZoomSdk();
+
+    setOverlayTimeLabel('00:07');
+    setOverlayTimePosition({ x: 0.9, y: 0.9 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The drag reaches the video without waiting for a color change to
+    // rebuild the record — and without pushing any background at all.
+    expect(sdkMock.setVirtualForeground).toHaveBeenCalled();
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+  });
+
+  it('removes the readout on a mode switch even while the label is still ticking', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    const { initializeZoomSdk, setOverlayTimeLabel, applyOverlay, setOverlayMode, OVERLAY_MODE_CARD } =
+      await loadModule();
+    await initializeZoomSdk();
+    setOverlayTimeLabel('00:05');
+    await applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    // Mid-speech switch to card mode: the teardown must win over the label
+    // heuristic, or the layer floats over the filter card forever.
+    await setOverlayMode(OVERLAY_MODE_CARD, 'https://zoom.example/backgrounds/green.png');
+
+    expect(sdkMock.removeVirtualForeground).toHaveBeenCalled();
+  });
+
   it('hiding the readout removes the layer instead of re-pushing the background', async () => {
     stubCanvas();
     saveOverlayMode('camera');

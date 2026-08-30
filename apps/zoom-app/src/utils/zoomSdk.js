@@ -343,18 +343,33 @@ function effectiveTimeLabel() {
   return overlayTimeVisible ? overlayTimeLabel : null;
 }
 
+/**
+ * Whether the camera-mode background pipeline is what is (or would be) on the
+ * user's video — the pipeline whose readout rides the foreground layer.
+ *
+ * Falls back to the persisted flag when the in-memory record is gone: Zoom
+ * re-creates the webview whenever the panel is closed and reopened, which
+ * wipes activeOverlay while the background it described is still on the
+ * video. Without the fallback, dragging the readout right after reopening
+ * the panel repainted nothing until a color change rebuilt the record.
+ */
+function backgroundPipelineActive() {
+  if (activeOverlay) return activeOverlay.pipeline === 'background';
+  return virtualBackgroundApplied && currentOverlayMode === OVERLAY_MODE_CAMERA;
+}
+
 /** Repaint the readout participants see, wherever it currently lives. */
 function repaintOverlayFrame() {
-  if (!activeOverlay?.url || !isVideoOverlayMode()) return;
+  if (!isVideoOverlayMode()) return;
   // The background pipeline never carries the readout — it rides its own
   // foreground layer — so a ticking clock must only touch that layer. Pushing
   // the background here instead would hand the Zoom client an image to save
   // to the user's disk once a second.
-  if (activeOverlay.pipeline === 'background') {
+  if (backgroundPipelineActive()) {
     enqueueOverlayOp(() => syncForegroundReadout());
     return;
   }
-  applyOverlay(activeOverlay.url);
+  if (activeOverlay?.url) applyOverlay(activeOverlay.url);
 }
 
 /** @returns {{x: number, y: number}} Normalized center of the readout */
@@ -480,9 +495,35 @@ function drawTimeReadout(ctx, width, height, label, position, scale) {
   ctx.fillText(label, x, y);
 }
 
+// What the foreground layer is sized to when the camera has not reported.
+// 720p is what Zoom sends for most cameras; the ceiling keeps a 4K report
+// under the SDK's 15MB encoding limit (1920x1080 RGBA is ~8MB).
+const FOREGROUND_FALLBACK_SIZE = { width: 1280, height: 720 };
+const FOREGROUND_CEILING_WIDTH = 1920;
+const FOREGROUND_CEILING_HEIGHT = 1080;
+
 /**
- * Render the readout alone on a transparent frame, sized to the overlay
- * budget, for setVirtualForeground. Exported for testing.
+ * The frame size for the foreground layer: the camera resolution, exactly.
+ *
+ * Deliberately NOT getOverlayBudget(). The 640x360 overlay ceiling is right
+ * for backgrounds and filters, which the client scales to fill the video —
+ * but the foreground is composited onto the video 1:1 from the top-left
+ * corner. Rendered at the budget size on a 720p stream, the layer covered
+ * only the top-left quadrant, so the readout's right edge was the video's
+ * center: dragging it toward the bottom-right pinned it just left of middle.
+ * This is why the SDK recommends the resolution from onMyMediaChange here.
+ */
+function getForegroundBudget() {
+  if (!cameraResolution) return { ...FOREGROUND_FALLBACK_SIZE };
+  return {
+    width: Math.min(cameraResolution.width, FOREGROUND_CEILING_WIDTH),
+    height: Math.min(cameraResolution.height, FOREGROUND_CEILING_HEIGHT),
+  };
+}
+
+/**
+ * Render the readout alone on a transparent frame, sized to the camera
+ * stream, for setVirtualForeground. Exported for testing.
  *
  * @param {string} label - Formatted elapsed time
  * @param {{width: number, height: number}} [budget] - Frame size
@@ -490,7 +531,7 @@ function drawTimeReadout(ctx, width, height, label, position, scale) {
  * @param {number} [scale] - Text height as a fraction of the frame
  * @returns {ImageData} A transparent frame carrying only the readout
  */
-export function renderTimeForeground(label, budget = getOverlayBudget(), position = overlayTimePosition, scale = overlayTimeScale) {
+export function renderTimeForeground(label, budget = getForegroundBudget(), position = overlayTimePosition, scale = overlayTimeScale) {
   const canvas = document.createElement('canvas');
   canvas.width = budget.width;
   canvas.height = budget.height;
@@ -592,33 +633,18 @@ async function syncForegroundReadout() {
   if (!sdkAvailable || !zoomSdk) return;
 
   // Only the camera pipeline pairs the readout with a foreground layer; the
-  // card bakes it into the filter frame, and a torn-down overlay wants none.
-  const label = activeOverlay?.pipeline === 'background' ? effectiveTimeLabel() : null;
+  // card bakes it into the filter frame instead.
+  const label = backgroundPipelineActive() ? effectiveTimeLabel() : null;
 
   if (!label) {
-    if (!virtualForegroundApplied) return;
-    if (!isApiAvailable('removeVirtualForeground')) {
-      log('Client did not grant removeVirtualForeground; leaving the readout in place', 'warn');
-      return;
-    }
-    try {
-      await zoomSdk.removeVirtualForeground();
-      markVirtualForegroundApplied(false);
-      log('Removed the count-up readout', 'info');
-    } catch (error) {
-      if (error.code === ERROR_NOTHING_APPLIED) {
-        markVirtualForegroundApplied(false);
-      } else {
-        log(`Could not remove the count-up readout: ${error.message || error.name}`, 'warn');
-      }
-    }
+    await removeForegroundReadout();
     return;
   }
 
   // The refusal is warned about at push time, where the organizer acted.
   if (!isApiAvailable('setVirtualForeground')) return;
 
-  const budget = getOverlayBudget();
+  const budget = getForegroundBudget();
   if (
     activeForeground &&
     activeForeground.label === label &&
@@ -646,6 +672,32 @@ async function syncForegroundReadout() {
     };
   } catch (error) {
     log(`Could not push the count-up readout: ${error.message || error.name}`, 'warn');
+  }
+}
+
+/**
+ * Take the readout layer off the user's video, if one of ours is up. Explicit
+ * rather than inferred, so teardown never depends on the label heuristic — a
+ * mode switch mid-speech still has a ticking label, and the removal must win.
+ * Never throws.
+ */
+async function removeForegroundReadout() {
+  if (!sdkAvailable || !zoomSdk) return;
+  if (!virtualForegroundApplied) return;
+  if (!isApiAvailable('removeVirtualForeground')) {
+    log('Client did not grant removeVirtualForeground; leaving the readout in place', 'warn');
+    return;
+  }
+  try {
+    await zoomSdk.removeVirtualForeground();
+    markVirtualForegroundApplied(false);
+    log('Removed the count-up readout', 'info');
+  } catch (error) {
+    if (error.code === ERROR_NOTHING_APPLIED) {
+      markVirtualForegroundApplied(false);
+    } else {
+      log(`Could not remove the count-up readout: ${error.message || error.name}`, 'warn');
+    }
   }
 }
 
@@ -1327,10 +1379,11 @@ export function handleMyMediaChange(event) {
   // and a null budget is what marks that case.
   if (activeOverlay?.budget) {
     applyOverlay(activeOverlay.url);
-  } else if (activeOverlay?.pipeline === 'background' && virtualForegroundApplied) {
+  } else if (backgroundPipelineActive() && virtualForegroundApplied) {
     // The background needed nothing, but the readout layer is pixels rendered
-    // for the old size. The sync compares sizes itself and repaints only when
-    // they differ.
+    // for the old camera size — and the foreground is composited 1:1, so a
+    // wrong size lands the readout in the wrong place. The sync compares
+    // sizes itself and repaints only when they differ.
     enqueueOverlayOp(() => syncForegroundReadout());
   }
 }
@@ -2591,10 +2644,9 @@ async function removeOverlayInternal(pipelines, label) {
       }
       // The readout layer belongs to camera mode, so it comes down with the
       // background — and first, so the time never floats over a background
-      // that has just been handed back to its owner. activeOverlay is already
-      // null, which is what tells the sync there is nothing left to show.
+      // that has just been handed back to its owner.
       if (pipelines.background && virtualForegroundApplied) {
-        await syncForegroundReadout();
+        await removeForegroundReadout();
       }
       if (hadBackground) {
         const api = restoreBackgroundApi();
