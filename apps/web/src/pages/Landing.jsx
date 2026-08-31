@@ -473,13 +473,12 @@ function HeroTimerMock() {
           <img
             src="/zoom/backgrounds/timer-yellow-background.png"
             alt=""
-            className="signal-card-overlay absolute inset-0 w-full"
+            className="signal-card-yellow absolute inset-0 w-full"
           />
           <img
             src="/zoom/backgrounds/timer-red-background.png"
             alt=""
-            className="signal-card-overlay absolute inset-0 w-full"
-            style={{ animationDelay: '-8s' }}
+            className="signal-card-red absolute inset-0 w-full"
           />
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="font-mono text-6xl sm:text-7xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">

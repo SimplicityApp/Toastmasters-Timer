@@ -46,18 +46,33 @@ body {
    red are overlays that each take one third of the cycle, offset from each
    other by animation-delay. Long holds with short cross-fades, so it reads as
    the timer changing phase rather than as a slideshow. */
-@keyframes card-overlay-fade {
+/* Each overlay needs its own curve, not one curve phase-shifted: a handoff
+   only looks right when the incoming card fades in over a predecessor that is
+   still fully opaque. Yellow therefore holds until red (stacked above it) has
+   completely covered it, and only then drops — if yellow faded out on its own
+   schedule, the green base would peek through mid-transition. */
+@keyframes card-yellow-fade {
   0%, 30% { opacity: 0; }
-  36%, 61% { opacity: 1; }
-  67%, 100% { opacity: 0; }
+  36%, 70% { opacity: 1; }
+  75%, 100% { opacity: 0; }
 }
-.signal-card-overlay {
+@keyframes card-red-fade {
+  0%, 61% { opacity: 0; }
+  67%, 96% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.signal-card-yellow {
   opacity: 0;
-  animation: card-overlay-fade 12s ease-in-out infinite;
+  animation: card-yellow-fade 12s ease-in-out infinite;
+}
+.signal-card-red {
+  opacity: 0;
+  animation: card-red-fade 12s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   /* The overlays stay hidden, leaving the static green card. */
-  .signal-card-overlay {
+  .signal-card-yellow,
+  .signal-card-red {
     animation: none;
   }
 }
