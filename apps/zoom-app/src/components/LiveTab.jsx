@@ -7,6 +7,7 @@ import TimerDisplay from './TimerDisplay';
 import TimerStage from './TimerStage';
 import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
+const CardImagesModal = lazy(() => import('./CardImagesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE, BREAK_QUICK_PICKS, DEFAULT_BREAK_SECONDS, deriveBreakRules, getDisplaySeconds } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, getOverlayTimeScale, setOverlayTimeScale, isOverlayTimeVisible, setOverlayTimeVisible, setOverlayTimeLabel, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
@@ -62,6 +63,10 @@ export default memo(function LiveTab() {
   const [breakSeconds, setBreakSeconds] = useState(DEFAULT_BREAK_SECONDS);
   const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
+  const [showCardImagesModal, setShowCardImagesModal] = useState(false);
+  // Bumped whenever a custom card image is uploaded or reset, so the overlay
+  // effect below re-pushes whatever is currently showing with the new artwork.
+  const [cardImagesGeneration, setCardImagesGeneration] = useState(0);
 
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   // A clear is in flight. Disables both the eraser and RESET, because in Timer +
@@ -344,7 +349,8 @@ export default memo(function LiveTab() {
         setOverlayTimeLabel(null);
       }
       const imageUrl = getBackgroundUrl(desiredStatus);
-      addDebugLog(`Applying overlay: ${desiredStatus} -> ${imageUrl}`, 'info');
+      // A custom card is a data: URL that can run to a megabyte; never log it whole.
+      addDebugLog(`Applying overlay: ${desiredStatus} -> ${imageUrl.startsWith('data:') ? 'custom image' : imageUrl}`, 'info');
       // Usually redundant with TimerContext's own push on status change; the
       // already-showing guard in applyOverlay makes the duplicate free.
       applyOverlay(imageUrl);
@@ -362,7 +368,9 @@ export default memo(function LiveTab() {
     }
     // previewColor is listed on its own because desiredStatus can hide a
     // swatch change: previewing the color the timer already shows.
-  }, [overlayMode, wantsColorNow, desiredStatus, previewColor, clearGeneration]);
+    // cardImagesGeneration re-runs the push when the artwork behind the same
+    // status changes; the already-showing guard sees a new URL and pushes it.
+  }, [overlayMode, wantsColorNow, desiredStatus, previewColor, clearGeneration, cardImagesGeneration]);
 
   // Log when status changes
   useEffect(() => {
@@ -897,6 +905,7 @@ export default memo(function LiveTab() {
           onChange={handleModeSwitch}
           revealFaceWhenIdle={revealFaceWhenIdle}
           onToggleRevealFaceWhenIdle={handleToggleRevealFaceWhenIdle}
+          onCustomizeCards={() => setShowCardImagesModal(true)}
         />
       </div>
 
@@ -1272,6 +1281,16 @@ export default memo(function LiveTab() {
           <EditRulesModal
             isOpen={showEditRulesModal}
             onClose={() => setShowEditRulesModal(false)}
+          />
+        </Suspense>
+      )}
+
+      {showCardImagesModal && (
+        <Suspense fallback={null}>
+          <CardImagesModal
+            isOpen={showCardImagesModal}
+            onClose={() => setShowCardImagesModal(false)}
+            onImagesChanged={() => setCardImagesGeneration((generation) => generation + 1)}
           />
         </Suspense>
       )}

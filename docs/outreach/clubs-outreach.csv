@@ -1,0 +1,119 @@
+segment,priority,club_name,club_number,district,area,city,country,meeting,format,language,contact_email,contact_notes,website,notes
+1-existing-user,P0,Women L.E.A.D. Toastmasters Club,07854613,101,Area G05,San Jose / Santa Clara CA,USA,Wed 7:00-8:10 PM PT,online,English,womenleadtm@gmail.com,Club email; co-presidents Sarah & Chandana (first names only per site),https://womenleadtm.org/,Confirmed user (survey 2026-08-20). Fully-online Zoom club - strongest product fit. Ask about app experience.
+1-existing-user,P0,Malabar Toastmasters Club,28676179,121,Div D Area 01,Kozhikode (Calicut) Kerala,India,Sun 10:30 AM-12:30 PM IST,in-person,English,,No public email; TI contact form + phone +91 98954 55058; Instagram @malabartoastmastersclub,https://www.toastmasters.org/Find-a-Club/28676179-malabar-toastmasters-club,Confirmed user (survey 2026-08-31; heavy usage Kozhikode/Sulthanbathery/Palakkad). Chartered Apr 2023.
+1-existing-user,P0,Jacaranda Chinese English Toastmasters,28678155,129,Div D Area 01,Harare,Zimbabwe,2nd & 4th Fri + Sat 2-4 PM,in-person,Chinese/English bilingual,,No public email; TI contact form; phone +263 773 881 881,https://www.toastmasters.org/Find-a-Club/28678155-jacaranda-chinese-english-toastmasters,Confirmed user (survey 2026-08-20). Chartered Sep 2025 - very new; only Chinese/bilingual club in D129.
+1-existing-user,P0,Sapphire City Toastmasters,00009256,70,Div N Area 18,Inverell NSW,Australia,1st & 3rd Mon 7:00 PM,in-person (possibly hybrid - unverified),English,,No public email; TI contact form; phone +61 419 380 059,https://www.toastmasters.org/Find-a-Club/00009256-sapphire-city-toastmasters,Confirmed user (survey 2026-08-17). 14 members; chartered 1993; venue recently changed - confirm.
+2-likely-user-mauritius,P1,Plateau Toastmasters Club,592015,114,,Moka,Mauritius,1st & 3rd Fri 18:00,hybrid,English,contact@plateautoastmasters.club,,http://plateautoastmasters.club/,Mauritius = biggest anonymous usage cluster (~15 users Jul-Aug 2026). Hybrid club.
+2-likely-user-mauritius,P1,PoWerCommunicators,7235882,114,,Moka (PwC Mauritius),Mauritius,1st & 3rd Wed 18:00,hybrid,English,yamini.rangasamy@gmail.com,Corporate (PwC) but published personal email,,Hybrid club in usage cluster.
+2-likely-user-mauritius,P1,ACE Speakers,7335249,114,,Moka,Mauritius,1st & 3rd Sat 11:00-13:00,hybrid,English,karuna.rootzconsult@gmail.com,,http://acespeakers.com/,Hybrid club in usage cluster.
+2-likely-user-mauritius,P1,ELIO Toastmasters Club,7864607,114,,St Pierre,Mauritius,2nd & 4th Sat 14:00-16:00,hybrid,English,elio.theclub@gmail.com,,,Hybrid club in usage cluster.
+2-likely-user-mauritius,P2,Port Louis Toastmasters Club,2558,114,,Moka (Voila Bagatelle Hotel),Mauritius,1st & 3rd Tue 18:00-20:00,in-person,English,portlouis.tmc@gmail.com,,https://www.portlouistoastmasters.org/,Oldest/flagship Mauritius club.
+2-likely-user-mauritius,P2,Financial Toastmasters Club,1226180,114,,Moka (Bagatelle),Mauritius,2nd & 4th Wed 18:00,in-person,English,financialtoast@gmail.com,,http://financial.toastmastersclubs.org/,
+2-likely-user-mauritius,P2,Bagatelle Toastmasters Club,28675649,114,,Reduit,Mauritius,1st & 3rd Mon 18:15,in-person,English,rajbholah@hotmail.com,,,
+2-likely-user-mauritius,P2,Pearls of Expression,28679278,114,,Port Louis,Mauritius,1st & 3rd Sat 14:30,in-person,English,aarifah.emambokus@gmail.com,,,
+2-likely-user-mauritius,P2,Royal Toastmasters Club,28679751,114,,Port Louis,Mauritius,1st & 3rd Fri 18:00,in-person,English,8.alexkim.soo@gmail.com,,,
+2-likely-user-mauritius,P3,Mauritius Revenue Authority,7863227,114,,Port Louis,Mauritius,Wed 16:15-18:30,in-person corporate restricted,English,humanresourceandtraining@mra.mu,,,Corporate - low priority.
+2-likely-user-mauritius,P3,NBA Toastmasters Club,28675654,114,,Port Louis,Mauritius,1st & 3rd Wed 15:00,in-person corporate restricted,English,sochit@nexia.mu,,,Corporate - low priority.
+2-likely-user-mauritius,P3,Imperium Toastmasters Club,28677895,114,,Ebene,Mauritius,Thu 16:30,in-person corporate restricted,English,marmance@intercontinentaltrust.com,,,Corporate - low priority.
+2-likely-user-kansas,P1,T.G.I.F. Club,4679,209,,Overland Park KS,USA,2nd & 4th Fri 7:00 AM,hybrid,English,vpm@tgiftoastmasters.com,VP Membership role address,http://www.tgiftoastmasters.com/,KC metro = heavy anonymous usage Jun-Aug 2026. Open hybrid club.
+2-likely-user-kansas,P1,Articulators Club,9953,209,,Overland Park KS (T-Mobile HQ),USA,1st & 3rd Thu 12:00 PM,hybrid,English,kathydraperfitness@gmail.com,,http://articulatorskc.toastmastersclubs.org/,Open hybrid club.
+2-likely-user-kansas,P1,Toastmasters Unlimited,1379,209,,Overland Park KS,USA,2nd & 4th Mon 7:00 PM,hybrid,English,war.sprint@gmail.com,,http://1379.toastmastersclubs.org/,Open hybrid club.
+2-likely-user-kansas,P2,AAFP Toastmasters,6843626,209,,Leawood KS,USA,3rd Wed 2:00-3:00 PM,hybrid corporate restricted,English,jmazurier@aafp.org,,,Corporate but in Leawood (exact usage city).
+2-likely-user-kansas,P2,AMC Toastmasters,28676995,209,,Leawood KS,USA,1st & 3rd Wed 12:00 PM,hybrid corporate restricted,English,karlotti@amctheatres.com,,,Corporate but in Leawood.
+2-likely-user-kansas,P2,Metcalf Toastmasters,4843,209,,Overland Park KS,USA,1st & 3rd Fri 12:00 PM,in-person,English,metcalftoastmasters@gmail.com,,https://metcalf.toastmastersclubs.org/,
+2-likely-user-kansas,P2,Overland Park Toastmasters,8825,209,,Overland Park KS,USA,2nd & 4th Wed 6:30 PM,in-person,English,vppr-8825@toastmastersclubs.org,VPPR role address,https://8825.toastmastersclubs.org,
+2-likely-user-kansas,P3,UFSC Empowered Leaders,7792590,209,,Kansas City (US Bank Zoom),USA,1st & 3rd Thu 12:00 PM,online corporate restricted,English,ufsckc@gmail.com,,https://7792590.toastmastersclubs.org,
+2-likely-user-kansas,P3,Suburban Club,1009,209,,Overland Park KS,USA,2nd & 4th Mon 6:30 PM,in-person,English,ihardeway@outlook.com,,http://suburbankc.toastmastersclubs.org/,
+2-likely-user-kansas,P3,Early Bird Toastmasters,1928,209,,Overland Park KS,USA,2nd & 4th Mon 7:00 AM,in-person,English,,Contact form on club site,http://earlybirdtoastmasterskc.org/,
+2-likely-user-kansas,P3,Heartland Black Chamber TM,28678812,209,,Kansas City,USA,2nd & 4th Wed 6:00 PM,in-person,English,info@heartlandblackchamber.com,,,
+2-likely-user-kansas,P3,ToastMacsters,28677626,209,,Kansas City (Burns & McDonnell),USA,2nd & 4th Mon 12:00 PM,in-person corporate restricted,English,lboeckmann@burnsmcd.com,,,Corporate - low priority.
+2-likely-user-honolulu,P1,Aloha Toastmasters,601,49,,Honolulu HI,USA,1st & 3rd Tue 6:30-7:45 PM HST,online,English,alohatoastmastersclub@gmail.com,,https://www.toastmasters.org/Find-a-Club/00000601-aloha-toastmasters,Honolulu = one very heavy session Jul 2026. Zoom-only club.
+2-likely-user-honolulu,P1,Hawaii Comedy Club Toastmasters,7841602,49,,Honolulu HI,USA,2nd & 4th Fri 6:00-7:00 PM HST,online,English,joyacey@gmail.com,,https://www.toastmasters.org/Find-a-Club/07841602-hawaii-comedy-central-toastmasters,Zoom-only club.
+2-likely-user-honolulu,P2,Downtown Business Associates,2076,49,,Honolulu HI,USA,1st & 3rd Wed 11:45 AM,hybrid,English,zey.tong@icxtg.com,,http://www.dbatoastmasters.com/,
+2-likely-user-honolulu,P2,City & County of Honolulu TM,4079,49,,Honolulu HI,USA,1st & 3rd Tue 12:00-1:00 PM,hybrid,English,gtoyomura@honolulu.gov,,http://4079.toastmastersclubs.org/,Uses Zoom/WebEx.
+2-likely-user-honolulu,P2,Kamehameha Toastmasters,720,49,,Honolulu HI,USA,2nd & 4th Tue 6:00 PM,hybrid,English,info@kamehameha-toastmasters.org,,http://kamehameha-toastmasters.org/,
+2-likely-user-honolulu,P2,Hawaiian Dredging Club,8673,49,,Honolulu HI,USA,1st & 3rd Wed 5:30 PM,hybrid,English,president-8673@toastmastersclubs.org,President role address,http://8673.toastmastersclubs.org/,
+2-likely-user-honolulu,P3,Honolulu Toastmasters,5190,49,,Honolulu HI,USA,"1st, 2nd & 3rd Tue 5:50 PM",in-person,English,info@honolulutoastmasters.org,,https://honolulutoastmasters.org/,Meets 3x/month - fits heavy-usage pattern.
+2-likely-user-honolulu,P3,Waikiki Club,7234,49,,Honolulu HI,USA,1st & 3rd Thu 6:50-8:15 PM,in-person,English,info@waikikitoastmasters.org,,https://waikikitoastmasters.org/,
+3-montreal,P1,Words On Wings (WOW),835,61,G61,Montreal QC,Canada,Fri 12:15 PM weekly,online,English,wow835membership@gmail.com,,http://835.toastmastersclubs.org/,100% Zoom weekly - top Montreal target.
+3-montreal,P1,Beyond Words Advanced Toastmasters,5468876,61,G61,Montreal QC,Canada,1st & 3rd Sat 9:30-11:30 AM,online,English,,Email obfuscated - use https://beyondwords.club/contact-us/,https://beyondwords.club/,Advanced club - members are officers/influencers in other clubs.
+3-montreal,P1,Club avance international,684093,61,F54,Montreal QC (members QC/FR/CH),Canada,Every other Sat 2:00 PM ET,online,French,info@clubavanceinternationaltm.com,,https://www.clubavanceinternationaltm.com,French advanced Zoom-native club.
+3-montreal,P1,Club Toastmasters Montreal,9361,61,H71,Montreal QC,Canada,Tue 6:55-8:30 AM,online,French,info@clubtoastmastersmontreal.org,Responds within 48h per site,https://clubtoastmastersmontreal.org/,Zoom meetings per own site.
+3-montreal,P1,Moderator Club / Club Moderateur,3200,61,G62,Montreal QC,Canada,Tue 6:30 PM,hybrid (online currently broken),Bilingual,info@moderatorclub.org,,https://moderatorclub.org/,STRONG HOOK: own site says online participation broken due to MS Teams technical issues.
+3-montreal,P1,Golden Mile Toastmasters,9886,61,G61,Montreal QC,Canada,Wed 7:00-9:00 PM,hybrid (alternates virtual/in-person weekly),English,goldenmiletm@gmail.com,,https://9886.toastmastersclubs.org/,30-year-old active club.
+3-montreal,P1,Club Excellence Toastmasters,7701,61,F52,Saint-Laurent QC,Canada,1st & 3rd Sat 9:00 AM,hybrid,Bilingual,contact@club-excellence.org,VPM Christian Schweiger 450-667-0002 published,https://7701.toastmastersclubs.org/,Advanced bilingual hybrid; named VPM - ideal first outreach.
+3-montreal,P1,NDG Leader Toastmasters,632838,61,G61,Montreal QC,Canada,Thu 7:00-9:00 PM (online last Thu/month),hybrid,English,ndgleaderstoastmaster@gmail.com,Pres. Judith Mugeni 438-860-1682 per site,https://www.ndgleaderstoastmasters.com/,Publishes Zoom link openly.
+3-montreal,P1,Les Orateurs Distingues,8658,61,H73,Saint-Hubert QC,Canada,Sat 8:30-10:30 AM,in-person (online allowed per TI),French,membreslod@gmail.com,,https://tmlod.com/,Closest club to home base (Saint-Hubert); 45 meetings/yr.
+3-montreal,P2,Toastmasters Quartier International,2587,61,H71,Montreal QC,Canada,Tue 12:00 PM,online (MS Teams),French,tm.quartierinternational@gmail.com,,http://www.toastmastersquartierinternational.com/,Fully virtual but on Teams - pitch cross-platform.
+3-montreal,P2,Expression Club,6552,61,H73,St-Jean-sur-Richelieu QC,Canada,Tue 7:20 PM,online,French (unverified),,No email; phone +1 438-868-8775,,TI address literally Online.
+3-montreal,P2,Les Communicateurs de la Rive-Nord,4319,61,F53,Laval QC,Canada,Wed 7:15-8:30 AM,hybrid (online allowed),French,,TI contact form; Facebook,https://www.facebook.com/communicateursdelarivenord/,
+3-montreal,P2,Les Explosifs de Laval,1296822,61,F54,Laval QC,Canada,Wed 7:00 PM,hybrid (Zoom option),French,,Website DNS dead - use Facebook,https://www.facebook.com/LesExplosifsDeLaval,
+3-montreal,P2,Beaconsfield Toastmasters,4468,61,F50,Beaconsfield QC,Canada,Mon 7:30-9:30 PM,hybrid,English,,VPE Francine Turgeon DTM 514-919-4147 published on site,http://beaconsfield.toastmastersclubs.org,
+3-montreal,P2,La Seigneurie de Boucherville,901116,61,H72,Boucherville QC,Canada,Wed 7:00-9:00 PM,hybrid (online allowed),Bilingual,,Facebook only,https://www.facebook.com/tmboucherville,
+3-montreal,P2,McGill Club,4311,61,G63,Montreal QC,Canada,Tue 5:45 PM,hybrid (online permitted),English,,Contact form,http://mcgilltoastmasters.com/,University club.
+3-montreal,P2,South Shore Toastmasters,7782,61,G64,Greenfield Park QC,Canada,Tue 7:30 PM,in-person,English,,Pres. Nigel Finch-Cole 450-341-1959; VPM Alexandre Guy per site,https://7782.toastmastersclubs.org/,Only English club on South Shore; draws from Brossard/St-Hubert/Longueuil.
+3-montreal,P3,Club Toastmasters Rive-Sud,2273,61,H73,Longueuil QC,Canada,Tue 7:00 PM,in-person,French,,No email found,http://www.toastmastersrivesud.org/,
+3-montreal,P3,ASC Toastmasters,9820,61,H73,Saint-Bruno QC,Canada,Wed 6:30-8:30 PM,in-person,Bilingual,info@andrelavalliere.com,VP recruitment personal domain; 514-799-0331,https://asctoastmasters.ca/,
+3-montreal,P3,Lemoyne de Candiac,1261,61,H73,Candiac QC,Canada,Mon 6:45 PM,in-person,French,,Contact form,https://www.toastmasterslemoyne.org/,Oldest South Shore club (1968).
+3-montreal,P3,Toastmasters Vallee du Richelieu,1099641,61,I93,Mont-St-Hilaire QC,Canada,Thu 7:00 PM,in-person,French (unverified),,Contact form,http://toastmasters-st-hilaire.ca/,
+3-montreal,P3,St Lawrence Toastmasters,606,61,G62,Montreal QC,Canada,Tue 7:00-9:00 PM,in-person,Bilingual,,Email JS-protected on site - use contact page,https://www.toastmastersmontreal.com/,Oldest Montreal club (1948).
+3-montreal,P3,Westmount Club,7041,61,G62,Westmount QC,Canada,Tue 7:00 PM,in-person,English,,Contact form,http://7041.toastmastersclubs.org/,
+3-montreal,P3,Concordia Toastmasters,6207,61,G63,Montreal QC,Canada,Mon 6:30 PM,in-person,English,,Contact form,http://concordia.toastmastersclubs.org/,
+3-montreal,P3,Laval Achievers,3620126,61,F54,Laval QC,Canada,Tue 7:00-9:00 PM,in-person,English,,Contact form (email protected),http://www.lavalachievers.com/,Only English club in Laval.
+3-montreal,P3,Club Dynamique de Laval,3604,61,F54,Laval QC,Canada,Mon 6:45 PM,in-person,French,,Contact form,https://www.tmlaval.com,Chartered 1978.
+3-montreal,P3,Pointe-Claire Toastmasters,9750,61,F50,Pointe-Claire QC,Canada,Thu 7:00-9:00 PM,in-person (explicitly returned to in-person only),English,,Contact form,https://pointeclaire.toastmastersclubs.org/,Deprioritize - in-person only by choice.
+3-montreal,P3,Dorval City Toastmasters,5600,61,F52,Dorval QC,Canada,Thu 7:30 PM,in-person,English,,Contact form,http://5600.toastmastersclubs.org/,
+3-montreal,P3,St Leonard Toastmasters,8519,61,H72,Montreal QC,Canada,Mon 7:00 PM,in-person,English (unverified),,Contact form,http://toastmasters-stleonard.ca,
+3-montreal,P3,Leaders En Action,813731,61,H70,Montreal QC,Canada,Thu 6:15 PM,in-person,French,,Via site,http://www.leadersenaction.org/,
+3-montreal,P3,HEC Toastmasters,999225,61,G64,Montreal QC,Canada,1st & 3rd Tue 6:00 PM,in-person,Unverified,,Contact form,,
+3-montreal,P3,Les Entrepreneurs de Montreal,28679190,61,G62,Montreal QC,Canada,Wed 7:30 AM,in-person,Bilingual (unverified),,Via site,https://tmentrepreneursmtl.toastmastersclubs.org,Brand-new club (chartered Apr 2026) - new clubs often need tooling.
+3-montreal,P2,Rockcliffe Aerodites,8585,61,Div D Ottawa,Ottawa ON,Canada,Wed 12:05 PM weekly,online,English,,Via aerodites.net; phone +1 819-939-0119,https://www.aerodites.net/,Ottawa/Gatineau bonus - lunchtime Zoom-only.
+3-montreal,P2,East Ottawa Toastmasters,3656,61,D31,Ottawa ON,Canada,Mon 5:30/6:00 PM,hybrid (Zoom ID published),English,,Contact page,https://www.eastottawa.org/,Self-described proud hybrid club.
+3-montreal,P2,Centretown Ottawa Toastmasters,7261,61,Div D Ottawa,Ottawa ON,Canada,Tue 6:30-8:00 PM,hybrid,English,centretowntoast@gmail.com,,https://centretown.toastmastersclubs.org/,
+3-montreal,P2,Le Parolier,8861,61,Div E Gatineau,Gatineau QC,Canada,Tue 7:30-9:00 PM,hybrid (alternates UQO/Zoom),French,leparolier.toastmasters@gmail.com,,https://leparolier.toastmastersclubs.org/,
+3-montreal,P2,Hull Toastmasters,7270199,61,Div E Gatineau,Gatineau QC,Canada,Tue 7:30 PM,hybrid (Zoom option),Bilingual,president-7270199@toastmastersclubs.org,Pres. Hani Naser; also contact-7270199@toastmastersclubs.org,https://hull.toastmastersclubs.org/,
+3-montreal,P2,Club TM francophone d'Ottawa,7538599,61,C22,Ottawa ON,Canada,Tue 6:30-8:00 PM,online (Zoom since Covid),French,,Contact form,https://francophoneottawa.toastmastersclubs.org,
+3-montreal,P2,Les Mots Arts,,61,Div E Gatineau,Gatineau QC,Canada,Every 2 weeks,hybrid (online link by email),French,toastmasterlesmotsarts@gmail.com,Club number not captured - verify,https://lesmotsarts.toastmastersclubs.org/,
+3-montreal,P3,Future First,874232,61,F50,Pointe-Claire QC,Canada,Wed 12:00 PM,hybrid corporate restricted,English,,Contact form; +1 514-694-7710,,Corporate (Future Electronics) - low conversion odds.
+4-eu,P1,In Camera Online Toastmasters,,95,D6,Pan-EU (DE-chartered),Germany,Fri 07:30 CE(S)T weekly,online,English,info@incameraonline.com,,https://incameraonline.com/,Chartered online-only club - archetypal Zoom timer user.
+4-eu,P1,Vliegende Hollanders Online Advanced,,59,C5,Online,Netherlands,Sun 19:30 CE(S)T,online (advanced),English,vliegende.hollanders.tm@gmail.com,,https://tmclub.eu (c=1852),Advanced online club focused on digital presentation; members are multipliers across D59.
+4-eu,P1,Toastmasters CPH North,02390648,95,G1,Horsholm/Copenhagen,Denmark,Every other Thu 18:30,online,English,,TI contact form,https://www.toastmasters.org/Find-a-Club/02390648,Pure online club.
+4-eu,P1,Mons Toastmasters Club,,59,B2,Mons,Belgium,1st Tue 19:00 online + 4th Fri hybrid,online+hybrid,English,mons.toastmasters.club@gmail.com,,https://toastmasters.be/mons-toastmasters-club,Monthly all-online meeting; published email.
+4-eu,P1,Advanced Speakers 59,,59,F4,Pan-D59,France,Wed 19:15 biweekly,online (advanced),English,,tmclub.eu Contact Us form,https://tmclub.eu,One adoption seeds dozens of D59 clubs.
+4-eu,P1,Mannheim International Toastmasters,00839612,95,E3,Mannheim,Germany,2nd & 4th Tue 19:15,online/hybrid,English,,TI contact form,https://www.toastmasters.org/Find-a-Club/00839612,
+4-eu,P1,Karlsruhe Toastmasters Club,00817718,95,E4,Karlsruhe,Germany,1st/3rd/5th Mon 19:15,online attendance,English,karlsruhe-toastmasters-club@gmx.de,CAUTION: may be sister German club's address - verify,https://www.toastmasters.org/Find-a-Club/00817718,Tech-heavy city (KIT).
+4-eu,P1,Taunus Toastmasters,,95,E1,Frankfurt area,Germany,Tue 19:00 biweekly,online,German+English,,tmclub.eu Contact Us form,https://tmclub.eu,
+4-eu,P1,Content Innovators,,109,A7,Pan-Italy,Italy,Thu 19:45 biweekly,online,English,,tmclub.eu / TI form; no own site found,https://tmclub.eu,
+4-eu,P2,West Coastmasters,00009249,95,B3,Gothenburg,Sweden,Wed 12:00 lunch,online/hybrid (MS Teams),English,,TI contact form,https://www.toastmasters.org/Find-a-Club/00009249,AstraZeneca lunchtime club; uses Teams - pitch cross-platform.
+4-eu,P2,Toastmasters Academy Florence,,109,A2,Florence,Italy,Wed 19:00 biweekly,online,Italian & English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Fraenkly Speaking,,95,D5,Franconia,Germany,Sat 10:30 biweekly,online,English/German,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Bamberg Toastmasters,,95,D6,Bamberg,Germany,Mon 19:00 biweekly,online,English+German,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Nantes Toastmasters,,59,A0,Nantes,France,Thu 19:30 biweekly,online,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Sprich to Me,,59,D1,Luxembourg,Luxembourg,Fri 12:30 biweekly,online,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Amigos Toastmasters,,107,E2,Pan-Spain,Spain,2nd & 4th Tue 19:00,online,Spanish,,Site contact page,https://amigostoastmasters.com,
+4-eu,P2,Berlin habla,07506467,95,C3,Berlin,Germany,Wed 21:30 weekly,online,Spanish,,TI contact form,https://www.toastmasters.org/Find-a-Club/07506467,
+4-eu,P2,Toastmasters Namur,,59,B3,Namur,Belgium,Thu 19:15 monthly+,online,French,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Metzmerising TM Club,,59,D2,Metz,France,Thu 19:15 biweekly,online,French,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,DACHmasters,,95,E5,DACH-wide,Germany,Sun 10:45 & 19:00,online,German,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Svenska Talarklubben Online,,95,B1,Online,Sweden,Thu 12:00 biweekly,online,Swedish,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Lulea Toastmasters,,95,B2,Lulea,Sweden,Wed 18:15 biweekly,online,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Vitoria-Gasteiz Toastmasters,,107,A3,Vitoria,Spain,Tue 19:20 weekly,online,English+Spanish,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Lisboa Oriente TM Club,,107,D2,Lisbon,Portugal,Wed 20:45 weekly,online,Portuguese,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,The Milliners,,109,A5,Milan,Italy,Alt Mon 19:30,hybrid,English,milliners.toastmasters@gmail.com,,https://www.toastmasters.it/en/themilliners,
+4-eu,P2,Madrid Toastmasters Club,,107,,Madrid,Spain,1st/3rd/5th Wed 20:00,hybrid (video for guests),English,,Site contact form,https://toastmastersmadrid.com,
+4-eu,P2,Toastmasters Paris Bilingue,,59,A1,Paris/Boulogne,France,Mon 19:30 biweekly,hybrid,French & English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Polyglottes Paris,,59,D4,Paris 15e,France,Tue 19:15,hybrid,English+French,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Lutece 75,,59,A3,Paris 11e,France,Wed 19:30 biweekly,hybrid (salle + Zoom),French,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Armada Toastmasters,,59,B1,Brussels,Belgium,Mon 19:30 biweekly,hybrid,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Phoenix Toastmasters Prague,,231,B2,Prague,Czechia,Wed 18:00 biweekly,hybrid,English,,tmclub.eu portal c=1511,https://tmclub.eu,D231 is new (Jul 2026 realignment).
+4-eu,P2,Poznan TM Lead and Speak,,231,E2,Poznan,Poland,Wed 19:00 biweekly,hybrid,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Skylarks Toastmasters Club,,231,D1,Budapest,Hungary,Tue 08:00 biweekly,hybrid,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,PM Portugal Toastmasters,,107,D1,Lisbon,Portugal,Mon 20:45 biweekly,hybrid (Zoom explicitly),Portuguese,,Facebook / TI form,https://facebook.com/PMPortugalToastmasters,
+4-eu,P2,Aalborg Toastmasters Club,,95,G2,Aalborg,Denmark,Thu 18:30 biweekly,hybrid,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P2,Oporto TM Club,,107,C1,Porto,Portugal,Mon 21:45 biweekly,hybrid,English,,tmclub.eu / TI form,https://tmclub.eu,
+4-eu,P3,First Berlin Toastmasters,,95,C1,Berlin,Germany,1st & 3rd Wed,hybrid (verify),English,president@fbtm.org,President role address,https://fbtm.org/,Format unverified.
+4-eu,P3,Stockholm International Toastmasters,,95,,Stockholm,Sweden,Wed 18:30,hybrid/in-person (unverified),English,sitmvppr@gmail.com,VPPR role address,https://www.meetup.com/stockholm-international-toastmasters/,Format unverified.
+4-eu,P3,Stadi Talkers,,95,,Helsinki,Finland,Mon odd weeks 18:00,in-person (unverified),English,lucas_sahlgren@hotmail.com,Listed club contact,https://staditalkers.toastmastersclubs.org/,Format unverified.
+4-eu,P3,Vienna Speakers Club,,109,F,Vienna,Austria,2nd & 4th Tue,in-person (unverified),English,viennaspeakers@gmail.com,,https://viennaspeakers.at/,Format unverified.
+4-eu,P3,Amsterdam Toastmasters Club,,59,,Amsterdam,Netherlands,2nd & 4th Fri 19:30,in-person (verify),English,,Site contact form,https://toastmasters.nl/en/tm-clubs/amsterdam-toastmasters-club,Format unverified.
+4-eu,P3,Dublin South Toastmasters,01588776,71,,Dublin,Ireland,1st & 3rd Tue 20:00,online (data from 2020 - verify),English,,TI contact form,https://www.toastmasters.org/Find-a-Club/01588776,Stale data - verify. D71 not continental EU district.

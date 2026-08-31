@@ -1,0 +1,46 @@
+# Club Outreach List — Toastmaster Timer
+
+Built 2026-08-31 from PostHog usage data + Toastmasters directory research.
+Master data: [clubs-outreach.csv](clubs-outreach.csv) (~118 clubs).
+
+## Segments
+
+| Segment | Count | Angle |
+|---|---|---|
+| 1. Existing users (survey-confirmed) | 4 | Follow-up: how's the app experience? Ask for review/referral. |
+| 2. Likely users (anonymous usage clusters) | 32 | "Someone in your club/area is already using us" — Mauritius (D114, ~15 users), Kansas City metro (D209), Honolulu (D49). |
+| 3. Montreal / District 61 (home turf) | 41 | Local founder story; offer to visit in person. Incl. Ottawa/Gatineau bonus. |
+| 4. EU (budget, unexplored) | 42 | Online/hybrid clubs first; D59/D95/D107/D109/D231. |
+| 5. John's list | pending | To be provided. |
+
+## Key facts learned
+
+- Most clubs publish NO email — the reliable channel is the Toastmasters contact form:
+  `toastmasters.org/Find-a-Club/{club-number}/contact-club` (exists for every club).
+- The Find-a-Club API returns club contact emails not shown on pages:
+  `toastmasters.org/api/sitecore/FindAClub/Search?q=...&latitude=..&longitude=..&radius=..`
+  (raw JSON for Mauritius/Leawood/Honolulu saved during research).
+- District corrections: Mauritius = **D114**; Kansas City = **D209** (old D22 renumbered);
+  Central/Eastern EU = **D231** (new, July 2026 realignment, not yet on toastmasters.org maps).
+- easy-speak's `tmclub.eu/meetonline.php` lists ~120 online/hybrid continental-EU clubs — the
+  best EU prospecting source.
+- toastmastersd108.org is domain-hijacked — never link it.
+
+## Outreach hooks worth using
+
+- **Moderator Club (Montreal)**: their site says online participation is broken ("technical
+  issues with Microsoft Teams") — perfect pitch.
+- **Manila user** reported the pause-reset bug we just fixed; **Denpasar user** requested the
+  mirrored-logo card fix (now in the working tree). Both anonymous — consider an in-app
+  changelog/"we fixed it" banner instead of email.
+- MS Teams clubs (Quartier International MTL, West Coastmasters SE): pitch that the web timer
+  works in any browser, not just Zoom.
+- Advanced clubs (Beyond Words, Club avancé international, Advanced Speakers 59, Vliegende
+  Hollanders) — members are officers in many other clubs; one adoption seeds many.
+
+## Caveats
+
+- Only publicly published emails were collected; several are personal addresses of officers —
+  use judgment and reference where the address was published.
+- EU meeting times captured as CE(S)T from easy-speak; verify DST offset before scheduling.
+- Rows flagged "unverified" in the CSV notes should be confirmed in the first email.

@@ -49,7 +49,9 @@ function serveZoomPublic() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!req.url.startsWith('/zoom/')) return next()
-        const filePath = path.join(zoomPublic, req.url.replace('/zoom/', ''))
+        // Drop the query string (cache-busting ?v=N on the card images) or the
+        // lookup misses and the SPA fallback answers with index.html.
+        const filePath = path.join(zoomPublic, req.url.replace('/zoom/', '').split('?')[0])
         if (fs.existsSync(filePath)) {
           return res.writeHead(200).end(fs.readFileSync(filePath))
         }

@@ -14,6 +14,10 @@ const OVERLAY_FILES = [
   'timer-green-background.png',
   'timer-yellow-background.png',
   'timer-red-background.png',
+  'timer-blue-modern.png',
+  'timer-green-modern.png',
+  'timer-yellow-modern.png',
+  'timer-red-modern.png',
 ];
 
 // The source budget, deliberately larger than OVERLAY_CEILING_* in zoomSdk.js

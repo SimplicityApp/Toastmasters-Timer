@@ -466,17 +466,17 @@ function HeroTimerMock() {
               static base so there is never a blank frame; yellow and red are
               overlays offset by a third of the loop each (see index.css). */}
           <img
-            src="/zoom/backgrounds/timer-green-background.png"
+            src="/zoom/backgrounds/timer-green-modern.png"
             alt=""
             className="block w-full"
           />
           <img
-            src="/zoom/backgrounds/timer-yellow-background.png"
+            src="/zoom/backgrounds/timer-yellow-modern.png"
             alt=""
             className="signal-card-yellow absolute inset-0 w-full"
           />
           <img
-            src="/zoom/backgrounds/timer-red-background.png"
+            src="/zoom/backgrounds/timer-red-modern.png"
             alt=""
             className="signal-card-red absolute inset-0 w-full"
           />

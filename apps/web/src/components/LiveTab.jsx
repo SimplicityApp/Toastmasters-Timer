@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
 import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { Play, Square, RotateCcw } from 'lucide-react';
+import { Play, Square, RotateCcw, Image } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
+const CardImagesModal = lazy(() => import('./CardImagesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
+import { getCardImageUrl } from '../utils/cardArtwork';
 import { trackEvent } from '../utils/posthog';
 
 const PREVIEW_COLORS = [
@@ -40,6 +42,9 @@ export default memo(function LiveTab({ onTimerStart }) {
   const [customRules, setCustomRules] = useState({ ...DEFAULT_CUSTOM_RULES });
   const [timeInputMode, setTimeInputMode] = useState(loadTimeInputMode);
   const [showEditRulesModal, setShowEditRulesModal] = useState(false);
+  const [showCardImagesModal, setShowCardImagesModal] = useState(false);
+  // Bumped on upload/reset so the tile and page background re-read the images.
+  const [, setCardImagesGeneration] = useState(0);
   const [previewColor, setPreviewColor] = useState(null);
   const initializedRef = useRef(false);
   const isLocalNameEdit = useRef(false);
@@ -207,7 +212,12 @@ export default memo(function LiveTab({ onTimerStart }) {
         </div>
       )}
 
-      <TimerDisplay elapsedTime={elapsedTime} status={previewColor || currentStatus} rules={currentSpeaker?.rules} />
+      <TimerDisplay
+        elapsedTime={elapsedTime}
+        status={previewColor || currentStatus}
+        rules={currentSpeaker?.rules}
+        backgroundImage={getCardImageUrl(previewColor || currentStatus)}
+      />
 
       {!isRunning && (
         <div className="flex items-center justify-center gap-3">
@@ -220,6 +230,14 @@ export default memo(function LiveTab({ onTimerStart }) {
               style={{ backgroundColor: hex }}
             />
           ))}
+          <button
+            onClick={() => setShowCardImagesModal(true)}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            title="Customize card images"
+            aria-label="Customize card images"
+          >
+            <Image className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -268,6 +286,20 @@ export default memo(function LiveTab({ onTimerStart }) {
       {showEditRulesModal && (
         <Suspense fallback={null}>
           <EditRulesModal isOpen={showEditRulesModal} onClose={() => setShowEditRulesModal(false)} />
+        </Suspense>
+      )}
+
+      {showCardImagesModal && (
+        <Suspense fallback={null}>
+          <CardImagesModal
+            isOpen={showCardImagesModal}
+            onClose={() => setShowCardImagesModal(false)}
+            onImagesChanged={() => {
+              setCardImagesGeneration((generation) => generation + 1);
+              // Repaint the page with the new artwork for whatever is showing.
+              setPageBackgroundFromStatus(previewColor || currentStatus || 'blue');
+            }}
+          />
         </Suspense>
       )}
     </div>
