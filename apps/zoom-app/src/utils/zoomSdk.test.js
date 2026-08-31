@@ -2697,6 +2697,39 @@ describe('the count-up on the pushed card', () => {
     expect(options.imageData).toMatchObject({ width: 1280, height: 720 });
   });
 
+  it('remembers the camera resolution across a webview reload', async () => {
+    stubCanvas();
+    saveOverlayMode('camera');
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    // The first webview hears the report...
+    const first = await loadModule();
+    first.handleMyMediaChange({ media: { video: { width: 640, height: 360 } }, timestamp: 1 });
+
+    // ...then Zoom re-creates the webview (panel closed and reopened), and no
+    // new onMyMediaChange arrives — it only fires on changes. Rendered at the
+    // 720p fallback, the frame would be twice the 360p stream: composited 1:1,
+    // the readout's reachable area would be the video's top-left quadrant and
+    // anything past it invisible.
+    const second = await loadModule();
+    expect(second.getCameraResolution()).toEqual({ width: 640, height: 360 });
+    await second.initializeZoomSdk();
+    second.setOverlayTimeLabel('00:05');
+    await second.applyOverlay('https://zoom.example/backgrounds/green.png');
+
+    const [options] = sdkMock.setVirtualForeground.mock.calls.at(-1);
+    expect(options.imageData).toMatchObject({ width: 640, height: 360 });
+  });
+
+  it.each([
+    ['corrupt JSON', '{not json'],
+    ['non-numeric dimensions', '{"width":"wide","height":"tall"}'],
+    ['a zero dimension', '{"width":0,"height":720}'],
+  ])('ignores a persisted camera resolution holding %s', async (_label, stored) => {
+    localStorage.setItem('toastmaster_zoom_camera_resolution', stored);
+    const { getCameraResolution } = await loadModule();
+    expect(getCameraResolution()).toBeNull();
+  });
+
   it('re-renders the readout layer when the camera resolution changes', async () => {
     stubCanvas();
     saveOverlayMode('camera');

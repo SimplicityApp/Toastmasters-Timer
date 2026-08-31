@@ -15,6 +15,11 @@ Master data: [clubs-outreach.csv](clubs-outreach.csv) (~118 clubs).
 
 ## Key facts learned
 
+- **Directory format labels are unreliable — don't filter on them.** 3 of our 4
+  survey-confirmed users (Malabar, Jacaranda, Sapphire City) are listed as in-person clubs.
+  Either the listings are stale or in-person clubs use the web timer on a laptop/projected
+  screen instead of paper cards. Format is a soft prioritization signal only; in-person
+  clubs get the "replace your paper timing cards" pitch.
 - Most clubs publish NO email — the reliable channel is the Toastmasters contact form:
   `toastmasters.org/Find-a-Club/{club-number}/contact-club` (exists for every club).
 - The Find-a-Club API returns club contact emails not shown on pages:

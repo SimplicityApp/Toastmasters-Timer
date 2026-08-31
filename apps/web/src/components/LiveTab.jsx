@@ -7,9 +7,9 @@ import TimerDisplay from './TimerDisplay';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 const CardImagesModal = lazy(() => import('./CardImagesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, initCardImages } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
-import { getCardImageUrl } from '../utils/cardArtwork';
+import { getCardImageUrl, preloadCardImages } from '../utils/cardArtwork';
 import { trackEvent } from '../utils/posthog';
 
 const PREVIEW_COLORS = [
@@ -48,6 +48,22 @@ export default memo(function LiveTab({ onTimerStart }) {
   const [previewColor, setPreviewColor] = useState(null);
   const initializedRef = useRef(false);
   const isLocalNameEdit = useRef(false);
+
+  // Custom card images load from IndexedDB asynchronously at startup; until
+  // then a selected custom set resolves to the built-in fallback. Once they
+  // are in, re-render the tile and repaint the page with whatever is showing.
+  const shownStatusRef = useRef('blue');
+  shownStatusRef.current = previewColor || currentStatus || 'blue';
+  useEffect(() => {
+    let cancelled = false;
+    initCardImages().then(() => {
+      if (cancelled) return;
+      setCardImagesGeneration((generation) => generation + 1);
+      setPageBackgroundFromStatus(shownStatusRef.current);
+      preloadCardImages();
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!initializedRef.current && !currentSpeaker && selectedRole && roleRules && Object.keys(roleRules).length > 0) {
@@ -296,8 +312,10 @@ export default memo(function LiveTab({ onTimerStart }) {
             onClose={() => setShowCardImagesModal(false)}
             onImagesChanged={() => {
               setCardImagesGeneration((generation) => generation + 1);
-              // Repaint the page with the new artwork for whatever is showing.
+              // Repaint the page with the new artwork for whatever is showing,
+              // and warm the other cards so the coming switches don't decode.
               setPageBackgroundFromStatus(previewColor || currentStatus || 'blue');
+              preloadCardImages();
             }}
           />
         </Suspense>

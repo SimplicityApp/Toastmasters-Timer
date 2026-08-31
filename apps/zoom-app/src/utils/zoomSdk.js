@@ -31,12 +31,12 @@ export function getCardFileUrl(file) {
 }
 
 // Get the URL for a background image, from whichever card set the organizer
-// selected. A custom set yields a data: URL, which every consumer here
-// accepts — the <img>/CSS paths directly, and the overlay path through its
-// pixel decode; the built-in sets yield a file URL.
+// selected. A custom set yields an object URL (or a legacy data: URL), which
+// every consumer here accepts — the <img>/CSS paths directly, and the overlay
+// path through its pixel decode; the built-in sets yield a file URL.
 export function getBackgroundUrl(color) {
   const resolved = resolveCardImage(color);
-  return resolved.dataUrl || getCardFileUrl(resolved.file);
+  return resolved.url || getCardFileUrl(resolved.file);
 }
 
 // Every overlay pixel costs 4 bytes of ImageData across the webview -> native
@@ -534,8 +534,29 @@ export function renderTimeForeground(label, budget = getForegroundBudget(), posi
   return ctx.getImageData(0, 0, budget.width, budget.height);
 }
 
-// Camera resolution reported by onMyMediaChange, or null until one arrives.
-let cameraResolution = null;
+// Camera resolution reported by onMyMediaChange, or the last one persisted.
+//
+// Persisted because Zoom re-creates the webview whenever the panel is closed
+// and reopened, and onMyMediaChange only fires on changes — a reopened panel
+// may never hear the resolution again. The foreground layer is composited
+// onto the video 1:1, so rendering it at the 720p fallback on any other
+// stream maps the readout to the wrong spot, or off the video entirely; the
+// last-known real value beats a guess.
+const CAMERA_RESOLUTION_KEY = 'toastmaster_zoom_camera_resolution';
+
+function readPersistedCameraResolution() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CAMERA_RESOLUTION_KEY));
+    const width = Number(parsed?.width);
+    const height = Number(parsed?.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+    return { width, height };
+  } catch {
+    return null;
+  }
+}
+
+let cameraResolution = readPersistedCameraResolution();
 
 // Whether a virtual background of ours is currently on the user's video.
 //
@@ -649,6 +670,18 @@ async function syncForegroundReadout() {
     activeForeground.height === budget.height
   ) {
     return;
+  }
+
+  // Once per size, not per second: this is the number to compare against
+  // where the readout actually lands when its position looks wrong.
+  if (!activeForeground || activeForeground.width !== budget.width || activeForeground.height !== budget.height) {
+    const cameraNote = cameraResolution
+      ? `camera ${cameraResolution.width}x${cameraResolution.height}`
+      : 'camera unreported, assuming 720p';
+    log(`Count-up readout frame: ${budget.width}x${budget.height} (${cameraNote})`, 'info');
+    if (cameraResolution && (cameraResolution.width > budget.width || cameraResolution.height > budget.height)) {
+      log('Camera exceeds the readout frame ceiling; the readout can only reach the top-left part of the video', 'warn');
+    }
   }
 
   try {
@@ -1374,6 +1407,11 @@ export function handleMyMediaChange(event) {
   }
 
   cameraResolution = { width, height };
+  try {
+    localStorage.setItem(CAMERA_RESOLUTION_KEY, JSON.stringify(cameraResolution));
+  } catch {
+    // Worst case the next webview starts from the 720p guess again.
+  }
   log(`Camera resolution reported: ${width}x${height}`, 'info');
 
   // Anything decoded for the previous resolution is the wrong size now.
@@ -2062,9 +2100,10 @@ function canDecodeAtTargetSize() {
 function decodeImage(imageUrl, budget) {
   log(`Loading image: ${describeUrl(imageUrl)}`, 'info');
 
-  // A data: URL (custom card) has nothing to fetch and is rarely a PNG, so the
-  // header fast-path would only fail into the element decode anyway.
-  if (imageUrl.startsWith('data:')) {
+  // A custom card (blob: object URL, or a legacy data: URL) is a JPEG, so the
+  // PNG-header fast-path would only fetch it and then fail into the element
+  // decode anyway.
+  if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
     return decodeViaImageElement(imageUrl, budget);
   }
 

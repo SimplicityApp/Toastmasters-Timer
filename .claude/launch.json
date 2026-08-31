@@ -35,6 +35,20 @@
       "port": 3001
     },
     {
+      "name": "zoom-dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "apps/zoom-app",
+        "--",
+        "--port",
+        "3010"
+      ],
+      "port": 3010
+    },
+    {
       "name": "web-dev-alt",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo, lazy, Suspense } from 'react';
 import { useTimer, useTimerTick } from '../context/TimerContext';
 import { useToast } from '../context/ToastContext';
-import { Play, Square, RotateCcw, Eraser, Video } from 'lucide-react';
+import { Play, Square, RotateCcw, Eraser, Video, Image } from 'lucide-react';
 import SpeakerInput from './SpeakerInput';
 import TimerDisplay from './TimerDisplay';
 import TimerStage from './TimerStage';
@@ -9,7 +9,7 @@ import OverlayModeMenu, { MODE_LABELS } from './OverlayModeMenu';
 const EditRulesModal = lazy(() => import('./EditRulesModal'));
 const CardImagesModal = lazy(() => import('./CardImagesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
-import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE, BREAK_QUICK_PICKS, DEFAULT_BREAK_SECONDS, deriveBreakRules, getDisplaySeconds } from '@toastmaster-timer/shared';
+import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, BREAK_ROLE, BREAK_QUICK_PICKS, DEFAULT_BREAK_SECONDS, deriveBreakRules, getDisplaySeconds, initCardImages } from '@toastmaster-timer/shared';
 import { getVideoState, setVideoState, applyOverlay, removeOverlay, clearVideoPipelines, isOverlayActive, getBackgroundUrl, getSdkStatus, setLogCallback, getOverlayMode, setOverlayMode, getOverlayTimePosition, setOverlayTimePosition, getOverlayTimeScale, setOverlayTimeScale, isOverlayTimeVisible, setOverlayTimeVisible, setOverlayTimeLabel, setPopoutChangeCallback, setShareChangeCallback, setAppShare, setAppPopout, isAppShareActive, isAppPoppedOut, isVideoOverlayMode, OVERLAY_MODE_CARD, OVERLAY_MODE_STAGE } from '../utils/zoomSdk';
 import { formatTime, saveOverlayMode, saveStageClockHidden, loadStageClockHidden, saveRevealFaceWhenIdle, loadRevealFaceWhenIdle } from '@toastmaster-timer/shared';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
@@ -67,6 +67,17 @@ export default memo(function LiveTab() {
   // Bumped whenever a custom card image is uploaded or reset, so the overlay
   // effect below re-pushes whatever is currently showing with the new artwork.
   const [cardImagesGeneration, setCardImagesGeneration] = useState(0);
+
+  // Custom card images load from IndexedDB asynchronously at startup; until
+  // then a selected custom set resolves to the built-in fallback. Bump the
+  // generation once they are in so the overlay re-pushes the real artwork.
+  useEffect(() => {
+    let cancelled = false;
+    initCardImages().then(() => {
+      if (!cancelled) setCardImagesGeneration((generation) => generation + 1);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const [videoState, setVideoStateLocal] = useState(null); // null = unknown, true = on, false = off
   // A clear is in flight. Disables both the eraser and RESET, because in Timer +
@@ -1175,6 +1186,16 @@ export default memo(function LiveTab() {
               data-tooltip={`Preview ${label}`}
             />
           ))}
+          {/* Same entry point as the web app; the OverlayModeMenu keeps its
+              own Card Images… item for discovery from the mode settings. */}
+          <button
+            onClick={() => setShowCardImagesModal(true)}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            data-tooltip="Customize card images"
+            aria-label="Customize card images"
+          >
+            <Image className="h-4 w-4" />
+          </button>
         </div>
       )}
 

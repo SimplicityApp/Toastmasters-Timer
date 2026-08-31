@@ -1,12 +1,15 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Plus, Check, Trash2 } from 'lucide-react';
 import {
   CARD_COLORS,
   DEFAULT_CARD_SETS,
   getCardImageSettings,
-  saveCardImageSettings,
-  nextCustomSetId,
-  fileToCardDataUrl,
+  selectCardSet,
+  addCustomCardSet,
+  deleteCustomCardSet,
+  getCustomCardImage,
+  fileToCardBlob,
+  initCardImages,
 } from '@toastmaster-timer/shared';
 import { getCardAssetUrl } from '../utils/cardArtwork';
 import { useToast } from '../context/ToastContext';
@@ -28,6 +31,8 @@ const SLOT_TINTS = {
 };
 
 const CLASSIC_FILES = DEFAULT_CARD_SETS[0].files;
+const STORAGE_FULL_MESSAGE =
+  'Could not save — browser storage is full. Try smaller images or delete another custom set.';
 
 /**
  * One selectable set: a labeled row of the four cards. The row itself is the
@@ -91,62 +96,74 @@ function CardSetRow({ label, selected, onSelect, thumbSrc, onDelete }) {
  */
 export default function CardImagesModal({ isOpen, onClose, onImagesChanged }) {
   const { showToast } = useToast();
-  // Snapshot on each open; saves keep it in step below.
-  const [settings, setSettings] = useState(() => {
-    const { selectedSetId, customSets } = getCardImageSettings();
-    return { selectedSetId, customSets: [...customSets] };
-  });
-  // The set being assembled in the uploader row, color -> data URL. Kept only
-  // in this modal until the organizer confirms it into a real set.
+  const [settings, setSettings] = useState(() => getCardImageSettings());
+  // The set being assembled in the uploader row, color -> {blob, url}. Kept
+  // only in this modal until the organizer confirms it into a real set.
   const [draft, setDraft] = useState({});
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const fileInputRef = useRef(null);
   const draftColorRef = useRef(null);
 
+  // The stored Blobs load asynchronously; if the modal opens before they are
+  // in, refresh once they are so custom thumbnails fill in. On unmount,
+  // release the preview URLs of an unconfirmed draft.
+  useEffect(() => {
+    let cancelled = false;
+    initCardImages().then(() => {
+      if (!cancelled) setSettings(getCardImageSettings());
+    });
+    return () => {
+      cancelled = true;
+      Object.values(draftRef.current).forEach((entry) => URL.revokeObjectURL(entry.url));
+    };
+  }, []);
+
   if (!isOpen) return null;
 
-  const commit = (next) => {
-    if (!saveCardImageSettings(next)) {
-      showToast('Could not save — browser storage is full. Try smaller images or delete another custom set.', 'error');
-      return false;
-    }
-    setSettings(next);
+  const changed = () => {
+    setSettings(getCardImageSettings());
     onImagesChanged?.();
-    return true;
   };
 
   const handleSelect = (setId) => {
     if (setId === settings.selectedSetId) return;
-    commit({ ...settings, selectedSetId: setId });
+    if (selectCardSet(setId)) changed();
+    else showToast(STORAGE_FULL_MESSAGE, 'error');
   };
 
   const handleDraftUpload = async (color, file) => {
     if (!file) return;
     try {
-      const dataUrl = await fileToCardDataUrl(file);
-      setDraft((prev) => ({ ...prev, [color]: dataUrl }));
+      const blob = await fileToCardBlob(file);
+      setDraft((prev) => {
+        if (prev[color]) URL.revokeObjectURL(prev[color].url);
+        return { ...prev, [color]: { blob, url: URL.createObjectURL(blob) } };
+      });
     } catch {
       showToast('That file could not be read as an image.', 'error');
     }
   };
 
-  const handleAddDraft = () => {
-    const id = nextCustomSetId(settings.customSets);
-    const next = {
-      selectedSetId: id,
-      customSets: [...settings.customSets, { id, images: draft }],
-    };
-    if (commit(next)) {
-      setDraft({});
-      showToast('Custom card set added', 'success');
+  const handleAddDraft = async () => {
+    const images = {};
+    for (const color of CARD_COLORS) {
+      if (draft[color]) images[color] = draft[color].blob;
     }
+    const id = await addCustomCardSet(images);
+    if (!id) {
+      showToast(STORAGE_FULL_MESSAGE, 'error');
+      return;
+    }
+    Object.values(draft).forEach((entry) => URL.revokeObjectURL(entry.url));
+    setDraft({});
+    changed();
+    showToast('Custom card set added', 'success');
   };
 
-  const handleDelete = (setId) => {
-    const next = {
-      selectedSetId: settings.selectedSetId === setId ? DEFAULT_CARD_SETS[0].id : settings.selectedSetId,
-      customSets: settings.customSets.filter((set) => set.id !== setId),
-    };
-    if (commit(next)) {
+  const handleDelete = async (setId) => {
+    if (await deleteCustomCardSet(setId)) {
+      changed();
       showToast('Custom card set deleted', 'success');
     }
   };
@@ -191,7 +208,7 @@ export default function CardImagesModal({ isOpen, onClose, onImagesChanged }) {
               onSelect={() => handleSelect(set.id)}
               // A color the set has no upload for shows — and times with —
               // the Classic card.
-              thumbSrc={(color) => set.images[color] || getCardAssetUrl(CLASSIC_FILES[color])}
+              thumbSrc={(color) => getCustomCardImage(set.id, color) || getCardAssetUrl(CLASSIC_FILES[color])}
               onDelete={() => handleDelete(set.id)}
             />
           ))}
@@ -218,7 +235,7 @@ export default function CardImagesModal({ isOpen, onClose, onImagesChanged }) {
                     aria-label={`Replace the ${COLOR_LABELS[color]} image`}
                     className="w-full aspect-video rounded overflow-hidden border border-gray-200"
                   >
-                    <img src={draft[color]} alt="" className="w-full h-full object-cover" />
+                    <img src={draft[color].url} alt="" className="w-full h-full object-cover" />
                   </button>
                 ) : (
                   <button

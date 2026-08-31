@@ -19,5 +19,23 @@ export function getCardAssetUrl(file) {
 export function getCardImageUrl(status) {
   if (!CARD_COLORS.includes(status)) return undefined;
   const resolved = resolveCardImage(status);
-  return resolved.dataUrl || getCardAssetUrl(resolved.file);
+  return resolved.url || getCardAssetUrl(resolved.file);
+}
+
+/**
+ * Warm the fetch and decode caches for every card of the selected set, so a
+ * status switch (blue -> green -> yellow -> red) never waits on a network
+ * round trip or a first decode — the same idea as the Zoom app's overlay
+ * pre-load. Call after init and again whenever the selected set changes.
+ * Fire-and-forget: a failure just means that card pays its decode when first
+ * shown, which is where it already was.
+ */
+export function preloadCardImages() {
+  for (const color of CARD_COLORS) {
+    const url = getCardImageUrl(color);
+    if (!url) continue;
+    const img = new Image();
+    img.src = url;
+    img.decode?.().catch(() => {});
+  }
 }

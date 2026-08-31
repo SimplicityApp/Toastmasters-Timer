@@ -1,13 +1,33 @@
 // Timing-card artwork selection: which set of card images the timer shows.
 //
 // Two built-in sets ship with the app as static files under /backgrounds; the
-// organizer can also add custom sets of uploaded images. Uploads are stored as
-// data: URLs because neither app has a backend for them: localStorage is the
-// only durable store both the web timer and the Zoom webview have, and a
-// data: URL is a src every consumer already accepts — <img>, CSS url(), and
-// the overlay decode path.
+// organizer can also add custom sets of uploaded images. Neither app has a
+// backend for uploads, so custom sets live in the browser, split across two
+// stores by what each is good at:
+//
+//   - localStorage: the metadata — which set is selected and which colors each
+//     custom set has. A few hundred bytes, read synchronously, so the render
+//     and overlay paths can resolve a card without ever awaiting.
+//   - IndexedDB: the image pixels, as Blobs. Megabytes live here because
+//     localStorage tops out around 5MB and blocks the main thread for reads
+//     proportional to payload size; IndexedDB stores Blobs natively (no base64
+//     tax) and reads them off the main thread.
+//
+// initCardImages() bridges the two: it loads the stored Blobs once, turns them
+// into object URLs, and keeps those in an in-memory map that the synchronous
+// resolver reads. Until it resolves, custom sets fall back to the built-in
+// files — the same thing a user sees before customizing anything.
+//
+// Earlier versions kept the images as data: URLs inside localStorage; init
+// migrates that data into IndexedDB and keeps serving the data URLs for the
+// rest of the session, so migration is invisible.
 
-const CUSTOM_CARD_IMAGES_KEY = 'toastmaster_custom_card_images';
+const SETTINGS_KEY = 'toastmaster_custom_card_images';
+const SETTINGS_VERSION = 3;
+
+const DB_NAME = 'toastmaster-timer';
+const DB_VERSION = 1;
+const IMAGE_STORE = 'card-images';
 
 export const CARD_COLORS = ['blue', 'green', 'yellow', 'red'];
 
@@ -48,107 +68,133 @@ function getDefaultCardSet(id) {
   return DEFAULT_CARD_SETS.find((set) => set.id === id) || null;
 }
 
-// A stored value must already be a decodable image src. Guards against a
-// corrupted entry wedging the overlay pipeline: a bad src fails every push
-// for that color until the user finds and clears it by hand.
 function isCardDataUrl(value) {
   return typeof value === 'string' && value.startsWith('data:image/');
 }
 
 // Uploads are re-encoded to fit this box before storing. 1280x720 matches the
 // built-in cards and the Zoom overlay pipeline's own working size; anything
-// larger would only be downscaled again on every push, while costing
-// localStorage quota (~5MB total) that the custom sets have to share.
+// larger would only be downscaled again on every push.
 const CARD_MAX_WIDTH = 1280;
 const CARD_MAX_HEIGHT = 720;
 const CARD_JPEG_QUALITY = 0.85;
 
-/**
- * Keep only what the rest of the app can trust: known set ids, custom sets
- * with at least one valid data URL, and a selection that points at a set
- * that actually exists.
- */
-function normalizeSettings(raw) {
-  const settings = { selectedSetId: DEFAULT_SET_ID, customSets: [] };
-  if (!raw || typeof raw !== 'object') return settings;
+// ---------------------------------------------------------------------------
+// Module state
+// ---------------------------------------------------------------------------
+
+// Metadata: { selectedSetId, customSets: [{ id, colors: [...] }] }.
+let settingsCache = null;
+
+// `${setId}:${color}` -> a displayable URL: an object URL minted from the
+// stored Blob, or a legacy data URL still being served out of localStorage.
+const imageUrlCache = new Map();
+
+let initPromise = null;
+let dbPromise = null;
+
+function imageKey(setId, color) {
+  return `${setId}:${color}`;
+}
+
+// ---------------------------------------------------------------------------
+// Metadata (localStorage)
+// ---------------------------------------------------------------------------
+
+function normalizeMeta(raw) {
+  const meta = { selectedSetId: DEFAULT_SET_ID, customSets: [] };
+  if (!raw || typeof raw !== 'object') return meta;
 
   if (Array.isArray(raw.customSets)) {
     for (const set of raw.customSets) {
       if (!set || typeof set.id !== 'string' || !set.id.startsWith('custom-')) continue;
-      const images = {};
-      for (const color of CARD_COLORS) {
-        if (isCardDataUrl(set.images?.[color])) images[color] = set.images[color];
-      }
-      if (Object.keys(images).length > 0 && !settings.customSets.some((s) => s.id === set.id)) {
-        settings.customSets.push({ id: set.id, images });
+      const colors = CARD_COLORS.filter((color) => set.colors?.includes(color));
+      if (colors.length > 0 && !meta.customSets.some((s) => s.id === set.id)) {
+        meta.customSets.push({ id: set.id, colors });
       }
     }
   }
 
   const selected = raw.selectedSetId;
-  if (getDefaultCardSet(selected) || settings.customSets.some((s) => s.id === selected)) {
-    settings.selectedSetId = selected;
+  if (getDefaultCardSet(selected) || meta.customSets.some((s) => s.id === selected)) {
+    meta.selectedSetId = selected;
   }
-  return settings;
+  return meta;
 }
 
 /**
- * Read the stored settings straight from localStorage. The pre-set format
- * (a plain color -> data URL map of per-color overrides) migrates into one
- * selected custom set, so earlier uploads keep showing.
- * @returns {{selectedSetId: string, customSets: Array<{id: string, images: Object<string, string>}>}}
+ * Parse whatever is in localStorage into current-format metadata, plus any
+ * image payloads still stored inline by the two earlier formats: v1 was a
+ * plain color -> data URL map, v2 kept data URLs inside customSets[].images.
+ * Inline images are returned so init can move them into IndexedDB; they are
+ * also seeded into the URL cache, so legacy data keeps displaying without
+ * waiting for init at all.
  */
-export function loadCardImageSettings() {
+function readStoredState() {
+  const inlineImages = new Map();
+  let meta = normalizeMeta(null);
   try {
-    const raw = localStorage.getItem(CUSTOM_CARD_IMAGES_KEY);
-    if (!raw) return normalizeSettings(null);
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !('customSets' in parsed) && !('selectedSetId' in parsed)) {
-      const images = {};
-      for (const color of CARD_COLORS) {
-        if (isCardDataUrl(parsed[color])) images[color] = parsed[color];
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (!('customSets' in parsed) && !('selectedSetId' in parsed)) {
+          // v1: per-color overrides at the top level.
+          const colors = CARD_COLORS.filter((color) => isCardDataUrl(parsed[color]));
+          if (colors.length > 0) {
+            meta = normalizeMeta({ selectedSetId: 'custom-1', customSets: [{ id: 'custom-1', colors }] });
+            for (const color of colors) inlineImages.set(imageKey('custom-1', color), parsed[color]);
+          }
+        } else {
+          // v2 sets carry images inline; v3 carries colors lists only.
+          const sets = Array.isArray(parsed.customSets) ? parsed.customSets : [];
+          meta = normalizeMeta({
+            selectedSetId: parsed.selectedSetId,
+            customSets: sets.map((set) => ({
+              id: set?.id,
+              colors: Array.isArray(set?.colors)
+                ? set.colors
+                : CARD_COLORS.filter((color) => isCardDataUrl(set?.images?.[color])),
+            })),
+          });
+          for (const set of sets) {
+            if (!set || typeof set.id !== 'string') continue;
+            for (const color of CARD_COLORS) {
+              if (isCardDataUrl(set.images?.[color])) inlineImages.set(imageKey(set.id, color), set.images[color]);
+            }
+          }
+        }
       }
-      if (Object.keys(images).length > 0) {
-        return normalizeSettings({ selectedSetId: 'custom-1', customSets: [{ id: 'custom-1', images }] });
-      }
-      return normalizeSettings(null);
     }
-    return normalizeSettings(parsed);
   } catch (error) {
     console.error('Failed to load card image settings:', error);
-    return normalizeSettings(null);
   }
+
+  for (const [key, dataUrl] of inlineImages) {
+    if (!imageUrlCache.has(key)) imageUrlCache.set(key, dataUrl);
+  }
+  settingsCache = meta;
+  return { meta, inlineImages };
 }
 
-// Module-level cache, so per-second render paths can ask without re-parsing
-// what can be megabytes of JSON. Lazy: nothing pays the parse until the
-// first card is actually resolved.
-let settingsCache = null;
-
 /**
- * The stored settings, cached. Callers on hot paths (status changes, page
- * background updates) use this rather than loadCardImageSettings().
+ * The stored settings metadata, cached: which set is selected and which
+ * colors each custom set has. Synchronous, so hot paths (status changes, page
+ * background updates) can call it freely. Image URLs come from
+ * resolveCardImage / getCustomCardImage instead.
  */
 export function getCardImageSettings() {
-  if (settingsCache === null) settingsCache = loadCardImageSettings();
+  if (settingsCache === null) readStoredState();
   return settingsCache;
 }
 
-/**
- * Persist the settings and refresh the cache. With the default set selected
- * and no custom sets left the key is removed outright.
- *
- * @returns {boolean} false when storage refused it — in practice a quota
- *   overflow, which the caller should tell the user about rather than
- *   silently losing their upload
- */
-export function saveCardImageSettings(settings) {
-  const normalized = normalizeSettings(settings);
+function writeSettings(meta) {
+  const normalized = normalizeMeta(meta);
   try {
     if (normalized.selectedSetId === DEFAULT_SET_ID && normalized.customSets.length === 0) {
-      localStorage.removeItem(CUSTOM_CARD_IMAGES_KEY);
+      localStorage.removeItem(SETTINGS_KEY);
     } else {
-      localStorage.setItem(CUSTOM_CARD_IMAGES_KEY, JSON.stringify(normalized));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ version: SETTINGS_VERSION, ...normalized }));
     }
     settingsCache = normalized;
     return true;
@@ -158,6 +204,308 @@ export function saveCardImageSettings(settings) {
     settingsCache = null;
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Image store (IndexedDB)
+// ---------------------------------------------------------------------------
+
+/**
+ * Open (and create) the image database. Resolves null when IndexedDB is
+ * missing or refuses to open — the app then runs with the built-in sets, and
+ * legacy inline images keep working straight from localStorage.
+ */
+function openImageDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') {
+      resolve(null);
+      return;
+    }
+    let request;
+    try {
+      request = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (error) {
+      console.error('Failed to open the card image database:', error);
+      resolve(null);
+      return;
+    }
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(IMAGE_STORE)) {
+        request.result.createObjectStore(IMAGE_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      console.error('Failed to open the card image database:', request.error);
+      resolve(null);
+    };
+    request.onblocked = () => resolve(null);
+  });
+  return dbPromise;
+}
+
+/** Run one IndexedDB transaction over the image store as a promise. */
+function imageTx(db, mode, work) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMAGE_STORE, mode);
+    const result = work(tx.objectStore(IMAGE_STORE));
+    tx.oncomplete = () => resolve(result);
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function idbPutMany(db, entries) {
+  return imageTx(db, 'readwrite', (store) => {
+    for (const [key, blob] of entries) store.put(blob, key);
+  });
+}
+
+function idbDeleteMany(db, keys) {
+  return imageTx(db, 'readwrite', (store) => {
+    for (const key of keys) store.delete(key);
+  });
+}
+
+function idbGetAllEntries(db) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IMAGE_STORE, 'readonly');
+    const store = tx.objectStore(IMAGE_STORE);
+    const keysReq = store.getAllKeys();
+    const valuesReq = store.getAll();
+    tx.oncomplete = () => {
+      const entries = new Map();
+      keysReq.result.forEach((key, i) => entries.set(key, valuesReq.result[i]));
+      resolve(entries);
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function dataUrlToBlob(dataUrl) {
+  const comma = dataUrl.indexOf(',');
+  const header = dataUrl.slice(0, comma);
+  const type = header.slice(5, header.indexOf(';') > -1 ? header.indexOf(';') : header.length) || 'image/jpeg';
+  const bytesText = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(bytesText.length);
+  for (let i = 0; i < bytesText.length; i++) bytes[i] = bytesText.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+
+// Duck-typed rather than `instanceof Blob`: the structured clone coming back
+// out of IndexedDB may be a Blob from another realm (worker, test harness),
+// which fails instanceof while being perfectly usable.
+function isBlobLike(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.size === 'number' &&
+    typeof value.type === 'string' &&
+    typeof value.arrayBuffer === 'function'
+  );
+}
+
+function cacheBlobUrl(key, blob) {
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return;
+  imageUrlCache.set(key, URL.createObjectURL(blob));
+}
+
+function revokeCached(key) {
+  const url = imageUrlCache.get(key);
+  if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+  imageUrlCache.delete(key);
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+/**
+ * Load the custom card images into memory: migrate any legacy inline data
+ * URLs into IndexedDB, mint object URLs for the stored Blobs, and sweep
+ * orphaned Blobs no set references. Idempotent — every caller shares one run.
+ * Never rejects; on any failure the app keeps working with the built-in sets.
+ *
+ * Call this once at app startup, before custom sets are expected to show;
+ * until it resolves, resolveCardImage falls back to the built-in files.
+ */
+export function initCardImages() {
+  if (!initPromise) {
+    initPromise = loadImagesIntoCache().catch((error) => {
+      console.error('Failed to initialize card images:', error);
+    });
+  }
+  return initPromise;
+}
+
+async function loadImagesIntoCache() {
+  const { meta, inlineImages } = readStoredState();
+  const db = await openImageDb();
+  if (!db) return;
+
+  // Migrate legacy inline payloads: pixels to IndexedDB, metadata-only to
+  // localStorage. The already-seeded data URLs keep serving this session.
+  if (inlineImages.size > 0) {
+    const entries = [];
+    for (const [key, dataUrl] of inlineImages) {
+      try {
+        entries.push([key, dataUrlToBlob(dataUrl)]);
+      } catch {
+        // A corrupt entry migrates as a dropped color rather than a failure.
+      }
+    }
+    await idbPutMany(db, entries);
+    writeSettings(meta);
+  }
+
+  const stored = await idbGetAllEntries(db);
+
+  // Object URLs for every set the metadata lists — all sets, not just the
+  // selected one, because the picker shows thumbnails of each. Object URLs
+  // are handles, not copies; the bytes stay in IndexedDB until decoded.
+  const referenced = new Set();
+  for (const set of getCardImageSettings().customSets) {
+    for (const color of set.colors) {
+      const key = imageKey(set.id, color);
+      referenced.add(key);
+      if (!imageUrlCache.has(key) && isBlobLike(stored.get(key))) {
+        cacheBlobUrl(key, stored.get(key));
+      }
+    }
+  }
+
+  // A crash between a Blob write and its metadata write leaves orphans;
+  // they are invisible, so sweep them here rather than letting them pile up.
+  const orphans = [...stored.keys()].filter((key) => !referenced.has(key));
+  if (orphans.length > 0) await idbDeleteMany(db, orphans);
+}
+
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+/**
+ * The image the selected set shows for a color: a displayable URL for an
+ * uploaded image, or the file name of a built-in card. Synchronous — a custom
+ * color whose Blob has not been loaded (init still running, or storage
+ * failed) falls back to the classic file, and an unknown color falls back to
+ * blue, the card the timer opens on.
+ *
+ * @param {string} color
+ * @returns {{url: string} | {file: string}}
+ */
+export function resolveCardImage(color) {
+  const { selectedSetId } = getCardImageSettings();
+  const defaultSet = getDefaultCardSet(selectedSetId);
+  if (defaultSet) {
+    return { file: defaultSet.files[color] || defaultSet.files.blue };
+  }
+  const url = imageUrlCache.get(imageKey(selectedSetId, color));
+  if (url) return { url };
+  return { file: CLASSIC_FILES[color] || CLASSIC_FILES.blue };
+}
+
+/**
+ * The uploaded image of one custom set for one color, as a displayable URL —
+ * what the picker uses for thumbnails. Null when the set has no upload for
+ * that color, or its Blob is not loaded (yet).
+ */
+export function getCustomCardImage(setId, color) {
+  return imageUrlCache.get(imageKey(setId, color)) || null;
+}
+
+// ---------------------------------------------------------------------------
+// Writes
+// ---------------------------------------------------------------------------
+
+/**
+ * Select which set the timer shows. Metadata-only, so it is synchronous.
+ * @returns {boolean} false when the id names no existing set or storage
+ *   refused the write
+ */
+export function selectCardSet(setId) {
+  const meta = getCardImageSettings();
+  if (!getDefaultCardSet(setId) && !meta.customSets.some((set) => set.id === setId)) return false;
+  return writeSettings({ ...meta, selectedSetId: setId });
+}
+
+/**
+ * Store a new custom set and select it. Blobs go to IndexedDB first, the
+ * metadata write publishes them, and the URL cache picks them up — so a
+ * failure at any step leaves at worst an orphaned Blob for init to sweep.
+ *
+ * @param {Object<string, Blob>} imagesByColor - color -> re-encoded upload
+ * @returns {Promise<string|null>} the new set id, or null when nothing could
+ *   be stored — the caller should tell the user rather than silently losing
+ *   their upload
+ */
+export async function addCustomCardSet(imagesByColor) {
+  await initCardImages();
+  const colors = CARD_COLORS.filter((color) => imagesByColor?.[color] instanceof Blob);
+  if (colors.length === 0) return null;
+
+  const db = await openImageDb();
+  if (!db) return null;
+
+  const meta = getCardImageSettings();
+  const id = nextCustomSetId(meta.customSets);
+  try {
+    await idbPutMany(db, colors.map((color) => [imageKey(id, color), imagesByColor[color]]));
+  } catch (error) {
+    console.error('Failed to store card images:', error);
+    return null;
+  }
+
+  const nextMeta = {
+    selectedSetId: id,
+    customSets: [...meta.customSets, { id, colors }],
+  };
+  if (!writeSettings(nextMeta)) return null;
+
+  for (const color of colors) cacheBlobUrl(imageKey(id, color), imagesByColor[color]);
+
+  // IndexedDB is best-effort storage the browser may evict under pressure;
+  // uploaded artwork is the one thing the user cannot get back, so ask for
+  // persistence at the moment they store some. Chromium decides silently;
+  // a refusal changes nothing today.
+  try {
+    navigator?.storage?.persist?.();
+  } catch {
+    // Unsupported — nothing to do.
+  }
+  return id;
+}
+
+/**
+ * Delete a custom set. If it was selected, selection returns to the default
+ * built-in set. The metadata write is what deletes it; Blob cleanup after it
+ * is best-effort, backstopped by init's orphan sweep.
+ * @returns {Promise<boolean>}
+ */
+export async function deleteCustomCardSet(setId) {
+  await initCardImages();
+  const meta = getCardImageSettings();
+  const set = meta.customSets.find((s) => s.id === setId);
+  if (!set) return false;
+
+  const nextMeta = {
+    selectedSetId: meta.selectedSetId === setId ? DEFAULT_SET_ID : meta.selectedSetId,
+    customSets: meta.customSets.filter((s) => s.id !== setId),
+  };
+  if (!writeSettings(nextMeta)) return false;
+
+  const keys = set.colors.map((color) => imageKey(setId, color));
+  for (const key of keys) revokeCached(key);
+  const db = await openImageDb();
+  if (db) {
+    try {
+      await idbDeleteMany(db, keys);
+    } catch (error) {
+      console.error('Failed to delete stored card images:', error);
+    }
+  }
+  return true;
 }
 
 /**
@@ -171,37 +519,15 @@ export function nextCustomSetId(customSets) {
 }
 
 /**
- * The image the selected set shows for a color: an uploaded data URL, or the
- * file name of a built-in card. A custom set missing this color falls back to
- * the classic file, so a partial set still covers every status; an unknown
- * color falls back to blue, the card the timer opens on.
- *
- * @param {string} color
- * @returns {{dataUrl: string} | {file: string}}
- */
-export function resolveCardImage(color) {
-  const { selectedSetId, customSets } = getCardImageSettings();
-  const defaultSet = getDefaultCardSet(selectedSetId);
-  if (defaultSet) {
-    return { file: defaultSet.files[color] || defaultSet.files.blue };
-  }
-  const custom = customSets.find((set) => set.id === selectedSetId);
-  if (custom && isCardDataUrl(custom.images[color])) {
-    return { dataUrl: custom.images[color] };
-  }
-  return { file: CLASSIC_FILES[color] || CLASSIC_FILES.blue };
-}
-
-/**
- * Turn an uploaded file into the data URL the store takes: decoded, scaled to
- * fit the card box, and re-encoded as JPEG. Re-encoding is not optional — a
- * phone photo is many MB and would blow the localStorage quota on its own,
- * and re-encoding also strips whatever metadata the file carried.
+ * Turn an uploaded file into the Blob the store takes: decoded, scaled to fit
+ * the card box, and re-encoded as JPEG. Re-encoding is not optional — a phone
+ * photo is many MB and would cost storage and decode time on every overlay
+ * push, and re-encoding also strips whatever metadata the file carried.
  *
  * @param {File|Blob} file - The upload, any image type the browser decodes
- * @returns {Promise<string>} data URL ready for saveCardImageSettings
+ * @returns {Promise<Blob>} JPEG blob ready for addCustomCardSet
  */
-export function fileToCardDataUrl(file) {
+export function fileToCardBlob(file) {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
@@ -222,11 +548,11 @@ export function fileToCardDataUrl(file) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      try {
-        resolve(canvas.toDataURL('image/jpeg', CARD_JPEG_QUALITY));
-      } catch (error) {
-        reject(error);
-      }
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('The image could not be re-encoded'))),
+        'image/jpeg',
+        CARD_JPEG_QUALITY
+      );
     };
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
