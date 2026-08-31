@@ -189,12 +189,108 @@ const TIPS = [
   },
 ]
 
+// Clubs we know are running their meetings with the timer, from the in-app club
+// survey and direct conversations. Add a club here as soon as it confirms —
+// name it exactly the way the club names itself.
+const TRUSTED_CLUBS = [
+  { name: 'Jacaranda Chinese English Toastmasters', place: 'District 129' },
+  { name: 'Women LEAD Toastmasters', place: 'District 101' },
+  { name: 'Sapphire City Toastmasters', place: 'District 70' },
+  { name: 'Malabar Toastmasters', place: 'Calicut, India' },
+  // Placeholders — swap in real clubs as they confirm.
+  { name: 'Your Club Here', place: 'Anywhere in the world', placeholder: true },
+]
+
+/**
+ * The rolling "Trusted by" strip.
+ *
+ * The track renders the club list twice and slides one copy's width before
+ * restarting, which reads as an endless loop. The second copy is decoration, so
+ * it is hidden from screen readers; they get the list once, in order. Hovering
+ * pauses the roll, and prefers-reduced-motion stops it entirely (the CSS side
+ * of this lives in index.css next to the keyframes).
+ */
+function TrustedBy() {
+  const chips = (hidden) => (
+    <ul
+      aria-hidden={hidden || undefined}
+      className="flex items-center gap-4 pr-4 flex-shrink-0"
+    >
+      {TRUSTED_CLUBS.map((club) => (
+        <li
+          key={club.name}
+          className={`flex flex-col items-center whitespace-nowrap rounded-xl border px-5 py-3 ${
+            club.placeholder
+              ? 'border-dashed border-white/25 bg-white/5'
+              : 'border-white/15 bg-white/10'
+          }`}
+        >
+          <span className={`text-sm font-medium ${club.placeholder ? 'text-gray-400' : 'text-white'}`}>
+            {club.name}
+          </span>
+          <span className="text-xs text-gray-400">{club.place}</span>
+        </li>
+      ))}
+    </ul>
+  )
+
+  return (
+    <section
+      aria-label="Clubs using Toastmasters Timer"
+      className="rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-6 -mt-6 mb-12"
+    >
+      <p className="text-center text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
+        Trusted by Toastmasters clubs worldwide
+      </p>
+      <div className="overflow-hidden" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
+        <div className="flex w-max animate-marquee">
+          {chips(false)}
+          {chips(true)}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * John's portrait, with the same graceful fallback the tutorial screenshots
+ * use: until the photo lands in apps/web/public/people/, show his initials
+ * instead of a broken image, so shipping the section never waits on the file.
+ */
+function AmbassadorPhoto() {
+  const [missing, setMissing] = useState(false)
+
+  if (missing) {
+    return (
+      <div
+        aria-hidden
+        className="h-28 w-28 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 ring-2 ring-white/30 shadow-lg flex items-center justify-center flex-shrink-0"
+      >
+        <span className="text-3xl font-semibold text-white">JC</span>
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src="/people/john-christensen.jpg"
+      alt="John Christensen"
+      loading="lazy"
+      onError={() => setMissing(true)}
+      // Anchored to the photo's bottom: it's a portrait selfie with open sky in
+      // the top half, so a centered crop shows sky where the face should be.
+      className="h-28 w-28 rounded-full object-cover object-bottom ring-2 ring-white/30 shadow-lg flex-shrink-0"
+    />
+  )
+}
+
 // The rail's entries, in the order the sections appear. Kept next to the page
 // rather than derived from the DOM so the labels can be shorter than the
 // headings they point at — "Tutorial" reads better in a narrow rail than "How to
 // Use the Timer in Zoom".
 const NAV_SECTIONS = [
   { id: 'top', label: 'Overview' },
+  { id: 'ambassador', label: 'Ambassador' },
   { id: 'features', label: 'Features' },
   { id: 'display-modes', label: 'Three Ways' },
   { id: 'tips', label: 'Worth Knowing' },
@@ -368,7 +464,34 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="features" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8">
+        <TrustedBy />
+
+        {/* Directly under the club strip on purpose: the clubs and John are one
+            social-proof block — "clubs run it, and a seasoned Toastmaster vouches
+            for it" — best read together, before the feature pitch. */}
+        <section id="ambassador" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8">
+          <h2 className="text-lg font-semibold text-white mb-6">Our Founding Ambassador</h2>
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            <AmbassadorPhoto />
+            <div className="text-center sm:text-left">
+              <h3 className="text-xl font-semibold text-white">John Christensen</h3>
+              <p className="mt-1 text-sm font-medium text-blue-300">
+                Founding Ambassador &middot; Toastmasters Area Director
+              </p>
+              <p className="mt-3 text-gray-300 text-sm leading-relaxed">
+                John is a member of more than twenty Toastmasters clubs around the world, from
+                San Diego to the UK to Phnom Penh. As an Area Director he has introduced the
+                timer to clubs across his area and beyond, and dozens of his suggestions have
+                shaped the app you see today.
+              </p>
+              <blockquote className="mt-4 border-l-2 border-blue-400 pl-4 text-gray-200 italic">
+                &ldquo;Everyone is praising the timer on the screen.&rdquo;
+              </blockquote>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="scroll-mt-6 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/20 px-6 py-8 mt-6">
           <h3 className="text-lg font-semibold text-white mb-4">Features</h3>
           <ul className="space-y-3 text-gray-300">
             <li className="flex items-start gap-2">

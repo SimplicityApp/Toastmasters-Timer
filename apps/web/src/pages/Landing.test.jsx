@@ -19,4 +19,34 @@ describe('Landing', () => {
     const link = screen.getByRole('link', { name: /add to zoom/i });
     expect(link).toHaveAttribute('href', TEST_ZOOM_URL);
   });
+
+  it('shows the clubs in the "Trusted by" strip, with the loop copy hidden from screen readers', () => {
+    render(
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
+    );
+
+    // The marquee renders the list twice for the seamless loop; only one copy
+    // may be exposed to assistive tech.
+    const chips = screen.getAllByText('Jacaranda Chinese English Toastmasters');
+    expect(chips).toHaveLength(2);
+    const exposed = chips.filter((chip) => !chip.closest('[aria-hidden="true"]'));
+    expect(exposed).toHaveLength(1);
+
+    expect(screen.getAllByText('Women LEAD Toastmasters')).not.toHaveLength(0);
+    expect(screen.getAllByText('Sapphire City Toastmasters')).not.toHaveLength(0);
+    expect(screen.getAllByText('Malabar Toastmasters')).not.toHaveLength(0);
+  });
+
+  it('introduces John Christensen as Founding Ambassador', () => {
+    render(
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { name: 'John Christensen' })).toBeInTheDocument();
+    expect(screen.getByText(/Founding Ambassador\s*·\s*Toastmasters Area Director/)).toBeInTheDocument();
+  });
 });
