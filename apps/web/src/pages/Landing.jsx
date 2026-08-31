@@ -268,12 +268,14 @@ const FALLBACK_STATS = {
   timerUsers: 520,
   countries: 55,
   speechesTimed: 1405,
+  speechSeconds: 122254,
 }
 
 /**
- * Live usage numbers from /api/stats (the Worker's edge-cached PostHog query).
- * Starts on the baked fallback and swaps in the live values when they arrive,
- * so the strip renders instantly and never shows a loading state.
+ * Live usage numbers from /api/stats (the Worker's edge-cached PostHog query,
+ * refreshed every five minutes). Starts on the baked fallback and swaps in the
+ * live values when they arrive, so the strip renders instantly and never shows
+ * a loading state.
  */
 function useUsageStats() {
   const [stats, setStats] = useState(FALLBACK_STATS)
@@ -285,9 +287,9 @@ function useUsageStats() {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (cancelled || !data) return
-          const { timerUsers, countries, speechesTimed } = data
-          if ([timerUsers, countries, speechesTimed].every((n) => typeof n === 'number' && n > 0)) {
-            setStats({ timerUsers, countries, speechesTimed })
+          const { timerUsers, countries, speechesTimed, speechSeconds } = data
+          if ([timerUsers, countries, speechesTimed, speechSeconds].every((n) => typeof n === 'number' && n > 0)) {
+            setStats({ timerUsers, countries, speechesTimed, speechSeconds })
           }
         })
         .catch(() => {})
@@ -309,22 +311,31 @@ function floorTo(n, step) {
   return floored < step ? `${n}` : `${floored.toLocaleString('en-US')}+`
 }
 
-function UsageStats() {
+/**
+ * The hero's proof line: live usage numbers where a static badge used to be.
+ * Real adoption is a stronger opener than promises about pricing, and it can
+ * never go stale the way "free forever" would.
+ */
+function HeroStats() {
   const stats = useUsageStats()
+  const hours = Math.floor(stats.speechSeconds / 3600)
   const items = [
-    { value: floorTo(stats.timerUsers, 50), label: 'Toastmasters running the timer' },
-    { value: `${stats.countries}`, label: 'Countries' },
-    { value: floorTo(stats.speechesTimed, 100), label: 'Speeches timed' },
+    { value: floorTo(stats.timerUsers, 50), label: 'Toastmasters', dot: 'bg-timer-green' },
+    { value: `${stats.countries}`, label: 'countries', dot: 'bg-timer-yellow' },
+    { value: floorTo(stats.speechesTimed, 100), label: 'speeches timed', dot: 'bg-timer-red' },
+    { value: floorTo(hours, 10), label: 'hours of speaking', dot: 'bg-timer-green' },
   ]
 
   return (
-    <dl className="mx-auto mb-10 grid max-w-3xl grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+    <dl className="flex flex-wrap items-center justify-center gap-2">
       {items.map((item) => (
-        <div key={item.label}>
-          <dd className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight">
-            {item.value}
-          </dd>
-          <dt className="mt-1 text-sm text-stone-500">{item.label}</dt>
+        <div
+          key={item.label}
+          className="flex items-baseline gap-1.5 rounded-full border border-stone-200 bg-white px-4 py-1.5 shadow-sm"
+        >
+          <span className={`self-center h-2 w-2 rounded-full ${item.dot}`} aria-hidden />
+          <dd className="font-display text-sm font-bold text-ink">{item.value}</dd>
+          <dt className="text-sm text-stone-500">{item.label}</dt>
         </div>
       ))}
     </dl>
@@ -369,7 +380,6 @@ function TrustedBy() {
       <h2 className="text-center font-display text-2xl sm:text-3xl font-extrabold tracking-tight mb-8">
         Trusted by Toastmasters clubs worldwide
       </h2>
-      <UsageStats />
       <div className="overflow-hidden" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
         {/* Four copies, not two: the loop slides half the track, so the half
             must be wider than any viewport or a blank gap rolls through. Two
@@ -526,10 +536,10 @@ export default function Landing() {
             }}
           />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-16 text-center">
-            <p className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-1.5 text-sm font-medium text-stone-600 shadow-sm">
-              <span className="h-2 w-2 rounded-full bg-timer-green" />
-              Free forever · No sign-up · Built for Toastmasters
-            </p>
+            {/* Live adoption where a static tagline used to be: real numbers
+                are the stronger opener, and unlike a pricing promise they
+                can't go stale. */}
+            <HeroStats />
             <h1 className="mt-7 font-display text-4xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight leading-[1.1] max-w-4xl mx-auto">
               Free Online Toastmasters Speech Timer – Run the Timer Role Easily
             </h1>

@@ -49,18 +49,21 @@ describe('Landing', () => {
     expect(screen.getAllByText('Malabar Toastmasters')).not.toHaveLength(0);
   });
 
-  it('shows the baked usage numbers when /api/stats is unreachable', async () => {
+  it('shows the baked usage numbers in the hero when /api/stats is unreachable', async () => {
     render(
       <MemoryRouter>
         <Landing />
       </MemoryRouter>
     );
 
-    // 520 users -> "500+", 55 countries exact, 1405 speeches -> "1,400+".
+    // 520 users -> "500+", 55 countries exact, 1405 speeches -> "1,400+",
+    // 122254 seconds -> 33 hours -> "30+".
     expect(await screen.findByText('500+')).toBeInTheDocument();
     expect(screen.getByText('55')).toBeInTheDocument();
     expect(screen.getByText('1,400+')).toBeInTheDocument();
-    expect(screen.getByText('Toastmasters running the timer')).toBeInTheDocument();
+    expect(screen.getByText('30+')).toBeInTheDocument();
+    expect(screen.getByText('speeches timed')).toBeInTheDocument();
+    expect(screen.getByText('hours of speaking')).toBeInTheDocument();
   });
 
   it('swaps in live numbers once /api/stats answers', async () => {
@@ -69,7 +72,13 @@ describe('Landing', () => {
       vi.fn(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ timerUsers: 730, countries: 61, speechesTimed: 2210 }),
+          json: () =>
+            Promise.resolve({
+              timerUsers: 730,
+              countries: 61,
+              speechesTimed: 2210,
+              speechSeconds: 190800, // 53 hours
+            }),
         })
       )
     );
@@ -83,6 +92,7 @@ describe('Landing', () => {
     expect(await screen.findByText('700+')).toBeInTheDocument();
     expect(screen.getByText('61')).toBeInTheDocument();
     expect(screen.getByText('2,200+')).toBeInTheDocument();
+    expect(screen.getByText('50+')).toBeInTheDocument();
   });
 
   it('introduces John Christensen as Founding Ambassador', () => {

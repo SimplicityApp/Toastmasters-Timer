@@ -11,14 +11,17 @@ const POSTHOG_HOST = 'https://us.posthog.com';
 const POSTHOG_PROJECT_ID = '295629';
 
 // One scan over the three usage events:
-//  - timer_users: people who have actually run the timer (not just visited)
-//  - countries:   distinct GeoIP countries across that usage
-//  - speeches_timed: every START pressed is one speech being timed
+//  - timer_users:    people who have actually run the timer (not just visited)
+//  - countries:      distinct GeoIP countries across that usage
+//  - speeches_timed: timer_started fires on the START press for one speaker
+//                    (it carries speaker_name and role), so each is one speech
+//  - speech_seconds: speech_finished carries the speech's duration in seconds
 const STATS_QUERY = `
   SELECT
     uniq(person_id) AS timer_users,
     uniq(properties.$geoip_country_name) AS countries,
-    countIf(event = 'timer_started') AS speeches_timed
+    countIf(event = 'timer_started') AS speeches_timed,
+    round(sumIf(toFloat(properties.duration), event = 'speech_finished')) AS speech_seconds
   FROM events
   WHERE timestamp >= toDateTime('2024-01-01 00:00:00')
     AND event IN ('timer_started', 'speech_finished', 'zoom_meeting_started')
@@ -31,13 +34,17 @@ const FALLBACK_STATS = {
   timerUsers: 520,
   countries: 55,
   speechesTimed: 1405,
+  speechSeconds: 122254,
 };
 
 const CACHE_KEY = 'https://stats.internal/api/stats';
-const CACHE_TTL_SECONDS = 6 * 60 * 60;
-// Failures get a short TTL so a PostHog blip doesn't pin the fallback for six
-// hours — the next visitor retries the real query within minutes.
-const FALLBACK_TTL_SECONDS = 5 * 60;
+// Five minutes keeps the numbers effectively live while staying far inside
+// PostHog's query rate limit (120/hour) — the edge cache is per-datacenter,
+// so the worst case is one query per colo per five minutes, not one total.
+const CACHE_TTL_SECONDS = 5 * 60;
+// Failures get a shorter TTL so a PostHog blip doesn't pin the fallback —
+// the next visitor retries the real query within a minute.
+const FALLBACK_TTL_SECONDS = 60;
 
 function json(body, ttlSeconds) {
   return new Response(JSON.stringify(body), {
@@ -76,12 +83,15 @@ export async function handleStats(request, env, ctx) {
 
     const data = await res.json();
     const row = data?.results?.[0];
-    const [timerUsers, countries, speechesTimed] = Array.isArray(row) ? row : [];
-    if (![timerUsers, countries, speechesTimed].every((n) => typeof n === 'number')) {
+    const [timerUsers, countries, speechesTimed, speechSeconds] = Array.isArray(row) ? row : [];
+    if (![timerUsers, countries, speechesTimed, speechSeconds].every((n) => typeof n === 'number')) {
       throw new Error('PostHog query returned an unexpected shape');
     }
 
-    const response = json({ timerUsers, countries, speechesTimed, fallback: false }, CACHE_TTL_SECONDS);
+    const response = json(
+      { timerUsers, countries, speechesTimed, speechSeconds, fallback: false },
+      CACHE_TTL_SECONDS
+    );
     if (cache) ctx.waitUntil(cache.put(cacheKey, response.clone()));
     return response;
   } catch (err) {
