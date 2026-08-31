@@ -17,7 +17,7 @@ describe('handleStats', () => {
     expect(body.timerUsers).toBeGreaterThan(0);
     expect(body.countries).toBeGreaterThan(0);
     expect(body.speechesTimed).toBeGreaterThan(0);
-    expect(body.speechSeconds).toBeGreaterThan(0);
+    expect(body.appSeconds).toBeGreaterThan(0);
   });
 
   it('returns live numbers from the PostHog query result', async () => {
@@ -34,12 +34,11 @@ describe('handleStats', () => {
       timerUsers: 600,
       countries: 60,
       speechesTimed: 1600,
-      speechSeconds: 150000,
+      appSeconds: 150000,
       fallback: false,
     });
-    // A successful answer is cacheable for minutes (near-live); the fallback
-    // for even less.
-    expect(res.headers.get('Cache-Control')).toContain('max-age=300');
+    // A successful answer is cacheable for hours; the fallback only briefly.
+    expect(res.headers.get('Cache-Control')).toContain('max-age=14400');
   });
 
   it('falls back when PostHog errors, with a short cache TTL', async () => {

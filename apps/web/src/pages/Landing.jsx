@@ -268,7 +268,7 @@ const FALLBACK_STATS = {
   timerUsers: 520,
   countries: 55,
   speechesTimed: 1405,
-  speechSeconds: 122254,
+  appSeconds: 416804,
 }
 
 /**
@@ -287,9 +287,9 @@ function useUsageStats() {
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (cancelled || !data) return
-          const { timerUsers, countries, speechesTimed, speechSeconds } = data
-          if ([timerUsers, countries, speechesTimed, speechSeconds].every((n) => typeof n === 'number' && n > 0)) {
-            setStats({ timerUsers, countries, speechesTimed, speechSeconds })
+          const { timerUsers, countries, speechesTimed, appSeconds } = data
+          if ([timerUsers, countries, speechesTimed, appSeconds].every((n) => typeof n === 'number' && n > 0)) {
+            setStats({ timerUsers, countries, speechesTimed, appSeconds })
           }
         })
         .catch(() => {})
@@ -318,12 +318,12 @@ function floorTo(n, step) {
  */
 function HeroStats() {
   const stats = useUsageStats()
-  const hours = Math.floor(stats.speechSeconds / 3600)
+  const hours = Math.floor(stats.appSeconds / 3600)
   const items = [
     { value: floorTo(stats.timerUsers, 50), label: 'Toastmasters', dot: 'bg-timer-green' },
     { value: `${stats.countries}`, label: 'countries', dot: 'bg-timer-yellow' },
     { value: floorTo(stats.speechesTimed, 100), label: 'speeches timed', dot: 'bg-timer-red' },
-    { value: floorTo(hours, 10), label: 'hours of speaking', dot: 'bg-timer-green' },
+    { value: floorTo(hours, 10), label: 'hours using the app', dot: 'bg-timer-green' },
   ]
 
   return (

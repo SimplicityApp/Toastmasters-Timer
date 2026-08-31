@@ -57,13 +57,13 @@ describe('Landing', () => {
     );
 
     // 520 users -> "500+", 55 countries exact, 1405 speeches -> "1,400+",
-    // 122254 seconds -> 33 hours -> "30+".
+    // 416804 seconds of app sessions -> 115 hours -> "110+".
     expect(await screen.findByText('500+')).toBeInTheDocument();
     expect(screen.getByText('55')).toBeInTheDocument();
     expect(screen.getByText('1,400+')).toBeInTheDocument();
-    expect(screen.getByText('30+')).toBeInTheDocument();
+    expect(screen.getByText('110+')).toBeInTheDocument();
     expect(screen.getByText('speeches timed')).toBeInTheDocument();
-    expect(screen.getByText('hours of speaking')).toBeInTheDocument();
+    expect(screen.getByText('hours using the app')).toBeInTheDocument();
   });
 
   it('swaps in live numbers once /api/stats answers', async () => {
@@ -77,7 +77,7 @@ describe('Landing', () => {
               timerUsers: 730,
               countries: 61,
               speechesTimed: 2210,
-              speechSeconds: 190800, // 53 hours
+              appSeconds: 1080000, // 300 hours
             }),
         })
       )
@@ -92,7 +92,7 @@ describe('Landing', () => {
     expect(await screen.findByText('700+')).toBeInTheDocument();
     expect(screen.getByText('61')).toBeInTheDocument();
     expect(screen.getByText('2,200+')).toBeInTheDocument();
-    expect(screen.getByText('50+')).toBeInTheDocument();
+    expect(screen.getByText('300+')).toBeInTheDocument();
   });
 
   it('introduces John Christensen as Founding Ambassador', () => {
