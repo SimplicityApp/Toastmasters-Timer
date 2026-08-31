@@ -119,6 +119,40 @@ describe('AgendaTab', () => {
     });
   });
 
+  describe('editing a speaker', () => {
+    const addSpeaker = async (user, name) => {
+      await user.click(screen.getByRole('button', { name: /add item/i }));
+      await user.type(screen.getByPlaceholderText(/enter speaker name/i), name);
+      await user.click(screen.getByRole('button', { name: /^add$/i }));
+      await waitFor(() => {
+        expect(screen.getByText(name)).toBeInTheDocument();
+      });
+    };
+
+    it('keeps the speaker in their original position after a name change', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<AgendaTab />);
+
+      await addSpeaker(user, 'Alice');
+      await addSpeaker(user, 'Bob');
+      await addSpeaker(user, 'Carol');
+
+      await user.click(screen.getByRole('button', { name: 'Edit Bob' }));
+      const nameInput = screen.getByPlaceholderText(/enter speaker name/i);
+      await user.clear(nameInput);
+      await user.type(nameInput, 'Bobby');
+      await user.click(screen.getByRole('button', { name: /^update$/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Bobby')).toBeInTheDocument();
+      });
+      const order = screen
+        .getAllByRole('button', { name: /^edit /i })
+        .map((btn) => btn.getAttribute('aria-label').replace('Edit ', ''));
+      expect(order).toEqual(['Alice', 'Bobby', 'Carol']);
+    });
+  });
+
   describe('switching to live tab', () => {
     it('calls onSwitchToLive when a speaker item is clicked', async () => {
       const user = userEvent.setup();

@@ -75,6 +75,7 @@ function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }
 
       <div className="flex items-center gap-2">
         <button
+          aria-label={`Edit ${item.name}`}
           onClick={(e) => {
             e.stopPropagation();
             onEdit(item);
@@ -84,6 +85,7 @@ function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }
           <Edit2 className="h-4 w-4" />
         </button>
         <button
+          aria-label={`Delete ${item.name}`}
           onClick={(e) => {
             e.stopPropagation();
             onDelete(item.id);
@@ -104,6 +106,7 @@ export default memo(function AgendaTab({ onSwitchToLive }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    updateAgendaItem,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
     importEasySpeakSpeakers,
@@ -204,8 +207,6 @@ export default memo(function AgendaTab({ onSwitchToLive }) {
 
   const handleUpdate = () => {
     if (editItem && newSpeakerName.trim()) {
-      // Remove old item and add updated one
-      removeFromAgenda(editItem.id);
       const speakerData = {
         name: newSpeakerName.trim(),
         role: newSpeakerRole,
@@ -214,7 +215,8 @@ export default memo(function AgendaTab({ onSwitchToLive }) {
       if (newSpeakerRole === 'Custom') {
         speakerData.rules = customRules;
       }
-      addToAgenda(speakerData);
+      // Update in place so the speaker keeps their position in the agenda
+      updateAgendaItem(editItem.id, speakerData);
       setEditItem(null);
       setNewSpeakerName('');
       setNewSpeakerRole('Standard Speech');

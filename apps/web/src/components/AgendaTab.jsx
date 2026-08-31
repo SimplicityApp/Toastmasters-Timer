@@ -39,15 +39,15 @@ function SortableItem({ item, isActive, isCompleted, onEdit, onDelete, onClick }
         <div className="text-sm text-gray-500">({item.role}{item.role === 'Short Roles' && item.originalShortRole && <span className="ml-1 text-gray-400">- {item.originalShortRole}</span>})</div>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-1 text-gray-400 hover:text-blue-600"><Edit2 className="h-4 w-4" /></button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+        <button aria-label={`Edit ${item.name}`} onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-1 text-gray-400 hover:text-blue-600"><Edit2 className="h-4 w-4" /></button>
+        <button aria-label={`Delete ${item.name}`} onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
       </div>
     </div>
   );
 }
 
 export default memo(function AgendaTab({ onSwitchToLive }) {
-  const { agenda, activeSpeakerId, addToAgenda, removeFromAgenda, reorderAgenda, loadSpeakerFromAgenda, importBulkSpeakers, importEasySpeakSpeakers, clearAllAgenda, roleRules, roleOptions } = useTimer();
+  const { agenda, activeSpeakerId, addToAgenda, removeFromAgenda, reorderAgenda, updateAgendaItem, loadSpeakerFromAgenda, importBulkSpeakers, importEasySpeakSpeakers, clearAllAgenda, roleRules, roleOptions } = useTimer();
   const { showToast } = useToast();
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -115,10 +115,9 @@ export default memo(function AgendaTab({ onSwitchToLive }) {
 
   const handleUpdate = () => {
     if (editItem && newSpeakerName.trim()) {
-      removeFromAgenda(editItem.id);
       const speakerData = { name: newSpeakerName.trim(), role: newSpeakerRole };
       if (newSpeakerRole === 'Custom') speakerData.rules = customRules;
-      addToAgenda(speakerData);
+      updateAgendaItem(editItem.id, speakerData);
       setEditItem(null);
       setNewSpeakerName('');
       setNewSpeakerRole('Standard Speech');
