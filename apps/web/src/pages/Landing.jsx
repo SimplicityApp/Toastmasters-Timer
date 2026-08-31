@@ -460,13 +460,35 @@ function HeroTimerMock() {
           <span className="h-2.5 w-2.5 rounded-full bg-stone-200" />
           <span className="h-2.5 w-2.5 rounded-full bg-stone-200" />
         </div>
-        <div className="animate-signal-cycle rounded-2xl flex flex-col items-center justify-center py-16 sm:py-20 transition-colors">
-          <span className="font-mono text-6xl sm:text-7xl font-bold text-white tabular-nums tracking-tight drop-shadow-sm">
-            05:47
-          </span>
-          <span className="mt-3 rounded-full bg-black/20 px-4 py-1 text-sm font-medium text-white">
-            Standard Speech · 5–7 min
-          </span>
+        <div className="relative rounded-2xl overflow-hidden">
+          {/* The branded timing cards — the same images the Zoom app sets as
+              virtual backgrounds — cycling green → yellow → red. Green is the
+              static base so there is never a blank frame; yellow and red are
+              overlays offset by a third of the loop each (see index.css). */}
+          <img
+            src="/zoom/backgrounds/timer-green-background.png"
+            alt=""
+            className="block w-full"
+          />
+          <img
+            src="/zoom/backgrounds/timer-yellow-background.png"
+            alt=""
+            className="signal-card-overlay absolute inset-0 w-full"
+          />
+          <img
+            src="/zoom/backgrounds/timer-red-background.png"
+            alt=""
+            className="signal-card-overlay absolute inset-0 w-full"
+            style={{ animationDelay: '-8s' }}
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-mono text-6xl sm:text-7xl font-bold text-white tabular-nums tracking-tight drop-shadow-md">
+              05:47
+            </span>
+            <span className="mt-3 rounded-full bg-black/25 px-4 py-1 text-sm font-medium text-white">
+              Standard Speech · 5–7 min
+            </span>
+          </div>
         </div>
       </div>
     </div>

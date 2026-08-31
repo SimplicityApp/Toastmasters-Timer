@@ -40,21 +40,24 @@ body {
   }
 }
 
-/* The hero's mock timer runs through a whole speech on a loop: green, yellow,
-   red, then back. Long holds with short cross-fades, so it reads as the timer
-   changing phase rather than as a color show. */
-@keyframes signal-cycle {
-  0%, 28% { background-color: #10b981; }
-  33%, 61% { background-color: #f59e0b; }
-  66%, 95% { background-color: #ef4444; }
-  100% { background-color: #10b981; }
+/* The hero's mock timer runs through a whole speech on a loop using the
+   branded timing cards (the same images the Zoom app sets as virtual
+   backgrounds). The green card sits underneath as the static base; yellow and
+   red are overlays that each take one third of the cycle, offset from each
+   other by animation-delay. Long holds with short cross-fades, so it reads as
+   the timer changing phase rather than as a slideshow. */
+@keyframes card-overlay-fade {
+  0%, 30% { opacity: 0; }
+  36%, 61% { opacity: 1; }
+  67%, 100% { opacity: 0; }
 }
-.animate-signal-cycle {
-  background-color: #10b981;
-  animation: signal-cycle 12s ease-in-out infinite;
+.signal-card-overlay {
+  opacity: 0;
+  animation: card-overlay-fade 12s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .animate-signal-cycle {
+  /* The overlays stay hidden, leaving the static green card. */
+  .signal-card-overlay {
     animation: none;
   }
 }
