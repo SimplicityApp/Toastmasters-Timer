@@ -49,7 +49,9 @@ function serveZoomPublic() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!req.url.startsWith('/zoom/')) return next()
-        const filePath = path.join(zoomPublic, req.url.replace('/zoom/', ''))
+        // Drop the query string (cache-busting ?v=N on the card images) or the
+        // lookup misses and the SPA fallback answers with index.html.
+        const filePath = path.join(zoomPublic, req.url.replace('/zoom/', '').split('?')[0])
         if (fs.existsSync(filePath)) {
           return res.writeHead(200).end(fs.readFileSync(filePath))
         }
@@ -77,6 +79,10 @@ export default defineConfig(async () => {
     envDir: path.resolve(__dirname, '../..'),
     server: {
       port: 3001,
+      // Bind every interface, not the default "localhost": depending on which
+      // process starts vite, that name resolves to only ::1 or only 127.0.0.1,
+      // and a browser on the other stack gets connection refused.
+      host: true,
       open: true
     }
   }

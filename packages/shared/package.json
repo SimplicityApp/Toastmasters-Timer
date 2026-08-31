@@ -10,6 +10,7 @@
     "./timingRules": "./timingRules.js",
     "./easySpeakParser": "./easySpeakParser.js",
     "./storage": "./storage.js",
+    "./cardImages": "./cardImages.js",
     "./promptScheduler": "./promptScheduler.js",
     "./surveyIds": "./surveyIds.js",
     "./appLinks": "./appLinks.js"

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react';
-import { Monitor, Camera, Maximize2, ChevronDown, Check } from 'lucide-react';
+import { Monitor, Camera, Maximize2, ChevronDown, Check, Image } from 'lucide-react';
 import {
   OVERLAY_MODE_CARD,
   OVERLAY_MODE_CAMERA,
@@ -51,7 +51,7 @@ export const MODE_LABELS = Object.fromEntries(OVERLAY_MODES.map(({ mode, label }
 /**
  * Mode picker for the Live tab: the active mode plus a menu to change it.
  */
-export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenIdle, onToggleRevealFaceWhenIdle }) {
+export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenIdle, onToggleRevealFaceWhenIdle, onCustomizeCards }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -136,6 +136,25 @@ export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenId
               </button>
             );
           })}
+
+          {/* In every mode: the cards show on the video in the video modes and
+              on the stage itself in stage mode, so the artwork is never moot. */}
+          {onCustomizeCards && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onCustomizeCards();
+              }}
+              className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left border-t border-gray-200 transition-colors hover:bg-gray-50"
+            >
+              <Image className="h-4 w-4 mt-0.5 flex-shrink-0 text-gray-500" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-gray-900">Card Images…</span>
+                <span className="block text-xs text-gray-500">Upload your own card artwork</span>
+              </span>
+            </button>
+          )}
 
           {/* Only for the video modes. The stage modes never touch the camera, so
               the setting would be a control that does nothing there. */}

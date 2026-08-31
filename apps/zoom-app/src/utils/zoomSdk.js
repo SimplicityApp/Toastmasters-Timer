@@ -1,23 +1,8 @@
 import zoomSdk from '@zoom/appssdk';
-import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout } from '@toastmaster-timer/shared';
+import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout, resolveCardImage, CARD_ASSET_VERSION } from '@toastmaster-timer/shared';
 
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
-
-// Bump this version when background images are updated to bust CDN/browser cache.
-// The files are served with `max-age=31536000, immutable`, so without a bump
-// existing clients keep the old asset for a year.
-// 3: re-exported at 1280x720 (was 2560x1440, which produced a 14.7MB ImageData
-//    against the Zoom SDK's documented 15MB limit).
-const BACKGROUND_VERSION = '3';
-
-// Zoom overlay image filenames (Toastmasters-branded backgrounds)
-const ZOOM_OVERLAY_FILES = {
-  blue: 'timer-blue-background.png',
-  green: 'timer-green-background.png',
-  yellow: 'timer-yellow-background.png',
-  red: 'timer-red-background.png',
-};
 
 /**
  * Path the app is served under, with leading and trailing slashes. This app is
@@ -32,10 +17,10 @@ export function getBasePath() {
   return withLeading.endsWith('/') ? withLeading : `${withLeading}/`;
 }
 
-// Get the URL for a background image (works in both dev and production)
-export function getBackgroundUrl(color) {
-  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.blue;
-  const path = `${getBasePath()}backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
+// Absolute URL of one built-in card file — what the picker shows as a
+// thumbnail and what the overlay fetches (works in both dev and production).
+export function getCardFileUrl(file) {
+  const path = `${getBasePath()}backgrounds/${file}?v=${CARD_ASSET_VERSION}`;
 
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
@@ -43,6 +28,15 @@ export function getBackgroundUrl(color) {
   }
   // Fallback to production URL if window is not available
   return `${PRODUCTION_BASE_URL}${path}`;
+}
+
+// Get the URL for a background image, from whichever card set the organizer
+// selected. A custom set yields a data: URL, which every consumer here
+// accepts — the <img>/CSS paths directly, and the overlay path through its
+// pixel decode; the built-in sets yield a file URL.
+export function getBackgroundUrl(color) {
+  const resolved = resolveCardImage(color);
+  return resolved.dataUrl || getCardFileUrl(resolved.file);
 }
 
 // Every overlay pixel costs 4 bytes of ImageData across the webview -> native
@@ -303,7 +297,7 @@ let activeOverlay = null;
 let overlayTimeLabel = null;
 
 // Where the readout sits on the frame: normalized (0-1) center of the text.
-// Upper-left by default, just below the Toastmasters logo that occupies the
+// Upper-left by default, just below the badge that occupies the
 // card's actual top-left corner. Not centered: the middle of the tile is
 // where camera mode puts the organizer's head, which would hide a centered
 // readout. The organizer repositions it by dragging the badge on the Live
@@ -1216,6 +1210,18 @@ export function setLogCallback(callback) {
 }
 
 /**
+ * A URL as it should appear in a log line. A custom card is a data: URL that
+ * can run to a megabyte; interpolating it verbatim would bury the debug panel
+ * under one entry.
+ */
+function describeUrl(url) {
+  if (typeof url === 'string' && url.startsWith('data:')) {
+    return `${url.slice(0, 32)}… (custom image, ${url.length} chars)`;
+  }
+  return url;
+}
+
+/**
  * Internal logging function
  */
 function log(message, type = 'info') {
@@ -2015,7 +2021,7 @@ export function loadImageAsImageData(imageUrl) {
 
   const cached = imageDataCache.get(key);
   if (cached) {
-    log(`Using cached ImageData for: ${imageUrl}`, 'info');
+    log(`Using cached ImageData for: ${describeUrl(imageUrl)}`, 'info');
     return cached;
   }
 
@@ -2054,7 +2060,13 @@ function canDecodeAtTargetSize() {
  * @returns {Promise<ImageData>} ImageData object
  */
 function decodeImage(imageUrl, budget) {
-  log(`Loading image: ${imageUrl}`, 'info');
+  log(`Loading image: ${describeUrl(imageUrl)}`, 'info');
+
+  // A data: URL (custom card) has nothing to fetch and is rarely a PNG, so the
+  // header fast-path would only fail into the element decode anyway.
+  if (imageUrl.startsWith('data:')) {
+    return decodeViaImageElement(imageUrl, budget);
+  }
 
   if (canDecodeAtTargetSize()) {
     return decodeAtTargetSize(imageUrl, budget).catch((error) => {
@@ -2125,7 +2137,7 @@ function decodeViaImageElement(imageUrl, budget) {
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+        reject(new Error(`Image load timeout after 10 seconds: ${describeUrl(imageUrl)}`));
       }
     }, 10000);
     
@@ -2162,7 +2174,7 @@ function decodeViaImageElement(imageUrl, budget) {
       log(`Image naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`, 'error');
       log(`Image complete: ${img.complete}, width: ${img.width}, height: ${img.height}`, 'error');
       resolved = true;
-      reject(new Error(`Failed to load image from ${imageUrl}: ${errorMsg}`));
+      reject(new Error(`Failed to load image from ${describeUrl(imageUrl)}: ${errorMsg}`));
     };
     
     // Set src to load image (works like UI images in Zoom client)
@@ -2175,7 +2187,6 @@ function decodeViaImageElement(imageUrl, budget) {
  * This should be called when the app initializes
  */
 export async function preloadBackgroundImages() {
-  // Map status colors to Zoom overlay image URLs (timer-*-background.*)
   // Blue is what the card shows first, so decode it before the others. Loading
   // all four at once puts three decodes the user is not waiting on ahead of the
   // one they are.
@@ -2192,6 +2203,16 @@ export async function preloadBackgroundImages() {
   }
 
   log(`Pre-loading complete. Cached ${imageDataCache.size} images.`, 'info');
+}
+
+/**
+ * Called after the organizer changes a custom card image. Decoded pixels for
+ * a replaced image are keyed by its old data: URL, so they can never be hit
+ * again — clearing just releases the megabytes instead of holding them for
+ * the session.
+ */
+export function notifyCardImagesChanged() {
+  imageDataCache.clear();
 }
 
 /**
@@ -2774,7 +2795,7 @@ async function applyOverlayInternal(imageUrl) {
   }
 
   if (isAlreadyShowing(imageUrl)) {
-    log(`Overlay already showing ${imageUrl}, skipping redundant push`, 'info');
+    log(`Overlay already showing ${describeUrl(imageUrl)}, skipping redundant push`, 'info');
     return;
   }
 
@@ -2804,23 +2825,29 @@ async function applyOverlayInternal(imageUrl) {
         if (effectiveTimeLabel() && !isApiAvailable('setVirtualForeground')) {
           log('Client did not grant setVirtualForeground; showing Timer + Camera without the count-up', 'warn');
         }
-        try {
-          log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
-          const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
-          log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
-          // No pixels pushed, so no budget to go stale.
-          activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null, pipeline: 'background' };
-          markVirtualBackgroundApplied(true);
-          lastError = null;
-          await syncForegroundReadout();
-          return;
-        } catch (fileUrlError) {
-          // The native client may not be able to reach the URL (restricted
-          // network, proxy, TLS inspection). Fall back to shipping the pixels.
-          log(`fileUrl virtual background failed: ${fileUrlError.message || fileUrlError.name}. Falling back to imageData.`, 'warn');
+        // Only a real http(s) URL takes the fileUrl shortcut. A custom card is
+        // a data: URL — there is no file for the native client to fetch, and
+        // handing it the whole payload as a "URL" is untested territory — so it
+        // ships as pixels below, the path the fallback has always exercised.
+        if (/^https?:/i.test(imageUrl)) {
+          try {
+            log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
+            const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
+            log(`Successfully applied virtual background by fileUrl. Result: ${JSON.stringify(result)}`, 'info');
+            // No pixels pushed, so no budget to go stale.
+            activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null, pipeline: 'background' };
+            markVirtualBackgroundApplied(true);
+            lastError = null;
+            await syncForegroundReadout();
+            return;
+          } catch (fileUrlError) {
+            // The native client may not be able to reach the URL (restricted
+            // network, proxy, TLS inspection). Fall back to shipping the pixels.
+            log(`fileUrl virtual background failed: ${fileUrlError.message || fileUrlError.name}. Falling back to imageData.`, 'warn');
+          }
         }
 
-        log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+        log(`Loading image for overlay (mode: ${currentOverlayMode}): ${describeUrl(imageUrl)}`, 'info');
         const budget = getOverlayBudget();
         const imageData = await loadImageAsImageData(imageUrl);
         log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
@@ -2835,7 +2862,7 @@ async function applyOverlayInternal(imageUrl) {
         // Card pipeline: setVideoFilter covers the entire video. Both Timer
         // Only and a degraded Timer + Camera land here.
         if (isApiAvailable('setVideoFilter')) {
-          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${describeUrl(imageUrl)}`, 'info');
           const budget = getOverlayBudget();
           const imageData = await loadImageAsImageData(imageUrl);
           log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
@@ -2866,7 +2893,7 @@ async function applyOverlayInternal(imageUrl) {
     }
 
     // SDK not available or function not found
-    log(`[MOCK] Would apply overlay (mode: ${currentOverlayMode}, ${imageUrl})`, 'warn');
+    log(`[MOCK] Would apply overlay (mode: ${currentOverlayMode}, ${describeUrl(imageUrl)})`, 'warn');
     if (!sdkAvailable) {
       log(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`, 'warn');
     }

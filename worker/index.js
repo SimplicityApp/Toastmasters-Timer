@@ -1,4 +1,5 @@
 import { handleZoomWebhook } from './zoom-webhook.js';
+import { handleStats } from './stats.js';
 
 // Content-Security-Policy for the marketing + web app (root). Mirrors the
 // "/(.*)" rule from the old vercel.json.
@@ -46,6 +47,11 @@ export default {
     //    redirected (a 301 would drop the request body).
     if (pathname === '/api/zoom/webhook') {
       return handleZoomWebhook(request, env, ctx);
+    }
+
+    // Usage stats for the landing page (edge-cached PostHog query).
+    if (pathname === '/api/stats') {
+      return handleStats(request, env, ctx);
     }
 
     // 2. Canonical host: apex -> www (301). The zoom.<domain> host is a
