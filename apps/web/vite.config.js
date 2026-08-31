@@ -77,6 +77,10 @@ export default defineConfig(async () => {
     envDir: path.resolve(__dirname, '../..'),
     server: {
       port: 3001,
+      // Bind every interface, not the default "localhost": depending on which
+      // process starts vite, that name resolves to only ::1 or only 127.0.0.1,
+      // and a browser on the other stack gets connection refused.
+      host: true,
       open: true
     }
   }
