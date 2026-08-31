@@ -9,15 +9,18 @@ beforeEach(() => {
 });
 
 describe('Landing', () => {
-  it('"Add to Zoom" links to the VITE_ZOOM_OAUTH_REDIRECT env var', () => {
+  it('every "Add to Zoom" button links to the VITE_ZOOM_OAUTH_REDIRECT env var', () => {
     render(
       <MemoryRouter>
         <Landing />
       </MemoryRouter>
     );
 
-    const link = screen.getByRole('link', { name: /add to zoom/i });
-    expect(link).toHaveAttribute('href', TEST_ZOOM_URL);
+    // The header, the hero and the closing band each carry one; they must all
+    // point at the same OAuth URL.
+    const links = screen.getAllByRole('link', { name: /add to zoom/i });
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    links.forEach((link) => expect(link).toHaveAttribute('href', TEST_ZOOM_URL));
   });
 
   it('shows the clubs in the "Trusted by" strip, with the loop copy hidden from screen readers', () => {
