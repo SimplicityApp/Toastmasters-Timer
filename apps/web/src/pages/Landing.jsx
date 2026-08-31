@@ -295,13 +295,18 @@ function TrustedBy() {
   )
 
   return (
-    <section aria-label="Clubs using Toastmasters Timer" className="py-12">
-      <p className="text-center text-xs font-semibold uppercase tracking-widest text-stone-500 mb-6">
+    <section aria-label="Clubs using Toastmasters Timer" className="py-14">
+      <h2 className="text-center font-display text-2xl sm:text-3xl font-extrabold tracking-tight mb-8">
         Trusted by Toastmasters clubs worldwide
-      </p>
+      </h2>
       <div className="overflow-hidden" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
+        {/* Four copies, not two: the loop slides half the track, so the half
+            must be wider than any viewport or a blank gap rolls through. Two
+            copies of a short club list only cover ~1250px. */}
         <div className="flex w-max animate-marquee">
           {chips(false)}
+          {chips(true)}
+          {chips(true)}
           {chips(true)}
         </div>
       </div>
@@ -487,6 +492,11 @@ export default function Landing() {
             for it" — best read together, before the feature pitch. */}
         <section id="ambassador" className="scroll-mt-24 max-w-3xl mx-auto px-4 sm:px-6 pb-20">
           <figure className="rounded-3xl border border-stone-200 bg-white px-8 py-10 sm:px-12 shadow-sm text-center">
+            {/* A real heading, not decoration: it names the section for the
+                page outline the way "Trusted by" names the strip above. */}
+            <h2 className="inline-flex items-center gap-2 rounded-full bg-stone-100 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-stone-600 mb-6">
+              Our Founding Ambassador
+            </h2>
             <blockquote className="font-display text-2xl sm:text-3xl font-bold leading-snug">
               &ldquo;Everyone is praising the timer on the screen.&rdquo;
             </blockquote>

@@ -29,7 +29,7 @@ body {
   to { transform: translateX(-50%); }
 }
 .animate-marquee {
-  animation: marquee-scroll 35s linear infinite;
+  animation: marquee-scroll 70s linear infinite;
 }
 .animate-marquee:hover {
   animation-play-state: paused;

@@ -30,10 +30,10 @@ describe('Landing', () => {
       </MemoryRouter>
     );
 
-    // The marquee renders the list twice for the seamless loop; only one copy
-    // may be exposed to assistive tech.
+    // The marquee renders the list several times for the seamless loop; only
+    // one copy may be exposed to assistive tech.
     const chips = screen.getAllByText('Jacaranda Chinese English Toastmasters');
-    expect(chips).toHaveLength(2);
+    expect(chips.length).toBeGreaterThanOrEqual(2);
     const exposed = chips.filter((chip) => !chip.closest('[aria-hidden="true"]'));
     expect(exposed).toHaveLength(1);
 
