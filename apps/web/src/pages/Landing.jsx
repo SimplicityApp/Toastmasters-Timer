@@ -607,15 +607,17 @@ export default function Landing() {
               <div className="text-center sm:text-left">
                 <h3 className="text-base font-semibold">John Christensen</h3>
                 <p className="text-sm text-stone-500">
-                  Founding Ambassador &middot; Toastmasters Area Director
+                  Founding Ambassador &middot; Toastmasters Area Director, Area E1, Division E,
+                  Founder&apos;s District
                 </p>
               </div>
             </figcaption>
             <p className="mt-6 text-sm text-stone-600 leading-relaxed max-w-xl mx-auto">
               John is a member of more than twenty Toastmasters clubs around the world, from
-              San Diego to the UK to Phnom Penh. As an Area Director he has introduced the
-              timer to clubs across his area and beyond, and dozens of his suggestions have
-              shaped the app you see today.
+              San Diego to the UK to Phnom Penh. As Area Director of Area E1 (Division E,
+              Founder&apos;s District) he serves the San Diego clubs, has introduced the timer
+              to clubs across his area and beyond, and dozens of his suggestions have shaped
+              the app you see today.
             </p>
           </figure>
         </section>

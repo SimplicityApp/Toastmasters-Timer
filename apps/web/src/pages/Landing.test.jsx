@@ -103,6 +103,9 @@ describe('Landing', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'John Christensen' })).toBeInTheDocument();
-    expect(screen.getByText(/Founding Ambassador\s*·\s*Toastmasters Area Director/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Founding Ambassador\s*·\s*Toastmasters Area Director, Area E1, Division E,\s*Founder's District/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/serves the San Diego clubs/)).toBeInTheDocument();
   });
 });

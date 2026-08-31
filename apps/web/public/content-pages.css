@@ -410,6 +410,21 @@
   background: #44403c;
   color: #fff;
 }
+/* Pill CTAs placed inside article copy: the `.static-content a` rule is more
+   specific than the single pill class, so without these the ink link color
+   lands on the ink pill — dark text on a dark background — plus an underline. */
+.static-content a.static-inline-cta,
+.static-content a.static-cta-primary,
+.static-content a.static-cta-secondary {
+  text-decoration: none;
+}
+.static-content a.static-inline-cta,
+.static-content a.static-cta-primary {
+  color: #fff;
+}
+.static-content a.static-cta-secondary {
+  color: var(--ink);
+}
 
 /* "Last updated" stamp. Freshness is weighted heavily by answer engines, so
    the date is visible to readers as well as declared in JSON-LD. */
