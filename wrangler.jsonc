@@ -56,7 +56,8 @@
   }
 
   // Secrets are NOT stored here. Set them per environment with `wrangler secret put`:
-  //   ZOOM_WEBHOOK_SECRET_TOKEN, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, POSTHOG_API_KEY
+  //   ZOOM_WEBHOOK_SECRET_TOKEN, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, POSTHOG_API_KEY,
+  //   POSTHOG_QUERY_API_KEY (personal key with Query read scope, for /api/stats)
   //   prod: `wrangler secret put NAME`     dev: `wrangler secret put NAME --env dev`
   // For local dev, put them in .dev.vars (see .dev.vars.example).
 }

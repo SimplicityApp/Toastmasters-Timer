@@ -6,6 +6,13 @@ const TEST_ZOOM_URL = 'https://zoom.us/oauth/authorize?test=true';
 
 beforeEach(() => {
   import.meta.env.VITE_ZOOM_OAUTH_REDIRECT = TEST_ZOOM_URL;
+  // The usage strip fetches /api/stats on mount; default to "endpoint down"
+  // so tests exercise the baked fallback unless they stub a response.
+  vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('offline'))));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('Landing', () => {
@@ -40,6 +47,42 @@ describe('Landing', () => {
     expect(screen.getAllByText('Women LEAD Toastmasters')).not.toHaveLength(0);
     expect(screen.getAllByText('Sapphire City Toastmasters')).not.toHaveLength(0);
     expect(screen.getAllByText('Malabar Toastmasters')).not.toHaveLength(0);
+  });
+
+  it('shows the baked usage numbers when /api/stats is unreachable', async () => {
+    render(
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
+    );
+
+    // 520 users -> "500+", 55 countries exact, 1405 speeches -> "1,400+".
+    expect(await screen.findByText('500+')).toBeInTheDocument();
+    expect(screen.getByText('55')).toBeInTheDocument();
+    expect(screen.getByText('1,400+')).toBeInTheDocument();
+    expect(screen.getByText('Toastmasters running the timer')).toBeInTheDocument();
+  });
+
+  it('swaps in live numbers once /api/stats answers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ timerUsers: 730, countries: 61, speechesTimed: 2210 }),
+        })
+      )
+    );
+
+    render(
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('700+')).toBeInTheDocument();
+    expect(screen.getByText('61')).toBeInTheDocument();
+    expect(screen.getByText('2,200+')).toBeInTheDocument();
   });
 
   it('introduces John Christensen as Founding Ambassador', () => {

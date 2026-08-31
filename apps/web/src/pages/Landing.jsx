@@ -261,6 +261,76 @@ const NAV_LINKS = [
   { href: '#timer-role', label: 'Timer Role' },
 ]
 
+// The strip's numbers when /api/stats is unreachable (local dev, ad blockers,
+// a Worker hiccup). True as of 2026-08-31 — stale-low is fine because the
+// display rounds down anyway.
+const FALLBACK_STATS = {
+  timerUsers: 520,
+  countries: 55,
+  speechesTimed: 1405,
+}
+
+/**
+ * Live usage numbers from /api/stats (the Worker's edge-cached PostHog query).
+ * Starts on the baked fallback and swaps in the live values when they arrive,
+ * so the strip renders instantly and never shows a loading state.
+ */
+function useUsageStats() {
+  const [stats, setStats] = useState(FALLBACK_STATS)
+
+  useEffect(() => {
+    let cancelled = false
+    try {
+      fetch('/api/stats')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return
+          const { timerUsers, countries, speechesTimed } = data
+          if ([timerUsers, countries, speechesTimed].every((n) => typeof n === 'number' && n > 0)) {
+            setStats({ timerUsers, countries, speechesTimed })
+          }
+        })
+        .catch(() => {})
+    } catch {
+      // fetch itself can throw (no network stack in some test environments);
+      // the fallback numbers are already on screen.
+    }
+    return () => { cancelled = true }
+  }, [])
+
+  return stats
+}
+
+// "520" reads as a live counter about to be wrong; "500+" reads as a floor
+// that stays true between cache refreshes. Countries stay exact — rounding
+// "55 countries" down would just make it smaller for no honesty gain.
+function floorTo(n, step) {
+  const floored = Math.floor(n / step) * step
+  return floored < step ? `${n}` : `${floored.toLocaleString('en-US')}+`
+}
+
+function UsageStats() {
+  const stats = useUsageStats()
+  const items = [
+    { value: floorTo(stats.timerUsers, 50), label: 'Toastmasters running the timer' },
+    { value: `${stats.countries}`, label: 'Countries' },
+    { value: floorTo(stats.speechesTimed, 100), label: 'Speeches timed' },
+  ]
+
+  return (
+    <dl className="mx-auto mb-10 grid max-w-3xl grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+      {items.map((item) => (
+        <div key={item.label}>
+          <dd className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight">
+            {item.value}
+          </dd>
+          <dt className="mt-1 text-sm text-stone-500">{item.label}</dt>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 /**
  * The rolling "Trusted by" strip.
  *
@@ -299,6 +369,7 @@ function TrustedBy() {
       <h2 className="text-center font-display text-2xl sm:text-3xl font-extrabold tracking-tight mb-8">
         Trusted by Toastmasters clubs worldwide
       </h2>
+      <UsageStats />
       <div className="overflow-hidden" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
         {/* Four copies, not two: the loop slides half the track, so the half
             must be wider than any viewport or a blank gap rolls through. Two
