@@ -615,8 +615,9 @@ export default memo(function LiveTab() {
    * thing they opted out of. So both halves are asked here:
    *
    * - Reveals on: the video comes back whole, their own background included.
-   *   This is the eraser's path, in silence, and it costs the same confirmation
-   *   dialog in Timer + Camera.
+   *   This is the eraser's path, in silence. It costs no confirmation dialog:
+   *   Timer + Camera never displaced their background in the first place, so
+   *   handing it back is a matter of taking our own layer off.
    * - Reveals off: the tile returns to the blue card. Unconditionally, unlike
    *   resetTimer's own handling — which is why the video is skipped there and
    *   decided here. That gate exists because resetTimer also runs on every
@@ -740,11 +741,13 @@ export default memo(function LiveTab() {
       } else if (!ok) {
         showToast('Zoom would not clear your video. Check Zoom\'s own background and filter settings.', 'error', 6000);
       } else if (lostBackground) {
-        // The app does put a saved background back, via getVirtualBackgroundData.
-        // This is the narrower case left over: the client refused those pixels,
-        // or no longer knows the id. Say so rather than leaving them to notice
-        // their own image is gone. Said even when the caller wanted silence:
-        // losing your own background is not a success.
+        // Only reachable for a background left on the video by a build that
+        // still replaced it — nothing displaces a background any more. Even
+        // then the app puts a saved image back via getVirtualBackgroundData;
+        // this is the remainder, where the client refused those pixels, no
+        // longer knows the id, or the background was a video, which Zoom offers
+        // no way to re-apply. Said even when the caller wanted silence: losing
+        // your own background is not a success.
         showToast('Cleared the timer. Zoom wouldn\'t give your own background back — pick it again in Background & Effects.', 'info', 7000);
       } else if (announceSuccess) {
         showToast('Cleared the timer from your video.', 'success');
