@@ -40,6 +40,15 @@
       "@graph": [
         {
           "@type": "Organization",
+          "@id": "https://www.wikidata.org/entity/Q917036",
+          "name": "Toastmasters International",
+          "sameAs": [
+            "https://en.wikipedia.org/wiki/Toastmasters_International",
+            "https://www.wikidata.org/wiki/Q917036"
+          ]
+        },
+        {
+          "@type": "Organization",
           "@id": "https://www.timer.simple-tech.app/#organization",
           "name": "Simple Tech",
           "url": "https://www.timer.simple-tech.app/",
@@ -51,16 +60,21 @@
         {
           "@type": "WebSite",
           "@id": "https://www.timer.simple-tech.app/#website",
-          "name": "Toastmasters Timer",
+          "name": "Toastmusters Timer",
           "url": "https://www.timer.simple-tech.app/",
           "inLanguage": "en-US",
-          "publisher": { "@id": "https://www.timer.simple-tech.app/#organization" }
+          "publisher": {
+            "@id": "https://www.timer.simple-tech.app/#organization"
+          },
+          "about": {
+            "@id": "https://www.wikidata.org/entity/Q917036"
+          }
         },
         {
           "@type": "WebApplication",
           "@id": "https://www.timer.simple-tech.app/#webapp",
-          "name": "Toastmasters Timer",
-          "alternateName": "Toastmasters Speech Timer",
+          "name": "Toastmusters Timer",
+          "alternateName": "Toastmasters Timer",
           "description": "Free timer tool for the Timer role in Toastmasters meetings. Tracks speech times with green/yellow/red signals. Works in browser or as a Zoom app with automatic virtual backgrounds.",
           "url": "https://www.timer.simple-tech.app/",
           "applicationCategory": "UtilitiesApplication",
@@ -70,7 +84,9 @@
           "isAccessibleForFree": true,
           "inLanguage": "en-US",
           "image": "https://www.timer.simple-tech.app/Toastmasters-Timer-cover-page.png",
-          "publisher": { "@id": "https://www.timer.simple-tech.app/#organization" },
+          "publisher": {
+            "@id": "https://www.timer.simple-tech.app/#organization"
+          },
           "featureList": [
             "Green, yellow, and red timing signals for every Toastmasters speech type",
             "Built-in timing rules: Standard Speech 5-7 min, Table Topics 1-2 min, Evaluation 2-3 min, Longer Speech 7-9 min",
@@ -85,7 +101,16 @@
             "price": "0",
             "priceCurrency": "USD",
             "availability": "https://schema.org/InStock"
-          }
+          },
+          "about": {
+            "@id": "https://www.wikidata.org/entity/Q917036"
+          },
+          "audience": {
+            "@type": "Audience",
+            "audienceType": "Toastmasters club members serving as Timer, Toastmaster of the Day, or club officer"
+          },
+          "keywords": "Toastmasters timer, Toastmasters speech timer, speech timer for Toastmasters, Toastmasters timing rules, Table Topics timer, Toastmasters Timer role, Toastmasters Zoom timer, timekeeper",
+          "disambiguatingDescription": "An independent timer app for Toastmasters club meetings. Not affiliated with, endorsed by, or sponsored by Toastmasters International."
         }
       ]
     }

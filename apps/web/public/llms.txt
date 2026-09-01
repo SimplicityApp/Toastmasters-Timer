@@ -1,4 +1,4 @@
-# Toastmasters Timer
+# Toastmusters Timer
 
 > A free, browser-based speech timer built for the Timer role at Toastmasters
 > meetings. It shows the standard green / yellow / red signals for every speech
@@ -7,6 +7,11 @@
 > background colour automatically, so no one has to hold coloured cards to a
 > webcam.
 
+Name: Toastmusters Timer (the product name is a play on "Toastmasters"; the tool is
+  an independent third-party app for Toastmasters club meetings, not affiliated with,
+  endorsed by, or sponsored by Toastmasters International).
+Topic: Toastmasters International (https://en.wikipedia.org/wiki/Toastmasters_International,
+  https://www.wikidata.org/wiki/Q917036) — meeting timing, the Timer role, speech time limits.
 Site: https://www.timer.simple-tech.app/
 Cost: Free. No account, sign-up, payment, or installation required.
 Platform: Any modern web browser (desktop, tablet, phone) and Zoom.
