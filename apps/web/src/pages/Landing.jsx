@@ -875,7 +875,7 @@ export default function Landing() {
             </ul>
           </div>
         </div>
-        <p className="text-xs text-stone-400 mt-10 text-center">&copy; 2026 Toastmusters Timer. Not affiliated with Toastmasters International.</p>
+        <p className="text-xs text-stone-400 mt-10 text-center">&copy; 2026 Toastmusters Timer. Not affiliated with <a href="https://www.toastmasters.org/" target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-500">Toastmasters International</a>.</p>
       </footer>
 
       <Lightbox shot={zoomedShot} onClose={() => setZoomedShot(null)} />

@@ -13,7 +13,7 @@
  * Run: node scripts/generate-sitemap.mjs
  */
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, statSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,6 +55,49 @@ const PAGES = [
   { path: '/terms-of-use', file: 'apps/zoom-app/public/terms-of-use.html', priority: '0.3', changefreq: 'yearly' },
 ];
 
+/**
+ * Whether git history is usable here. CI checkouts are often shallow (or have
+ * no .git at all), in which case per-file `git log` returns nothing for every
+ * file outside the tip commit and we must NOT fall back to mtime — in a fresh
+ * clone that is the checkout time, which would stamp every URL with the deploy
+ * date and claim an update that did not happen.
+ */
+function gitHistoryUsable() {
+  try {
+    const out = execFileSync('git', ['log', '-1', '--format=%cs'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(out)) return false;
+    // A depth-1 clone has exactly one commit; per-file history is meaningless.
+    const depth = execFileSync('git', ['rev-list', '--count', 'HEAD'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return Number(depth) > 1;
+  } catch {
+    return false;
+  }
+}
+
+/** lastmod values already published in the committed sitemap, by URL path. */
+function committedLastmods() {
+  if (!existsSync(OUT)) return {};
+  try {
+    const xml = readFileSync(OUT, 'utf8');
+    const out = {};
+    const re = /<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]*)<\/lastmod>)?/g;
+    for (const m of xml.matchAll(re)) {
+      if (m[2]) out[m[1].replace(ORIGIN, '')] = m[2];
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 /** Last git commit date for a file (YYYY-MM-DD), or null if unavailable. */
 function gitLastModified(relPath) {
   try {
@@ -77,10 +120,23 @@ function fileMtime(relPath) {
 }
 
 const missing = [];
+const HAVE_GIT = gitHistoryUsable();
+const PUBLISHED = HAVE_GIT ? {} : committedLastmods();
+if (!HAVE_GIT) {
+  console.warn(
+    'generate-sitemap: git history unavailable (shallow clone?) — keeping the ' +
+      'lastmod values already committed in sitemap.xml and omitting the rest. ' +
+      'Regenerate locally, with full history, to refresh them.'
+  );
+}
 const entries = PAGES.map((page) => {
   if (!existsSync(resolve(ROOT, page.file))) missing.push(page.file);
-  // Prefer the commit date; fall back to mtime for uncommitted new pages.
-  const lastmod = gitLastModified(page.file) || fileMtime(page.file) || null;
+  // With real history: commit date, then mtime for a page git has not seen yet.
+  // Without it: reuse what we already published rather than inventing a date —
+  // mtime in a fresh checkout is the deploy time, not a content change.
+  const lastmod = HAVE_GIT
+    ? gitLastModified(page.file) || fileMtime(page.file) || null
+    : PUBLISHED[page.path] || null;
   return { ...page, lastmod };
 });
 
