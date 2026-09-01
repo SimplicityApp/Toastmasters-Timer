@@ -511,10 +511,10 @@ export default function Landing() {
           <a href="#top" className="flex items-center gap-2.5">
             <img
               src="/Toastmasters-Timer-logo.jpg"
-              alt="Toastmasters Timer app logo"
+              alt="Toastmusters Timer app logo"
               className="h-9 w-9 rounded-xl object-cover"
             />
-            <span className="font-display text-lg font-bold">Toastmasters Timer</span>
+            <span className="font-display text-lg font-bold">Toastmusters Timer</span>
           </a>
           <nav aria-label="Page sections" className="hidden md:flex items-center gap-1 mx-auto">
             {NAV_LINKS.map((link) => (
@@ -875,7 +875,7 @@ export default function Landing() {
             </ul>
           </div>
         </div>
-        <p className="text-xs text-stone-400 mt-10 text-center">&copy; 2026 Toastmasters Timer. Not affiliated with Toastmasters International.</p>
+        <p className="text-xs text-stone-400 mt-10 text-center">&copy; 2026 Toastmusters Timer. Not affiliated with Toastmasters International.</p>
       </footer>
 
       <Lightbox shot={zoomedShot} onClose={() => setZoomedShot(null)} />
