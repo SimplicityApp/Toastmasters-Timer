@@ -7,15 +7,21 @@
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#FAF7F2" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Toastmasters Timer – Free Online Speech Timer for Toastmasters Meetings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>Free Online Toastmasters Speech Timer – Run the Timer Role</title>
     <meta name="description" content="Free online Toastmasters timer with green, yellow, and red signals for every speech type. Runs in your browser or as a Zoom app with auto backgrounds." />
     <link rel="canonical" href="https://www.timer.simple-tech.app/" />
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://www.timer.simple-tech.app/" />
-    <meta property="og:title" content="Toastmasters Timer – Free Online Speech Timer for Toastmasters Meetings" />
+    <meta property="og:title" content="Toastmusters Timer – Free Speech Timer for Toastmasters Meetings" />
     <meta property="og:description" content="Free online Toastmasters timer with green, yellow, and red signals for every speech type. Runs in your browser or as a Zoom app with auto backgrounds." />
     <meta property="og:image" content="https://www.timer.simple-tech.app/Toastmasters-Timer-cover-page.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -34,6 +40,15 @@
       "@graph": [
         {
           "@type": "Organization",
+          "@id": "https://www.wikidata.org/entity/Q917036",
+          "name": "Toastmasters International",
+          "sameAs": [
+            "https://en.wikipedia.org/wiki/Toastmasters_International",
+            "https://www.wikidata.org/wiki/Q917036"
+          ]
+        },
+        {
+          "@type": "Organization",
           "@id": "https://www.timer.simple-tech.app/#organization",
           "name": "Simple Tech",
           "url": "https://www.timer.simple-tech.app/",
@@ -45,16 +60,21 @@
         {
           "@type": "WebSite",
           "@id": "https://www.timer.simple-tech.app/#website",
-          "name": "Toastmasters Timer",
+          "name": "Toastmusters Timer",
           "url": "https://www.timer.simple-tech.app/",
           "inLanguage": "en-US",
-          "publisher": { "@id": "https://www.timer.simple-tech.app/#organization" }
+          "publisher": {
+            "@id": "https://www.timer.simple-tech.app/#organization"
+          },
+          "about": {
+            "@id": "https://www.wikidata.org/entity/Q917036"
+          }
         },
         {
           "@type": "WebApplication",
           "@id": "https://www.timer.simple-tech.app/#webapp",
-          "name": "Toastmasters Timer",
-          "alternateName": "Toastmasters Speech Timer",
+          "name": "Toastmusters Timer",
+          "alternateName": "Toastmasters Timer",
           "description": "Free timer tool for the Timer role in Toastmasters meetings. Tracks speech times with green/yellow/red signals. Works in browser or as a Zoom app with automatic virtual backgrounds.",
           "url": "https://www.timer.simple-tech.app/",
           "applicationCategory": "UtilitiesApplication",
@@ -64,7 +84,9 @@
           "isAccessibleForFree": true,
           "inLanguage": "en-US",
           "image": "https://www.timer.simple-tech.app/Toastmasters-Timer-cover-page.png",
-          "publisher": { "@id": "https://www.timer.simple-tech.app/#organization" },
+          "publisher": {
+            "@id": "https://www.timer.simple-tech.app/#organization"
+          },
           "featureList": [
             "Green, yellow, and red timing signals for every Toastmasters speech type",
             "Built-in timing rules: Standard Speech 5-7 min, Table Topics 1-2 min, Evaluation 2-3 min, Longer Speech 7-9 min",
@@ -79,7 +101,16 @@
             "price": "0",
             "priceCurrency": "USD",
             "availability": "https://schema.org/InStock"
-          }
+          },
+          "about": {
+            "@id": "https://www.wikidata.org/entity/Q917036"
+          },
+          "audience": {
+            "@type": "Audience",
+            "audienceType": "Toastmasters club members serving as Timer, Toastmaster of the Day, or club officer"
+          },
+          "keywords": "Toastmasters timer, Toastmasters speech timer, speech timer for Toastmasters, Toastmasters timing rules, Table Topics timer, Toastmasters Timer role, Toastmasters Zoom timer, timekeeper",
+          "disambiguatingDescription": "An independent timer app for Toastmasters club meetings. Not affiliated with, endorsed by, or sponsored by Toastmasters International."
         }
       ]
     }
@@ -107,10 +138,10 @@
         },
         {
           "@type": "Question",
-          "name": "How does the Toastmasters Timer app work in Zoom?",
+          "name": "How does the Toastmasters timer app work in Zoom?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Toastmasters Timer integrates with Zoom as a Zoom app. When timing speeches in a Zoom meeting, the app automatically changes your virtual background color to green, yellow, or red to signal the speaker — no physical cards or screen sharing needed."
+            "text": "Toastmusters Timer integrates with Zoom as a Zoom app. When timing speeches in a Zoom meeting, the app automatically changes your virtual background color to green, yellow, or red to signal the speaker — no physical cards or screen sharing needed."
           }
         },
         {
@@ -118,7 +149,7 @@
           "name": "Is the Toastmasters timer free?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes, Toastmasters Timer is completely free to use. No account or sign-up is needed — just open it in any modern browser and start timing speeches immediately. The Zoom app integration is also free."
+            "text": "Yes, Toastmusters Timer is completely free to use. No account or sign-up is needed — just open it in any modern browser and start timing speeches immediately. The Zoom app integration is also free."
           }
         },
         {
@@ -126,7 +157,7 @@
           "name": "Can I use a timer for online Toastmasters meetings?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Toastmasters Timer has a dedicated Zoom app that automatically changes your virtual background color to green, yellow, or red as the speaker reaches each time threshold. This replaces the need for physical colored cards in virtual meetings."
+            "text": "Yes. Toastmusters Timer has a dedicated Zoom app that automatically changes your virtual background color to green, yellow, or red as the speaker reaches each time threshold. This replaces the need for physical colored cards in virtual meetings."
           }
         },
         {
@@ -150,7 +181,7 @@
           "name": "What happens if a Toastmasters speaker goes over time?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "After the red signal, speakers have a 30-second grace period. If they exceed the maximum time plus 30 seconds, they may be disqualified from winning the Best Speaker, Best Table Topics, or Best Evaluator award for that meeting. Toastmasters Timer tracks the exact overage so the Timer can report precise times."
+            "text": "After the red signal, speakers have a 30-second grace period. If they exceed the maximum time plus 30 seconds, they may be disqualified from winning the Best Speaker, Best Table Topics, or Best Evaluator award for that meeting. Toastmusters Timer tracks the exact overage so the Timer can report precise times."
           }
         }
       ]
@@ -193,8 +224,8 @@
 
         <header class="static-header">
           <div class="static-header-inner">
-            <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmasters Timer app logo" class="static-header-logo" />
-            <span class="static-header-title">Toastmasters Timer</span>
+            <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmusters Timer app logo" class="static-header-logo" />
+            <span class="static-header-title">Toastmusters Timer</span>
           </div>
         </header>
 
@@ -204,7 +235,7 @@
             <div class="static-hero-content">
               <img src="/Toastmasters-Timer-logo.jpg" alt="" class="static-hero-logo" aria-hidden="true" />
               <h1>Free Online Toastmasters Speech Timer – Run the Timer Role Easily</h1>
-              <p>Toastmasters Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for automatic virtual backgrounds.</p>
+              <p>Toastmusters Timer helps you run the Timer role in Toastmasters meetings. Use it in your browser or add it to Zoom for automatic virtual backgrounds.</p>
               <div class="static-cta-row">
                 <a href="https://zoom.us/oauth/authorize?response_type=code&client_id=DsFHK5sNQs2_VFyeQky2sg&redirect_uri=https://www.timer.simple-tech.app/oauth/redirect" target="_blank" rel="noopener noreferrer" class="static-cta-primary">Add to Zoom</a>
                 <a href="/app" class="static-cta-secondary">Use in Browser</a>
@@ -213,7 +244,7 @@
           </section>
 
           <section class="static-card">
-            <h3>Features</h3>
+            <h2>Features</h2>
             <ul class="static-features">
               <li><span class="static-dot" style="background:#60a5fa"></span>Timing rules for speeches (Standard Speech, Short Roles, Table Topics, evaluations, etc.)</li>
               <li><span class="static-dot" style="background:#22c55e"></span>Agenda and reports to track speakers</li>
@@ -225,7 +256,7 @@
 
           <section class="static-card">
             <h2>What is the Timer Role in Toastmasters?</h2>
-            <p>The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice.</p>
+            <p>Every Toastmasters meeting assigns a Timer, and it is one of the first roles most new members take on. You track how long each speaker talks, show them a green, yellow, or red signal as they pass each threshold, and report the exact times at the end. It sounds small, but it is what keeps a meeting on schedule and gives every speaker a fair share of the floor.</p>
 
             <h2 style="margin-top:1.5rem">Standard Toastmasters Timing Rules</h2>
             <p style="margin-bottom:0.75rem">Each speech type has its own time range. The timer shows green when the minimum time is reached, yellow at the midpoint, and red at the maximum. Speakers who finish before green or after red may be disqualified from awards.</p>
@@ -235,7 +266,66 @@
               <li><span class="static-rule-name">Evaluation (2–3 min)</span><span>🟢 2:00 &nbsp; 🟡 2:30 &nbsp; 🔴 3:00</span></li>
               <li><span class="static-rule-name">Longer Speech (7–9 min)</span><span>🟢 7:00 &nbsp; 🟡 8:00 &nbsp; 🔴 9:00</span></li>
             </ul>
-            <p class="static-note">Toastmasters Timer is pre-loaded with these rules so you can start timing immediately — no manual setup required.</p>
+            <p class="static-note">Toastmusters Timer is pre-loaded with these rules so you can start timing immediately — no manual setup required.</p>
+          </section>
+
+          <section class="static-card">
+            <h2>How to Use the Timer in Your Meeting</h2>
+            <p>You do not need an account, a download, or any setup. Open the timer, pick the speech type, and press start when the speaker begins.</p>
+            <ol class="static-steps">
+              <li><strong>Open the timer.</strong> Use it in any browser at <a href="/app">the web app</a>, or add it to Zoom so it runs beside your meeting.</li>
+              <li><strong>Load the agenda.</strong> Paste your meeting roles and the agenda builds itself, or add speakers one at a time.</li>
+              <li><strong>Pick the speech type.</strong> Standard Speech, Table Topics, Evaluation and the other roles each carry their own green, yellow, and red thresholds already.</li>
+              <li><strong>Start when the speaker starts.</strong> The screen turns green at the minimum, yellow at the midpoint, and red at the maximum — no cards to hold up and no stopwatch to read.</li>
+              <li><strong>Read your report.</strong> Every speaker's exact time is recorded, so the Timer's report at the end of the meeting is already written for you.</li>
+            </ol>
+            <p class="static-note">Because the whole screen changes color, the speaker sees the signal from across the room without looking for a small card.</p>
+          </section>
+
+          <section class="static-card">
+            <h2>Browser Timer or Zoom App?</h2>
+            <p>Both are free and both use the same timing rules. The difference is only how the speaker sees the signal.</p>
+            <ul class="static-features">
+              <li><span class="static-dot" style="background:#22c55e"></span><strong>In-person meetings — use the browser.</strong> Put a laptop or tablet where the speaker can see it. The full page turns green, yellow, then red, which replaces a physical set of timing cards.</li>
+              <li><span class="static-dot" style="background:#60a5fa"></span><strong>Online meetings — use the Zoom app.</strong> Your virtual background changes color automatically, so the speaker gets the signal without anyone screen sharing or holding a card to a webcam.</li>
+              <li><span class="static-dot" style="background:#eab308"></span><strong>Hybrid meetings — use both.</strong> Run the Zoom app for remote speakers and keep the browser timer visible in the room.</li>
+            </ul>
+            <p>See it working in the <a href="/toastmasters-timer-demo">full product walkthrough</a> or the <a href="/toastmasters-timer-zoom-demo">Zoom virtual background demo</a>.</p>
+          </section>
+
+          <section class="static-card">
+            <h2>Frequently Asked Questions</h2>
+            <h3>What is the Timer Role in Toastmasters?</h3>
+            <div class="answer-block"><p>The Timer is one of the most important meeting roles in Toastmasters. The Timer tracks how long each speaker talks and signals them using colored lights — green, yellow, and red — so they stay within their allotted time. Keeping speeches on time ensures the meeting runs smoothly and every speaker gets a fair chance to practice.</p></div>
+            <h3>What are the standard Toastmasters timing rules?</h3>
+            <div class="answer-block"><p>Each speech type has its own time range. Standard Speech (5–7 min): green at 5:00, yellow at 6:00, red at 7:00. Table Topics (1–2 min): green at 1:00, yellow at 1:30, red at 2:00. Evaluation (2–3 min): green at 2:00, yellow at 2:30, red at 3:00. Longer Speech (7–9 min): green at 7:00, yellow at 8:00, red at 9:00.</p></div>
+            <h3>How does the Toastmasters timer app work in Zoom?</h3>
+            <div class="answer-block"><p>Toastmusters Timer integrates with Zoom as a Zoom app. When timing speeches in a Zoom meeting, the app automatically changes your virtual background color to green, yellow, or red to signal the speaker — no physical cards or screen sharing needed.</p></div>
+            <h3>Is the Toastmasters timer free?</h3>
+            <div class="answer-block"><p>Yes, Toastmusters Timer is completely free to use. No account or sign-up is needed — just open it in any modern browser and start timing speeches immediately. The Zoom app integration is also free.</p></div>
+            <h3>Can I use a timer for online Toastmasters meetings?</h3>
+            <div class="answer-block"><p>Yes. Toastmusters Timer has a dedicated Zoom app that automatically changes your virtual background color to green, yellow, or red as the speaker reaches each time threshold. This replaces the need for physical colored cards in virtual meetings.</p></div>
+            <h3>What colors does the Toastmasters timer use?</h3>
+            <div class="answer-block"><p>Toastmasters uses a traffic-light system: green means the speaker has reached the minimum time, yellow signals the midpoint of the time range, and red indicates the speaker has reached the maximum allowed time. Speakers should wrap up before or at the red signal.</p></div>
+            <h3>How long is a Table Topics speech in Toastmasters?</h3>
+            <div class="answer-block"><p>A Table Topics speech in Toastmasters is 1 to 2 minutes long. The green signal shows at 1:00 (minimum time reached), yellow at 1:30 (midpoint), and red at 2:00 (maximum time). Speakers who go over 2 minutes and 30 seconds may be disqualified from awards.</p></div>
+            <h3>What happens if a Toastmasters speaker goes over time?</h3>
+            <div class="answer-block"><p>After the red signal, speakers have a 30-second grace period. If they exceed the maximum time plus 30 seconds, they may be disqualified from winning the Best Speaker, Best Table Topics, or Best Evaluator award for that meeting. Toastmusters Timer tracks the exact overage so the Timer can report precise times.</p></div>
+          </section>
+
+          <section class="static-card">
+            <h2>More Toastmasters Timing Guides</h2>
+            <p>Free references for running the Timer role and for timing every part of a Toastmasters meeting.</p>
+            <ul class="static-features">
+              <li><span class="static-dot" style="background:#60a5fa"></span><a href="/toastmasters-timer-role-guide">Timer role guide</a> — the duties, the signals, and the mistakes new Timers make most often.</li>
+              <li><span class="static-dot" style="background:#22c55e"></span><a href="/toastmasters-timing-chart">Toastmasters timing chart</a> — a visual green, yellow, and red reference for every speech type.</li>
+              <li><span class="static-dot" style="background:#eab308"></span><a href="/toastmasters-timer-script">Timer script</a> — word for word, what to say when you explain the timing rules.</li>
+              <li><span class="static-dot" style="background:#ef4444"></span><a href="/table-topics-timer">Table Topics timer</a> — the 1 to 2 minute rules and how the grace period works.</li>
+              <li><span class="static-dot" style="background:#60a5fa"></span><a href="/toastmasters-speech-types-and-timing">Speech types and timing rules</a> — a complete reference for every Pathways project.</li>
+              <li><span class="static-dot" style="background:#22c55e"></span><a href="/toastmasters-speech-contest-timing-rules">Contest timing rules</a> — the stricter limits and disqualification thresholds used in contests.</li>
+              <li><span class="static-dot" style="background:#eab308"></span><a href="/toastmasters-zoom-timer-backgrounds">Zoom timer backgrounds</a> — free green, yellow, and red virtual backgrounds to download.</li>
+              <li><span class="static-dot" style="background:#ef4444"></span><a href="/how-to-use-zoom-for-toastmasters">Zoom for Toastmasters</a> — running a full online club meeting end to end.</li>
+            </ul>
           </section>
         </main>
 
@@ -273,7 +363,7 @@
               </ul>
             </div>
           </div>
-          <p class="static-footer-copy">&copy; 2026 Toastmasters Timer. Not affiliated with Toastmasters International.</p>
+          <p class="static-footer-copy">&copy; 2026 Toastmusters Timer. Not affiliated with Toastmasters International.</p>
         </footer>
       </div>
     </div>

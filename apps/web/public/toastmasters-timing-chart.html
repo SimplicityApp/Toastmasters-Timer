@@ -23,7 +23,7 @@
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
-  <meta name="theme-color" content="#111827" />
+  <meta name="theme-color" content="#FAF7F2" />
 
   <!-- Shared styles -->
   <link rel="stylesheet" href="/content-pages.css" />
@@ -40,7 +40,7 @@
       display: flex;
       justify-content: space-between;
       font-size: 0.75rem;
-      color: #9ca3af;
+      color: #78716c;
       margin-top: 0.25rem;
     }
     .chart-legend {
@@ -63,27 +63,29 @@
       flex-shrink: 0;
     }
     .print-hint {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.12);
+      background: #fafaf9;
+      border: 1px solid #e7e5e4;
       border-radius: 0.5rem;
       padding: 0.875rem 1rem;
       font-size: 0.875rem;
-      color: #9ca3af;
+      color: #78716c;
       margin-top: 1.5rem;
     }
     .print-hint strong {
-      color: #d1d5db;
+      color: #57534e;
     }
     .static-content .page-title {
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
       font-size: 1.75rem;
-      font-weight: 700;
-      color: #fff;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #1c1b1a;
       margin-bottom: 0.5rem;
       line-height: 1.2;
     }
     .static-content .page-subtitle {
       font-size: 1rem;
-      color: #9ca3af;
+      color: #78716c;
       margin-bottom: 1.5rem;
     }
     .table-wrapper {
@@ -92,7 +94,7 @@
       margin: 1rem 0;
     }
     .dq-col {
-      color: #f87171;
+      color: #b91c1c;
       font-weight: 600;
     }
     @media print {
@@ -161,9 +163,9 @@
     <header class="static-header">
       <div class="static-header-inner">
         <a href="/">
-          <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmasters Timer app logo" class="static-header-logo" />
+          <img src="/Toastmasters-Timer-logo.jpg" alt="Toastmusters Timer app logo" class="static-header-logo" />
         </a>
-        <span class="static-header-title">Toastmasters Timer</span>
+        <span class="static-header-title">Toastmusters Timer</span>
       </div>
     </header>
 
@@ -197,11 +199,11 @@
         <div class="chart-legend" aria-label="Color legend">
           <div class="chart-legend-item">
             <span class="chart-legend-swatch" style="background:#22c55e;" aria-hidden="true"></span>
-            <span><strong style="color:#22c55e;">Green</strong> &ndash; minimum time reached</span>
+            <span><strong style="color:#16a34a;">Green</strong> &ndash; minimum time reached</span>
           </div>
           <div class="chart-legend-item">
             <span class="chart-legend-swatch" style="background:#eab308;" aria-hidden="true"></span>
-            <span><strong style="color:#eab308;">Yellow</strong> &ndash; midpoint of the time window</span>
+            <span><strong style="color:#ca8a04;">Yellow</strong> &ndash; midpoint of the time window</span>
           </div>
           <div class="chart-legend-item">
             <span class="chart-legend-swatch" style="background:#dc2626;" aria-hidden="true"></span>
@@ -209,7 +211,7 @@
           </div>
           <div class="chart-legend-item">
             <span class="chart-legend-swatch" style="background:#7f1d1d;" aria-hidden="true"></span>
-            <span><strong style="color:#f87171;">DQ</strong> &ndash; disqualification zone (30 s after red)</span>
+            <span><strong style="color:#dc2626;">DQ</strong> &ndash; disqualification zone (30 s after red)</span>
           </div>
         </div>
 
@@ -302,10 +304,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">4:00</span>
-            <span style="color:#eab308;">5:00</span>
+            <span style="color:#16a34a;">4:00</span>
+            <span style="color:#ca8a04;">5:00</span>
             <span style="color:#dc2626;">6:00</span>
-            <span style="color:#f87171;">DQ 6:30</span>
+            <span style="color:#dc2626;">DQ 6:30</span>
           </div>
         </div>
 
@@ -321,10 +323,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">5:00</span>
-            <span style="color:#eab308;">6:00</span>
+            <span style="color:#16a34a;">5:00</span>
+            <span style="color:#ca8a04;">6:00</span>
             <span style="color:#dc2626;">7:00</span>
-            <span style="color:#f87171;">DQ 7:30</span>
+            <span style="color:#dc2626;">DQ 7:30</span>
           </div>
         </div>
 
@@ -340,10 +342,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">1:00</span>
-            <span style="color:#eab308;">1:30</span>
+            <span style="color:#16a34a;">1:00</span>
+            <span style="color:#ca8a04;">1:30</span>
             <span style="color:#dc2626;">2:00</span>
-            <span style="color:#f87171;">DQ 2:30</span>
+            <span style="color:#dc2626;">DQ 2:30</span>
           </div>
         </div>
 
@@ -359,10 +361,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">2:00</span>
-            <span style="color:#eab308;">2:30</span>
+            <span style="color:#16a34a;">2:00</span>
+            <span style="color:#ca8a04;">2:30</span>
             <span style="color:#dc2626;">3:00</span>
-            <span style="color:#f87171;">DQ 3:30</span>
+            <span style="color:#dc2626;">DQ 3:30</span>
           </div>
         </div>
 
@@ -378,10 +380,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">7:00</span>
-            <span style="color:#eab308;">8:00</span>
+            <span style="color:#16a34a;">7:00</span>
+            <span style="color:#ca8a04;">8:00</span>
             <span style="color:#dc2626;">9:00</span>
-            <span style="color:#f87171;">DQ 9:30</span>
+            <span style="color:#dc2626;">DQ 9:30</span>
           </div>
         </div>
 
@@ -397,10 +399,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">8:00</span>
-            <span style="color:#eab308;">9:00</span>
+            <span style="color:#16a34a;">8:00</span>
+            <span style="color:#ca8a04;">9:00</span>
             <span style="color:#dc2626;">10:00</span>
-            <span style="color:#f87171;">DQ 10:30</span>
+            <span style="color:#dc2626;">DQ 10:30</span>
           </div>
         </div>
 
@@ -415,10 +417,10 @@
           </div>
           <div class="color-bar-label-row">
             <span>0:00</span>
-            <span style="color:#22c55e;">1:00</span>
-            <span style="color:#eab308;">1:30</span>
+            <span style="color:#16a34a;">1:00</span>
+            <span style="color:#ca8a04;">1:30</span>
             <span style="color:#dc2626;">2:00</span>
-            <span style="color:#f87171;">DQ 2:30</span>
+            <span style="color:#dc2626;">DQ 2:30</span>
           </div>
         </div>
 
@@ -486,7 +488,7 @@
         </div>
 
         <!-- CTA -->
-        <div class="static-cta-block" style="margin-top:2rem; padding-top:1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+        <div class="static-cta-block" style="margin-top:2rem; padding-top:1.5rem; border-top: 1px solid #e7e5e4;">
           <h2 style="margin-top:0;">Ready to Start Timing?</h2>
           <p>
             Open the Toastmasters Timer app to start timing speeches with automatic color signals — no setup required. All the timing windows from this chart are pre-loaded and ready to use.
@@ -528,7 +530,7 @@
           </ul>
         </div>
       </div>
-      <p class="static-footer-copy">&copy; 2026 Toastmasters Timer. Not affiliated with Toastmasters International.</p>
+      <p class="static-footer-copy">&copy; 2026 Toastmusters Timer. Not affiliated with Toastmasters International.</p>
     </footer>
 
   </div>

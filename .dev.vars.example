@@ -5,3 +5,7 @@ ZOOM_WEBHOOK_SECRET_TOKEN=
 ZOOM_CLIENT_ID=
 ZOOM_CLIENT_SECRET=
 POSTHOG_API_KEY=
+# Personal API key (phx_…) with "Query read" scope, for /api/stats.
+# Create at https://us.posthog.com/settings/user-api-keys — the project key
+# above cannot run queries.
+POSTHOG_QUERY_API_KEY=

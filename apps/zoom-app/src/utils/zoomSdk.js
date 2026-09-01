@@ -1,23 +1,8 @@
 import zoomSdk from '@zoom/appssdk';
-import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout } from '@toastmaster-timer/shared';
+import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout, resolveCardImage, CARD_ASSET_VERSION } from '@toastmaster-timer/shared';
 
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
-
-// Bump this version when background images are updated to bust CDN/browser cache.
-// The files are served with `max-age=31536000, immutable`, so without a bump
-// existing clients keep the old asset for a year.
-// 3: re-exported at 1280x720 (was 2560x1440, which produced a 14.7MB ImageData
-//    against the Zoom SDK's documented 15MB limit).
-const BACKGROUND_VERSION = '3';
-
-// Zoom overlay image filenames (Toastmasters-branded backgrounds)
-const ZOOM_OVERLAY_FILES = {
-  blue: 'timer-blue-background.png',
-  green: 'timer-green-background.png',
-  yellow: 'timer-yellow-background.png',
-  red: 'timer-red-background.png',
-};
 
 /**
  * Path the app is served under, with leading and trailing slashes. This app is
@@ -32,10 +17,10 @@ export function getBasePath() {
   return withLeading.endsWith('/') ? withLeading : `${withLeading}/`;
 }
 
-// Get the URL for a background image (works in both dev and production)
-export function getBackgroundUrl(color) {
-  const imageFile = ZOOM_OVERLAY_FILES[color] || ZOOM_OVERLAY_FILES.blue;
-  const path = `${getBasePath()}backgrounds/${imageFile}?v=${BACKGROUND_VERSION}`;
+// Absolute URL of one built-in card file — what the picker shows as a
+// thumbnail and what the overlay fetches (works in both dev and production).
+export function getCardFileUrl(file) {
+  const path = `${getBasePath()}backgrounds/${file}?v=${CARD_ASSET_VERSION}`;
 
   // In browser, use the current origin (works automatically in production)
   if (typeof window !== 'undefined') {
@@ -43,6 +28,15 @@ export function getBackgroundUrl(color) {
   }
   // Fallback to production URL if window is not available
   return `${PRODUCTION_BASE_URL}${path}`;
+}
+
+// Get the URL for a background image, from whichever card set the organizer
+// selected. A custom set yields an object URL (or a legacy data: URL), which
+// every consumer here accepts — the <img>/CSS paths directly, and the overlay
+// path through its pixel decode; the built-in sets yield a file URL.
+export function getBackgroundUrl(color) {
+  const resolved = resolveCardImage(color);
+  return resolved.url || getCardFileUrl(resolved.file);
 }
 
 // Every overlay pixel costs 4 bytes of ImageData across the webview -> native
@@ -88,6 +82,8 @@ export const USED_SDK_APIS = [
   { name: 'deleteVideoFilter', capability: 'deleteVideoFilter', required: true, purpose: 'Clearing Timer Only' },
   { name: 'setVirtualBackground', capability: 'setVirtualBackground', required: false, purpose: 'Timer + Camera' },
   { name: 'removeVirtualBackground', capability: 'removeVirtualBackground', required: false, purpose: 'Clearing Timer + Camera' },
+  { name: 'setVirtualForeground', capability: 'setVirtualForeground', required: false, purpose: 'Count-up readout over Timer + Camera' },
+  { name: 'removeVirtualForeground', capability: 'removeVirtualForeground', required: false, purpose: 'Clearing the count-up readout' },
   { name: 'getCurrentVirtualBackground', capability: 'getCurrentVirtualBackground', required: false, purpose: 'Leaving the user\'s own background alone' },
   { name: 'getVirtualBackgrounds', capability: 'getVirtualBackgrounds', required: false, purpose: 'Naming the background being restored' },
   { name: 'getVirtualBackgroundData', capability: 'getVirtualBackgroundData', required: false, purpose: 'Putting the user\'s own background image back' },
@@ -284,18 +280,24 @@ const imageDataCache = new Map();
 // pipeline says which SDK pipeline the push went through ('filter' or
 // 'background'), which is no longer implied by the mode: Timer + Camera
 // degrades to the filter on clients that refused setVirtualBackground. label is
-// the elapsed-time readout baked into a filter frame, or null for a plain card.
+// the elapsed-time readout baked into a filter frame, or null for a plain card
+// — background frames never carry one; camera mode's readout is a virtual
+// foreground tracked in activeForeground instead.
 let activeOverlay = null;
 
 // The elapsed-time readout to render onto pushed frames, e.g. '02:35', or null
-// while no speech is being timed. Both video modes are image pushes, so the
-// count-up other participants see has to be baked into the pixels. In camera
-// mode that costs the fileUrl shortcut while a speech runs — a frame carrying
-// the time is different every second, so the pixels have to cross the bridge.
+// while no speech is being timed. In card mode the readout is baked into the
+// filter frame, so each advance re-pushes the pixels. In camera mode it rides
+// its own virtual-foreground layer instead: the Zoom client saves every image
+// handed to setVirtualBackground to the user's disk as a new custom
+// background, so baking a per-second readout into background frames was
+// leaving thousands of one-second background files behind. The foreground
+// replaces rather than accumulates, and the background stays one of four
+// fixed files the client fetches by URL.
 let overlayTimeLabel = null;
 
 // Where the readout sits on the frame: normalized (0-1) center of the text.
-// Upper-left by default, just below the Toastmasters logo that occupies the
+// Upper-left by default, just below the badge that occupies the
 // card's actual top-left corner. Not centered: the middle of the tile is
 // where camera mode puts the organizer's head, which would hide a centered
 // readout. The organizer repositions it by dragging the badge on the Live
@@ -335,11 +337,33 @@ function effectiveTimeLabel() {
   return overlayTimeVisible ? overlayTimeLabel : null;
 }
 
-/** Repaint the pushed frame if it is carrying (or should now carry) a readout. */
+/**
+ * Whether the camera-mode background pipeline is what is (or would be) on the
+ * user's video — the pipeline whose readout rides the foreground layer.
+ *
+ * Falls back to the persisted flag when the in-memory record is gone: Zoom
+ * re-creates the webview whenever the panel is closed and reopened, which
+ * wipes activeOverlay while the background it described is still on the
+ * video. Without the fallback, dragging the readout right after reopening
+ * the panel repainted nothing until a color change rebuilt the record.
+ */
+function backgroundPipelineActive() {
+  if (activeOverlay) return activeOverlay.pipeline === 'background';
+  return virtualBackgroundApplied && currentOverlayMode === OVERLAY_MODE_CAMERA;
+}
+
+/** Repaint the readout participants see, wherever it currently lives. */
 function repaintOverlayFrame() {
-  if (activeOverlay?.url && isVideoOverlayMode()) {
-    applyOverlay(activeOverlay.url);
+  if (!isVideoOverlayMode()) return;
+  // The background pipeline never carries the readout — it rides its own
+  // foreground layer — so a ticking clock must only touch that layer. Pushing
+  // the background here instead would hand the Zoom client an image to save
+  // to the user's disk once a second.
+  if (backgroundPipelineActive()) {
+    enqueueOverlayOp(() => syncForegroundReadout());
+    return;
   }
+  if (activeOverlay?.url) applyOverlay(activeOverlay.url);
 }
 
 /** @returns {{x: number, y: number}} Normalized center of the readout */
@@ -403,15 +427,16 @@ export function setOverlayTimeVisible(visible) {
 }
 
 /**
- * Set the elapsed-time readout and repaint the frame other participants see.
+ * Set the elapsed-time readout and repaint what other participants see.
  *
  * Driven by the timer once per second while a speech runs. Each change
- * re-pushes the visible frame — filter or background, whichever pipeline is
- * up; the overlay queue coalesces pushes a slow client cannot keep up with, so
- * the readout skips ahead rather than lagging behind. Clearing the label never
- * re-pushes — null means the speech is over, and whatever teardown or status
- * push follows owns the tile. A hidden readout never re-pushes either: the
- * frame it would repaint is identical.
+ * repaints the readout where it lives — baked into the filter frame in card
+ * mode, on its own virtual-foreground layer in camera mode; the overlay queue
+ * coalesces pushes a slow client cannot keep up with, so the readout skips
+ * ahead rather than lagging behind. Clearing the label never re-pushes — null
+ * means the speech is over, and whatever teardown or status push follows owns
+ * the tile. A hidden readout never re-pushes either: the frame it would
+ * repaint is identical.
  *
  * @param {string|null} label - Formatted elapsed time, or null between speeches
  */
@@ -442,25 +467,96 @@ export function renderTimeOnFrame(base, label, position = overlayTimePosition, s
   canvas.height = base.height;
   const ctx = canvas.getContext('2d');
   ctx.putImageData(base, 0, 0);
-  const fontSize = Math.round(base.height * scale);
+  drawTimeReadout(ctx, base.width, base.height, label, position, scale);
+  return ctx.getImageData(0, 0, base.width, base.height);
+}
+
+/** The drawing itself, shared by the baked (card) and layered (camera) paths. */
+function drawTimeReadout(ctx, width, height, label, position, scale) {
+  const fontSize = Math.round(height * scale);
   ctx.font = `bold ${fontSize}px 'Helvetica Neue', Helvetica, Arial, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const pad = Math.round(base.height * 0.04);
+  const pad = Math.round(height * 0.04);
   const textWidth = ctx.measureText(label).width;
   const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-  const x = Math.round(clamp(position.x * base.width, pad + textWidth / 2, base.width - pad - textWidth / 2));
-  const y = Math.round(clamp(position.y * base.height, pad + fontSize / 2, base.height - pad - fontSize / 2));
+  const x = Math.round(clamp(position.x * width, pad + textWidth / 2, width - pad - textWidth / 2));
+  const y = Math.round(clamp(position.y * height, pad + fontSize / 2, height - pad - fontSize / 2));
   ctx.lineWidth = Math.max(2, Math.round(fontSize / 12));
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
   ctx.strokeText(label, x, y);
   ctx.fillStyle = '#ffffff';
   ctx.fillText(label, x, y);
-  return ctx.getImageData(0, 0, base.width, base.height);
 }
 
-// Camera resolution reported by onMyMediaChange, or null until one arrives.
-let cameraResolution = null;
+// What the foreground layer is sized to when the camera has not reported.
+// 720p is what Zoom sends for most cameras; the ceiling keeps a 4K report
+// under the SDK's 15MB encoding limit (1920x1080 RGBA is ~8MB).
+const FOREGROUND_FALLBACK_SIZE = { width: 1280, height: 720 };
+const FOREGROUND_CEILING_WIDTH = 1920;
+const FOREGROUND_CEILING_HEIGHT = 1080;
+
+/**
+ * The frame size for the foreground layer: the camera resolution, exactly.
+ *
+ * Deliberately NOT getOverlayBudget(). The 640x360 overlay ceiling is right
+ * for backgrounds and filters, which the client scales to fill the video —
+ * but the foreground is composited onto the video 1:1 from the top-left
+ * corner. Rendered at the budget size on a 720p stream, the layer covered
+ * only the top-left quadrant, so the readout's right edge was the video's
+ * center: dragging it toward the bottom-right pinned it just left of middle.
+ * This is why the SDK recommends the resolution from onMyMediaChange here.
+ */
+function getForegroundBudget() {
+  if (!cameraResolution) return { ...FOREGROUND_FALLBACK_SIZE };
+  return {
+    width: Math.min(cameraResolution.width, FOREGROUND_CEILING_WIDTH),
+    height: Math.min(cameraResolution.height, FOREGROUND_CEILING_HEIGHT),
+  };
+}
+
+/**
+ * Render the readout alone on a transparent frame, sized to the camera
+ * stream, for setVirtualForeground. Exported for testing.
+ *
+ * @param {string} label - Formatted elapsed time
+ * @param {{width: number, height: number}} [budget] - Frame size
+ * @param {{x: number, y: number}} [position] - Normalized center of the text
+ * @param {number} [scale] - Text height as a fraction of the frame
+ * @returns {ImageData} A transparent frame carrying only the readout
+ */
+export function renderTimeForeground(label, budget = getForegroundBudget(), position = overlayTimePosition, scale = overlayTimeScale) {
+  const canvas = document.createElement('canvas');
+  canvas.width = budget.width;
+  canvas.height = budget.height;
+  const ctx = canvas.getContext('2d');
+  drawTimeReadout(ctx, budget.width, budget.height, label, position, scale);
+  return ctx.getImageData(0, 0, budget.width, budget.height);
+}
+
+// Camera resolution reported by onMyMediaChange, or the last one persisted.
+//
+// Persisted because Zoom re-creates the webview whenever the panel is closed
+// and reopened, and onMyMediaChange only fires on changes — a reopened panel
+// may never hear the resolution again. The foreground layer is composited
+// onto the video 1:1, so rendering it at the 720p fallback on any other
+// stream maps the readout to the wrong spot, or off the video entirely; the
+// last-known real value beats a guess.
+const CAMERA_RESOLUTION_KEY = 'toastmaster_zoom_camera_resolution';
+
+function readPersistedCameraResolution() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CAMERA_RESOLUTION_KEY));
+    const width = Number(parsed?.width);
+    const height = Number(parsed?.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+    return { width, height };
+  } catch {
+    return null;
+  }
+}
+
+let cameraResolution = readPersistedCameraResolution();
 
 // Whether a virtual background of ours is currently on the user's video.
 //
@@ -499,6 +595,136 @@ function markVirtualBackgroundApplied(applied) {
   } catch {
     // Storage unavailable (private mode). The in-memory flag still holds for
     // this session, which is the pre-existing behaviour.
+  }
+}
+
+// Whether a count-up readout of ours is on the user's video as a virtual
+// foreground. Persisted for the same reason as the background flag: Zoom
+// re-creates the webview whenever the panel is reopened, and a readout left
+// up by the previous webview still needs taking down.
+const VIRTUAL_FOREGROUND_APPLIED_KEY = 'toastmaster_zoom_virtual_foreground_applied';
+
+function readVirtualForegroundApplied() {
+  try {
+    return localStorage.getItem(VIRTUAL_FOREGROUND_APPLIED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+let virtualForegroundApplied = readVirtualForegroundApplied();
+
+// What the pushed foreground currently shows, so a repaint that would draw the
+// identical layer skips the bridge call. In-memory only: after a webview
+// reload the next sync simply pushes fresh over whatever is there.
+let activeForeground = null;
+
+/**
+ * Record whether a count-up readout of ours is on the user's video.
+ * @param {boolean} applied
+ */
+function markVirtualForegroundApplied(applied) {
+  virtualForegroundApplied = applied;
+  if (!applied) activeForeground = null;
+  try {
+    if (applied) localStorage.setItem(VIRTUAL_FOREGROUND_APPLIED_KEY, 'true');
+    else localStorage.removeItem(VIRTUAL_FOREGROUND_APPLIED_KEY);
+  } catch {
+    // See markVirtualBackgroundApplied.
+  }
+}
+
+/**
+ * Make the virtual foreground match the readout that should be showing: push
+ * the current label as a transparent layer over the camera-mode background,
+ * or take the layer off when there is nothing left to show.
+ *
+ * Never throws — the readout is a bonus, and failing to draw the time must
+ * never take the color signal down with it. Runs inside the overlay queue:
+ * applyOverlayInternal and removeOverlayInternal call it from their own
+ * queued turns, and repaintOverlayFrame enqueues it directly.
+ */
+async function syncForegroundReadout() {
+  if (!sdkAvailable || !zoomSdk) return;
+
+  // Only the camera pipeline pairs the readout with a foreground layer; the
+  // card bakes it into the filter frame instead.
+  const label = backgroundPipelineActive() ? effectiveTimeLabel() : null;
+
+  if (!label) {
+    await removeForegroundReadout();
+    return;
+  }
+
+  // The refusal is warned about at push time, where the organizer acted.
+  if (!isApiAvailable('setVirtualForeground')) return;
+
+  const budget = getForegroundBudget();
+  if (
+    activeForeground &&
+    activeForeground.label === label &&
+    activeForeground.position.x === overlayTimePosition.x &&
+    activeForeground.position.y === overlayTimePosition.y &&
+    activeForeground.scale === overlayTimeScale &&
+    activeForeground.width === budget.width &&
+    activeForeground.height === budget.height
+  ) {
+    return;
+  }
+
+  // Once per size, not per second: this is the number to compare against
+  // where the readout actually lands when its position looks wrong.
+  if (!activeForeground || activeForeground.width !== budget.width || activeForeground.height !== budget.height) {
+    const cameraNote = cameraResolution
+      ? `camera ${cameraResolution.width}x${cameraResolution.height}`
+      : 'camera unreported, assuming 720p';
+    log(`Count-up readout frame: ${budget.width}x${budget.height} (${cameraNote})`, 'info');
+    if (cameraResolution && (cameraResolution.width > budget.width || cameraResolution.height > budget.height)) {
+      log('Camera exceeds the readout frame ceiling; the readout can only reach the top-left part of the video', 'warn');
+    }
+  }
+
+  try {
+    const frame = renderTimeForeground(label, budget);
+    // "meeting" persistence: the client takes the layer down itself when the
+    // meeting ends, so a closed panel or a crashed app strands nothing.
+    await zoomSdk.setVirtualForeground({ imageData: frame, persistence: 'meeting' });
+    markVirtualForegroundApplied(true);
+    activeForeground = {
+      label,
+      position: { ...overlayTimePosition },
+      scale: overlayTimeScale,
+      width: budget.width,
+      height: budget.height,
+    };
+  } catch (error) {
+    log(`Could not push the count-up readout: ${error.message || error.name}`, 'warn');
+  }
+}
+
+/**
+ * Take the readout layer off the user's video, if one of ours is up. Explicit
+ * rather than inferred, so teardown never depends on the label heuristic — a
+ * mode switch mid-speech still has a ticking label, and the removal must win.
+ * Never throws.
+ */
+async function removeForegroundReadout() {
+  if (!sdkAvailable || !zoomSdk) return;
+  if (!virtualForegroundApplied) return;
+  if (!isApiAvailable('removeVirtualForeground')) {
+    log('Client did not grant removeVirtualForeground; leaving the readout in place', 'warn');
+    return;
+  }
+  try {
+    await zoomSdk.removeVirtualForeground();
+    markVirtualForegroundApplied(false);
+    log('Removed the count-up readout', 'info');
+  } catch (error) {
+    if (error.code === ERROR_NOTHING_APPLIED) {
+      markVirtualForegroundApplied(false);
+    } else {
+      log(`Could not remove the count-up readout: ${error.message || error.name}`, 'warn');
+    }
   }
 }
 
@@ -1017,6 +1243,18 @@ export function setLogCallback(callback) {
 }
 
 /**
+ * A URL as it should appear in a log line. A custom card is a data: URL that
+ * can run to a megabyte; interpolating it verbatim would bury the debug panel
+ * under one entry.
+ */
+function describeUrl(url) {
+  if (typeof url === 'string' && url.startsWith('data:')) {
+    return `${url.slice(0, 32)}… (custom image, ${url.length} chars)`;
+  }
+  return url;
+}
+
+/**
  * Internal logging function
  */
 function log(message, type = 'info') {
@@ -1169,6 +1407,11 @@ export function handleMyMediaChange(event) {
   }
 
   cameraResolution = { width, height };
+  try {
+    localStorage.setItem(CAMERA_RESOLUTION_KEY, JSON.stringify(cameraResolution));
+  } catch {
+    // Worst case the next webview starts from the 720p guess again.
+  }
   log(`Camera resolution reported: ${width}x${height}`, 'info');
 
   // Anything decoded for the previous resolution is the wrong size now.
@@ -1180,6 +1423,12 @@ export function handleMyMediaChange(event) {
   // and a null budget is what marks that case.
   if (activeOverlay?.budget) {
     applyOverlay(activeOverlay.url);
+  } else if (backgroundPipelineActive() && virtualForegroundApplied) {
+    // The background needed nothing, but the readout layer is pixels rendered
+    // for the old camera size — and the foreground is composited 1:1, so a
+    // wrong size lands the readout in the wrong place. The sync compares
+    // sizes itself and repaints only when they differ.
+    enqueueOverlayOp(() => syncForegroundReadout());
   }
 }
 
@@ -1810,7 +2059,7 @@ export function loadImageAsImageData(imageUrl) {
 
   const cached = imageDataCache.get(key);
   if (cached) {
-    log(`Using cached ImageData for: ${imageUrl}`, 'info');
+    log(`Using cached ImageData for: ${describeUrl(imageUrl)}`, 'info');
     return cached;
   }
 
@@ -1849,7 +2098,14 @@ function canDecodeAtTargetSize() {
  * @returns {Promise<ImageData>} ImageData object
  */
 function decodeImage(imageUrl, budget) {
-  log(`Loading image: ${imageUrl}`, 'info');
+  log(`Loading image: ${describeUrl(imageUrl)}`, 'info');
+
+  // A custom card (blob: object URL, or a legacy data: URL) is a JPEG, so the
+  // PNG-header fast-path would only fetch it and then fail into the element
+  // decode anyway.
+  if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
+    return decodeViaImageElement(imageUrl, budget);
+  }
 
   if (canDecodeAtTargetSize()) {
     return decodeAtTargetSize(imageUrl, budget).catch((error) => {
@@ -1920,7 +2176,7 @@ function decodeViaImageElement(imageUrl, budget) {
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        reject(new Error(`Image load timeout after 10 seconds: ${imageUrl}`));
+        reject(new Error(`Image load timeout after 10 seconds: ${describeUrl(imageUrl)}`));
       }
     }, 10000);
     
@@ -1957,7 +2213,7 @@ function decodeViaImageElement(imageUrl, budget) {
       log(`Image naturalWidth: ${img.naturalWidth}, naturalHeight: ${img.naturalHeight}`, 'error');
       log(`Image complete: ${img.complete}, width: ${img.width}, height: ${img.height}`, 'error');
       resolved = true;
-      reject(new Error(`Failed to load image from ${imageUrl}: ${errorMsg}`));
+      reject(new Error(`Failed to load image from ${describeUrl(imageUrl)}: ${errorMsg}`));
     };
     
     // Set src to load image (works like UI images in Zoom client)
@@ -1970,7 +2226,6 @@ function decodeViaImageElement(imageUrl, budget) {
  * This should be called when the app initializes
  */
 export async function preloadBackgroundImages() {
-  // Map status colors to Zoom overlay image URLs (timer-*-background.*)
   // Blue is what the card shows first, so decode it before the others. Loading
   // all four at once puts three decodes the user is not waiting on ahead of the
   // one they are.
@@ -1987,6 +2242,16 @@ export async function preloadBackgroundImages() {
   }
 
   log(`Pre-loading complete. Cached ${imageDataCache.size} images.`, 'info');
+}
+
+/**
+ * Called after the organizer changes a custom card image. Decoded pixels for
+ * a replaced image are keyed by its old data: URL, so they can never be hit
+ * again — clearing just releases the megabytes instead of holding them for
+ * the session.
+ */
+export function notifyCardImagesChanged() {
+  imageDataCache.clear();
 }
 
 /**
@@ -2237,6 +2502,7 @@ export async function clearVideoPipelines() {
   if (!sdkAvailable || !zoomSdk) {
     log('[MOCK] Would clear video filter and virtual background', 'warn');
     markVirtualBackgroundApplied(false);
+    markVirtualForegroundApplied(false);
     markVideoFilterApplied(false);
     return { ok: false, declined: false, ungranted: [], lostBackground: false };
   }
@@ -2262,6 +2528,17 @@ export async function clearVideoPipelines() {
   // eraser in camera mode reached past our own overlay and turned off a filter
   // the organizer had chosen themselves.
   const attempts = [];
+  // The readout layer comes off first, so the time never floats over a video
+  // that has just been handed back. removeVirtualForeground raises no
+  // confirmation dialog, so on the record is guard enough.
+  if (virtualForegroundApplied) {
+    attempts.push({
+      what: 'count-up readout',
+      expected: true,
+      api: 'removeVirtualForeground',
+      run: () => zoomSdk.removeVirtualForeground(),
+    });
+  }
   if (hadFilter) {
     attempts.push({
       what: 'video filter',
@@ -2299,9 +2576,11 @@ export async function clearVideoPipelines() {
   // failed removal leaves it up, and the next attempt still needs to know that.
   let backgroundGone = true;
   let filterGone = true;
+  let foregroundGone = true;
 
   const stillThere = (what) => {
     if (what === 'virtual background') backgroundGone = false;
+    else if (what === 'count-up readout') foregroundGone = false;
     else filterGone = false;
   };
 
@@ -2349,6 +2628,7 @@ export async function clearVideoPipelines() {
     // finds the video is already their own.
   }
   if (filterGone) markVideoFilterApplied(false);
+  if (foregroundGone) markVirtualForegroundApplied(false);
   return { ok, declined, ungranted, lostBackground };
 }
 
@@ -2421,6 +2701,12 @@ async function removeOverlayInternal(pipelines, label) {
     if (sdkAvailable && zoomSdk) {
       if (!hadFilter && !hadBackground) {
         log(`Nothing of ours on the video; nothing to remove (mode: ${mode})`, 'info');
+      }
+      // The readout layer belongs to camera mode, so it comes down with the
+      // background — and first, so the time never floats over a background
+      // that has just been handed back to its owner.
+      if (pipelines.background && virtualForegroundApplied) {
+        await removeForegroundReadout();
       }
       if (hadBackground) {
         const api = restoreBackgroundApi();
@@ -2548,7 +2834,7 @@ async function applyOverlayInternal(imageUrl) {
   }
 
   if (isAlreadyShowing(imageUrl)) {
-    log(`Overlay already showing ${imageUrl}, skipping redundant push`, 'info');
+    log(`Overlay already showing ${describeUrl(imageUrl)}, skipping redundant push`, 'info');
     return;
   }
 
@@ -2568,13 +2854,21 @@ async function applyOverlayInternal(imageUrl) {
         // is on the video now is theirs, and it is the only chance to learn
         // what to put back. No-ops on clients that cannot report it.
         if (!virtualBackgroundApplied) await snapshotUserBackground();
-        const label = effectiveTimeLabel();
-        // setVirtualBackground accepts a fileUrl, which lets the Zoom client
-        // fetch the image itself. That skips both the decode and the multi-MB
-        // ImageData transfer across the bridge — but only a frame with nothing
-        // baked into it can take it. While a speech runs, the frame carries the
-        // count-up and is different every second, so the pixels have to cross.
-        if (!label) {
+        // The background is always pushed label-free: the count-up rides its
+        // own virtual-foreground layer. The Zoom client saves every image
+        // handed to setVirtualBackground to the user's disk as a new custom
+        // background, so baking the readout in here — a new image every
+        // second — is what once filled organizers' machines with thousands of
+        // one-second background files. Label-free, the frame is one of four
+        // fixed files, and the fileUrl shortcut can serve a running speech.
+        if (effectiveTimeLabel() && !isApiAvailable('setVirtualForeground')) {
+          log('Client did not grant setVirtualForeground; showing Timer + Camera without the count-up', 'warn');
+        }
+        // Only a real http(s) URL takes the fileUrl shortcut. A custom card is
+        // a data: URL — there is no file for the native client to fetch, and
+        // handing it the whole payload as a "URL" is untested territory — so it
+        // ships as pixels below, the path the fallback has always exercised.
+        if (/^https?:/i.test(imageUrl)) {
           try {
             log(`Applying virtual background by fileUrl: ${imageUrl}`, 'info');
             const result = await zoomSdk.setVirtualBackground({ fileUrl: imageUrl });
@@ -2583,6 +2877,7 @@ async function applyOverlayInternal(imageUrl) {
             activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget: null, pipeline: 'background' };
             markVirtualBackgroundApplied(true);
             lastError = null;
+            await syncForegroundReadout();
             return;
           } catch (fileUrlError) {
             // The native client may not be able to reach the URL (restricted
@@ -2591,31 +2886,22 @@ async function applyOverlayInternal(imageUrl) {
           }
         }
 
-        log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+        log(`Loading image for overlay (mode: ${currentOverlayMode}): ${describeUrl(imageUrl)}`, 'info');
         const budget = getOverlayBudget();
         const imageData = await loadImageAsImageData(imageUrl);
         log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
-        let frame = imageData;
-        if (label) {
-          try {
-            frame = renderTimeOnFrame(imageData, label);
-          } catch (error) {
-            // The readout is a bonus; the color is the signal. Push the plain
-            // background rather than nothing.
-            log(`Could not render the time onto the background: ${error.message || error.name}`, 'warn');
-          }
-        }
-        const result = await zoomSdk.setVirtualBackground({ imageData: frame });
+        const result = await zoomSdk.setVirtualBackground({ imageData });
         log(`Successfully applied virtual background. Result: ${JSON.stringify(result)}`, 'info');
-        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background', label, position: overlayTimePosition, scale: overlayTimeScale };
+        activeOverlay = { url: imageUrl, mode: currentOverlayMode, budget, pipeline: 'background' };
         markVirtualBackgroundApplied(true);
         lastError = null;
+        await syncForegroundReadout();
         return;
       } else {
         // Card pipeline: setVideoFilter covers the entire video. Both Timer
         // Only and a degraded Timer + Camera land here.
         if (isApiAvailable('setVideoFilter')) {
-          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${imageUrl}`, 'info');
+          log(`Loading image for overlay (mode: ${currentOverlayMode}): ${describeUrl(imageUrl)}`, 'info');
           const budget = getOverlayBudget();
           const imageData = await loadImageAsImageData(imageUrl);
           log(`Loaded ImageData: ${imageData.width}x${imageData.height}`, 'info');
@@ -2646,7 +2932,7 @@ async function applyOverlayInternal(imageUrl) {
     }
 
     // SDK not available or function not found
-    log(`[MOCK] Would apply overlay (mode: ${currentOverlayMode}, ${imageUrl})`, 'warn');
+    log(`[MOCK] Would apply overlay (mode: ${currentOverlayMode}, ${describeUrl(imageUrl)})`, 'warn');
     if (!sdkAvailable) {
       log(`[MOCK] SDK is not available. Make sure you're running this app inside Zoom client.`, 'warn');
     }

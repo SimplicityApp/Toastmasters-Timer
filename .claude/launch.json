@@ -4,8 +4,63 @@
     {
       "name": "cf-worker",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", "--port", "8788"],
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8788"
+      ],
       "port": 8788
+    },
+    {
+      "name": "zoom-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "apps/zoom-app"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "apps/web"
+      ],
+      "port": 3001
+    },
+    {
+      "name": "zoom-dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "apps/zoom-app",
+        "--",
+        "--port",
+        "3010"
+      ],
+      "port": 3010
+    },
+    {
+      "name": "web-dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "apps/web",
+        "--",
+        "--port",
+        "3011"
+      ],
+      "port": 3011
     }
   ]
 }

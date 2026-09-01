@@ -31,7 +31,7 @@ test.describe('Zoom App — Functional Checks', () => {
 
   test('page loads with timer display', async ({ page }) => {
     await page.goto('/zoom/');
-    await expect(page.getByText(/^\d{2}:\d{2}$/)).toBeVisible();
+    await expect(page.getByTestId('timer-display')).toBeVisible();
   });
 
   test('select role, start timer, verify ticking', async ({ page }) => {
@@ -47,7 +47,7 @@ test.describe('Zoom App — Functional Checks', () => {
     await page.waitForTimeout(1500);
 
     // Timer should have advanced past 00:00
-    await expect(page.getByText(/^\d{2}:\d{2}$/)).not.toHaveText('00:00');
+    await expect(page.getByTestId('timer-display')).not.toHaveText('00:00');
   });
 
   test('STOP → CONTINUE → FINISH flow', async ({ page }) => {
@@ -78,7 +78,7 @@ test.describe('Zoom App — Functional Checks', () => {
     await page.goto('/zoom/');
 
     // Verify we start on LIVE
-    await expect(page.getByText(/^\d{2}:\d{2}$/)).toBeVisible();
+    await expect(page.getByTestId('timer-display')).toBeVisible();
 
     // Switch to AGENDA
     await page.getByRole('button', { name: /AGENDA/i }).click();
@@ -90,7 +90,7 @@ test.describe('Zoom App — Functional Checks', () => {
 
     // Back to LIVE
     await page.getByRole('button', { name: /LIVE/i }).click();
-    await expect(page.getByText(/^\d{2}:\d{2}$/)).toBeVisible();
+    await expect(page.getByTestId('timer-display')).toBeVisible();
   });
 
   test('report tab shows completed speech', async ({ page }) => {

@@ -21,10 +21,10 @@ export default function OAuthRedirect() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <img
             src="/Toastmasters-Timer-logo.jpg"
-            alt="Toastmaster Timer"
+            alt="Toastmusters Timer"
             className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-white/20"
           />
-          <h1 className="text-xl font-semibold text-white">Toastmaster Timer</h1>
+          <h1 className="text-xl font-semibold text-white">Toastmusters Timer</h1>
         </div>
       </header>
 

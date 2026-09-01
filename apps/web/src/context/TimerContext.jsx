@@ -208,6 +208,15 @@ export function TimerProvider({ children }) {
 
   const reorderAgenda = useCallback((newOrder) => setAgenda(newOrder), []);
 
+  // Edit a speaker in place so their position in the agenda is preserved
+  const updateAgendaItem = useCallback((id, speaker) => {
+    const rules = speaker.rules || roleRules[speaker.role] || DEFAULT_ROLE_RULES['Standard Speech'];
+    setAgenda(prev => prev.map(item => (item.id === id ? { ...item, name: speaker.name, role: speaker.role, rules } : item)));
+    if (activeSpeakerId === id) {
+      setCurrentSpeaker(prev => (prev ? { ...prev, name: speaker.name, role: speaker.role, rules } : prev));
+    }
+  }, [roleRules, activeSpeakerId]);
+
   const clearAllAgenda = useCallback(() => {
     const agendaCount = agenda.length;
     setAgenda([]);
@@ -403,6 +412,7 @@ export function TimerProvider({ children }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    updateAgendaItem,
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
@@ -430,6 +440,7 @@ export function TimerProvider({ children }) {
     addToAgenda,
     removeFromAgenda,
     reorderAgenda,
+    updateAgendaItem,
     markCompleted,
     loadSpeakerFromAgenda,
     importBulkSpeakers,
