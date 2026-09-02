@@ -8,7 +8,7 @@ import {
   clearOwnBackground,
   initCardImages,
 } from '@toastmaster-timer/shared';
-import { notifyOwnBackgroundChanged, applyOwnBackground } from '../utils/zoomSdk';
+import { notifyOwnBackgroundChanged, applyOwnBackground, removeOwnBackground } from '../utils/zoomSdk';
 import { useToast } from '../context/ToastContext';
 
 /**
@@ -86,9 +86,23 @@ export default function OwnBackgroundPicker({ onChange }) {
   const handleRemove = async () => {
     setBusy(true);
     try {
+      // Storage first: if the organizer declines Zoom's removal dialog, the
+      // setting is still gone — that is what they asked for, and only their
+      // video is left as it was.
       await clearOwnBackground();
       refresh();
-      showToast('Removed. The timer will put back whatever Zoom reports instead.', 'info');
+      // Off the video too, mirroring the upload. A setting that put an image
+      // on their video should take it off again when cleared.
+      const removed = await removeOwnBackground();
+      showToast(
+        {
+          removed: 'Removed — your video is back to your camera.',
+          declined: 'Removed. Zoom needs your confirmation to take it off your video.',
+          busy: 'Removed. Your video changes when the timer clears.',
+          unavailable: 'Removed. The timer will put back whatever Zoom reports instead.',
+        }[removed],
+        removed === 'removed' ? 'success' : 'info'
+      );
     } finally {
       setBusy(false);
     }

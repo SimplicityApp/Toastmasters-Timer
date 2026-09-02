@@ -2967,6 +2967,57 @@ describe('an own background the organizer set in the app', () => {
     expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
   });
 
+  it('comes off the video when the organizer clears the setting', async () => {
+    // The mirror of setting one. A setting that put an image on their video
+    // should take it off again, rather than leaving it there with nothing left
+    // that will ever remove it.
+    const { initializeZoomSdk, removeOwnBackground } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+
+    expect(await removeOwnBackground()).toBe('removed');
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+  });
+
+  it('reports a declined removal as declined, not as a failure', async () => {
+    // Zoom always asks before removing a background. Saying no leaves the
+    // video alone, which is a normal outcome — the setting is gone either way.
+    const { initializeZoomSdk, removeOwnBackground } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    sdkMock.removeVirtualBackground.mockRejectedValueOnce(
+      Object.assign(new Error('declined'), { code: 10017 })
+    );
+
+    expect(await removeOwnBackground()).toBe('declined');
+  });
+
+  it('treats an already-bare camera as removed, since that is the state asked for', async () => {
+    const { initializeZoomSdk, removeOwnBackground } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    sdkMock.removeVirtualBackground.mockRejectedValueOnce(
+      Object.assign(new Error('nothing applied'), { code: 10195 })
+    );
+
+    expect(await removeOwnBackground()).toBe('removed');
+  });
+
+  it('declines to strip the video while a timing card is on it', async () => {
+    // Same guard as applying: mid-speech the card owns the video, and the
+    // background underneath is not what anyone is looking at.
+    const { initializeZoomSdk, setOverlayMode, removeOwnBackground, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    setOwnBackground();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    sdkMock.removeVirtualBackground.mockClear();
+
+    expect(await removeOwnBackground()).toBe('busy');
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+  });
+
   it('does nothing differently while none is set', async () => {
     // The guard on the whole feature: an organizer who never opens the modal
     // keeps the behaviour they have today.
