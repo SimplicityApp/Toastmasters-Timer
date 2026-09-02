@@ -12,6 +12,7 @@ import {
   initCardImages,
 } from '@toastmaster-timer/shared';
 import { getCardFileUrl, notifyCardImagesChanged, preloadBackgroundImages } from '../utils/zoomSdk';
+import OwnBackgroundPicker from './OwnBackgroundPicker';
 import { useToast } from '../context/ToastContext';
 
 const COLOR_LABELS = {
@@ -261,6 +262,12 @@ export default function CardImagesModal({ isOpen, onClose, onImagesChanged }) {
               Upload an image for each color, then Add set. Colors you skip use the Classic card.
             </p>
           </div>
+        </div>
+
+        {/* Not a card, but the other image the organizer's video shows — and
+            the one they have to go looking for otherwise. */}
+        <div className="mt-5 pt-4 border-t border-gray-200">
+          <OwnBackgroundPicker />
         </div>
 
         <input
