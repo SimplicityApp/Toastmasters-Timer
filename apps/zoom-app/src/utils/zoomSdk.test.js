@@ -43,11 +43,16 @@ function stubCanvas() {
     putImageData: () => operations.push(['putImageData']),
     strokeText: (text, x, y) => operations.push(['strokeText', text, x, y]),
     fillText: (text, x, y) => operations.push(['fillText', text, x, y]),
+    // The band over a video background is four fillRects; the color is read off
+    // fillStyle at the moment of the call, as a real 2D context would.
+    fillRect: (x, y, w, h) => operations.push(['fillRect', x, y, w, h, ctx.fillStyle]),
     measureText: (text) => ({ width: String(text).length * 40 }),
     getImageData: (x, y, w, h) => ({
       width: w,
       height: h,
-      data: new Uint8ClampedArray(w * h * 4),
+      // Opaque, so sampleCardBandColor has something to average. A fully
+      // transparent buffer would make every card sample as "no color".
+      data: new Uint8ClampedArray(w * h * 4).fill(255),
     }),
   };
   const fakeCanvas = { width: 0, height: 0, getContext: () => ctx };
@@ -61,6 +66,11 @@ function stubCanvas() {
 /** The time readouts drawn onto frames, in the order they were rendered. */
 function renderedLabels(operations) {
   return operations.filter(([op]) => op === 'fillText').map(([, text]) => text);
+}
+
+/** Whether a color band was drawn onto the frame. */
+function drewBand(operations) {
+  return operations.some(([op]) => op === 'fillRect');
 }
 
 /**
@@ -2351,6 +2361,220 @@ describe('putting the user back on their own background', () => {
     expect(normalizeVirtualBackground(undefined)).toBeNull();
     expect(normalizeVirtualBackground({})).toBeNull();
     expect(normalizeVirtualBackground({ somethingElse: 42 })).toBeNull();
+  });
+});
+
+// The organizer's own background is a looping video. Zoom will hand one back
+// through no API at all — setVirtualBackground takes imageData, a fileUrl or
+// blur, and none of those is a video — so replacing it means losing it. The
+// reported bug: a speech ended and their beach was gone, replaced by None,
+// recoverable only from Zoom's own Background & Effects panel.
+describe('an organizer whose own background is a video', () => {
+  function withBackgroundReader(current) {
+    sdkMock.getCurrentVirtualBackground = vi.fn().mockResolvedValue(current);
+    return sdkMock.getCurrentVirtualBackground;
+  }
+
+  beforeEach(() => {
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualForeground.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete sdkMock.getCurrentVirtualBackground;
+    delete sdkMock.getVirtualBackgrounds;
+  });
+
+  it('recognises a video background rather than calling it an image', async () => {
+    const { normalizeVirtualBackground } = await loadModule();
+
+    // However the client says it: an explicit setting...
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-9', name: 'Waves' },
+        currentBackgroundSetting: 'video',
+      })
+    ).toEqual({ type: 'video', id: 'vb-9', name: 'Waves' });
+    // ...a flag on the entry...
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-9', name: 'Waves', isVideo: true },
+        currentBackgroundSetting: 'background',
+      })
+    ).toEqual({ type: 'video', id: 'vb-9', name: 'Waves' });
+    // ...or nothing but the file name, which is all some clients give.
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-9', name: 'beach-loop.mp4' },
+        currentBackgroundSetting: 'background',
+      })
+    ).toEqual({ type: 'video', id: 'vb-9', name: 'beach-loop.mp4' });
+
+    // A still is still a still, and must keep going down the replace-and-restore
+    // path that every other organizer gets.
+    expect(
+      normalizeVirtualBackground({
+        currentBackground: { id: 'vb-9', name: 'beach.png' },
+        currentBackgroundSetting: 'background',
+      })
+    ).toEqual({ type: 'image', id: 'vb-9', name: 'beach.png' });
+  });
+
+  it('never replaces it, banding the card color over the video instead', async () => {
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayMode, applyOverlay, OVERLAY_MODE_CAMERA } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-9', name: 'beach-loop.mp4' },
+      currentBackgroundSetting: 'video',
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    await applyOverlay('https://zoom.example/backgrounds/red.png');
+
+    // Not once, across two colors. This is the whole fix: what is never taken
+    // away cannot fail to come back.
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(sdkMock.setVirtualForeground).toHaveBeenCalledWith({
+      imageData: expect.anything(),
+      persistence: 'meeting',
+    });
+    expect(drewBand(operations)).toBe(true);
+  });
+
+  it('leaves the video playing when the speech ends', async () => {
+    // The report, exactly: finish or clear, and the beach was replaced by None.
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubCanvas();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-9', name: 'beach-loop.mp4' },
+      currentBackgroundSetting: 'video',
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    const result = await clearVideoPipelines();
+
+    // Only our own band comes off. The background is never addressed, so it
+    // cannot be reset to None — and the organizer is never asked to confirm a
+    // removal either, since that dialog belongs to removeVirtualBackground.
+    expect(sdkMock.removeVirtualForeground).toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('keeps the band up while the organizer has the clock hidden', async () => {
+    // Over a video the band is the entire timing signal, where normally the
+    // card behind them is. Hiding the readout must not take the color with it.
+    const { operations } = stubCanvas();
+    const { initializeZoomSdk, setOverlayMode, setOverlayTimeLabel, setOverlayTimeVisible, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-9', name: 'beach-loop.mp4' },
+      currentBackgroundSetting: 'video',
+    });
+    setOverlayTimeLabel('00:05');
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+
+    setOverlayTimeVisible(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sdkMock.removeVirtualForeground).not.toHaveBeenCalled();
+    expect(drewBand(operations)).toBe(true);
+  });
+
+  it('still finds the band after a webview reload, so the eraser can clear it', async () => {
+    // Over a video there is no card and no filter: the foreground flag is the
+    // only trace of us, and Zoom wipes the in-memory record on every reopen.
+    localStorage.setItem('toastmaster_zoom_virtual_foreground_applied', 'true');
+    const { initializeZoomSdk, isOverlayActive } = await loadModule();
+    await initializeZoomSdk();
+
+    expect(isOverlayActive()).toBe(true);
+  });
+
+  it('declines the setter and says why for a video an older build displaced', async () => {
+    // Reachable only from a record written before camera mode stopped replacing
+    // one. There is no call that puts a video back, so the branded background
+    // still has to come off — but the organizer is told, not left to notice.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'video', id: 'vb-9', name: 'beach-loop.mp4' })
+    );
+    const { initializeZoomSdk, setLogCallback, clearVideoPipelines } = await loadModule();
+    const lines = [];
+    setLogCallback((message) => lines.push(message));
+    await initializeZoomSdk();
+    stubCanvas();
+    withBackgroundReader({ id: 'timer-green' });
+
+    const result = await clearVideoPipelines();
+
+    // Never handed to the setter: every spelling of it would fail. And never
+    // even asked for as pixels — a video has none this API can return.
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(sdkMock.callZoomApi).not.toHaveBeenCalledWith(
+      'getVirtualBackgroundData',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: true });
+    expect(lines.some((line) => line.includes('video background'))).toBe(true);
+  });
+
+  it('still replaces a still image outright, which is what the room expects', async () => {
+    // The guard on the fix. Only a video takes the band; every other organizer
+    // keeps the full timing card behind their face, and keeps the restore.
+    const { initializeZoomSdk, setOverlayMode, OVERLAY_MODE_CAMERA } = await loadModule();
+    await initializeZoomSdk();
+    stubCanvas();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-77', name: 'bookshelf.png' },
+      currentBackgroundSetting: 'background',
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/green.png',
+    });
+  });
+
+  it('samples the band color from the card edge, not the wordmark in the middle', async () => {
+    const { sampleCardBandColor } = await loadModule();
+    // A 8x8 card: red edge, grey block in the middle where the logo sits.
+    const width = 8;
+    const height = 8;
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = (y * width + x) * 4;
+        const middle = x > 1 && x < 6 && y > 1 && y < 6;
+        data[i] = middle ? 128 : 215;
+        data[i + 1] = middle ? 128 : 8;
+        data[i + 2] = middle ? 128 : 6;
+        data[i + 3] = 255;
+      }
+    }
+
+    expect(sampleCardBandColor({ width, height, data })).toBe('rgb(215, 8, 6)');
+    // Nothing opaque to average is an honest "no color", not black.
+    expect(
+      sampleCardBandColor({ width: 2, height: 2, data: new Uint8ClampedArray(16) })
+    ).toBeNull();
   });
 });
 
