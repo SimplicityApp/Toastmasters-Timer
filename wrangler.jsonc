@@ -1,63 +1,138 @@
 {
-  // Cloudflare Workers config — replaces vercel.json.
-  // Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "toastmaster-timer",
-  "main": "worker/index.js",
-
-  // Bump periodically; enables the modern Workers runtime behaviour.
-  "compatibility_date": "2025-09-01",
-  // nodejs_compat gives us node:crypto (HMAC + timingSafeEqual) and Buffer,
-  // which the Zoom webhook signature verification relies on.
-  "compatibility_flags": ["nodejs_compat"],
-
-  "observability": { "enabled": true },
-
-  // Static Assets: serves the combined monorepo build in ./dist.
-  //  - web app (apps/web)        -> served at /
-  //  - zoom app (apps/zoom-app)  -> served at /zoom/
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    // Auto-serves "/privacy" -> "/privacy.html", etc. Replaces most of the
-    // clean-URL rewrites that lived in vercel.json.
-    "html_handling": "auto-trailing-slash",
-    // We do our own SPA fallback in worker/index.js (two SPAs: root + /zoom),
-    // so a missing asset must surface as a 404 to the Worker rather than being
-    // silently rewritten to a single index.html.
-    "not_found_handling": "none",
-    // Run the Worker on every request so it can do host-based routing
-    // (zoom.<domain> -> /zoom/*), SPA fallback, and attach security headers.
-    "run_worker_first": true
-  },
-
-  // ── Production (default env) ──────────────────────────────────────────────
-  // Deploy with: `wrangler deploy`  (Worker: toastmaster-timer)
-  // ⚠️ These custom_domain routes ATTACH the domains on deploy and REPLACE the
-  // existing Vercel CNAMEs — i.e. a plain `wrangler deploy` performs the
-  // production cutover. Use `--env dev` for the canary until you're ready.
-  "routes": [
-    { "pattern": "timer.simple-tech.app", "custom_domain": true },
-    { "pattern": "www.timer.simple-tech.app", "custom_domain": true },
-    { "pattern": "zoom.timer.simple-tech.app", "custom_domain": true }
-  ],
-
-  "env": {
-    // ── Dev / preview ───────────────────────────────────────────────────────
-    // Deploy with: `wrangler deploy --env dev`  (Worker: toastmaster-timer-dev)
-    // Secrets are per-Worker — set them once with `--env dev` (see below).
-    "dev": {
-      "routes": [
-        { "pattern": "timer-dev.simple-tech.app", "custom_domain": true },
-        { "pattern": "www.timer-dev.simple-tech.app", "custom_domain": true },
-        { "pattern": "zoom.timer-dev.simple-tech.app", "custom_domain": true }
-      ]
-    }
-  }
-
-  // Secrets are NOT stored here. Set them per environment with `wrangler secret put`:
-  //   ZOOM_WEBHOOK_SECRET_TOKEN, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, POSTHOG_API_KEY,
-  //   POSTHOG_QUERY_API_KEY (personal key with Query read scope, for /api/stats)
-  //   prod: `wrangler secret put NAME`     dev: `wrangler secret put NAME --env dev`
-  // For local dev, put them in .dev.vars (see .dev.vars.example).
+	// Cloudflare Workers config — replaces vercel.json.
+	// Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "toastmaster-timer",
+	"main": "worker/index.js",
+	// Bump periodically; enables the modern Workers runtime behaviour.
+	"compatibility_date": "2025-09-01",
+	// nodejs_compat gives us node:crypto (HMAC + timingSafeEqual) and Buffer,
+	// which the Zoom webhook signature verification relies on.
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	// Cross-device user settings, keyed profile:zoom:<uid>. Values are a few KB
+	// of preferences, so KV's eventual consistency is fine: the merge is
+	// per-field last-write-wins and idempotent, and a stale read costs at most
+	// one extra sync round.
+	//
+	// ⚠️ Create the namespaces before deploying, then paste the ids here:
+	//   wrangler kv namespace create PROFILES
+	//   wrangler kv namespace create PROFILES --env dev
+	// /api/profile answers 503 until the binding exists, so the rest of the
+	// Worker (including Zoom identity) deploys and runs fine without it.
+	"kv_namespaces": [
+		{
+			"binding": "PROFILES",
+			"id": "a43ea925db874eff89d160e36369251a",
+			"remote": true
+		}
+	],
+	// Custom card artwork: megabyte-scale Blobs, keyed card/<uid>/<sha256>.
+	// R2 rather than KV because KV is built for small values, and these are the
+	// one thing a user cannot recreate if it is lost.
+	//
+	// ⚠️ Create the buckets before deploying:
+	//   wrangler r2 bucket create toastmaster-timer-card-assets
+	//   wrangler r2 bucket create toastmaster-timer-card-assets-dev
+	// /api/assets/* answers 503 until the binding exists.
+	"r2_buckets": [
+		{
+			"binding": "CARD_ASSETS",
+			"bucket_name": "toastmaster-timer-card-assets"
+		},
+		{
+			"bucket_name": "toastmaster-timer-card-assets",
+			"binding": "toastmaster_timer_card_assets",
+			"remote": true
+		},
+		{
+			"bucket_name": "toastmaster-timer-card-assets-dev",
+			"binding": "toastmaster_timer_card_assets_dev",
+			"remote": true
+		}
+	],
+	// Static Assets: serves the combined monorepo build in ./dist.
+	//  - web app (apps/web)        -> served at /
+	//  - zoom app (apps/zoom-app)  -> served at /zoom/
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS",
+		// Auto-serves "/privacy" -> "/privacy.html", etc. Replaces most of the
+		// clean-URL rewrites that lived in vercel.json.
+		"html_handling": "auto-trailing-slash",
+		// We do our own SPA fallback in worker/index.js (two SPAs: root + /zoom),
+		// so a missing asset must surface as a 404 to the Worker rather than being
+		// silently rewritten to a single index.html.
+		"not_found_handling": "none",
+		// Run the Worker on every request so it can do host-based routing
+		// (zoom.<domain> -> /zoom/*), SPA fallback, and attach security headers.
+		"run_worker_first": true
+	},
+	// ── Production (default env) ──────────────────────────────────────────────
+	// Deploy with: `wrangler deploy`  (Worker: toastmaster-timer)
+	// ⚠️ These custom_domain routes ATTACH the domains on deploy and REPLACE the
+	// existing Vercel CNAMEs — i.e. a plain `wrangler deploy` performs the
+	// production cutover. Use `--env dev` for the canary until you're ready.
+	"routes": [
+		{
+			"pattern": "timer.simple-tech.app",
+			"custom_domain": true
+		},
+		{
+			"pattern": "www.timer.simple-tech.app",
+			"custom_domain": true
+		},
+		{
+			"pattern": "zoom.timer.simple-tech.app",
+			"custom_domain": true
+		}
+	],
+	"env": {
+		// ── Dev / preview ───────────────────────────────────────────────────────
+		// Deploy with: `wrangler deploy --env dev`  (Worker: toastmaster-timer-dev)
+		// Secrets are per-Worker — set them once with `--env dev` (see below).
+		"dev": {
+			"routes": [
+				{
+					"pattern": "timer-dev.simple-tech.app",
+					"custom_domain": true
+				},
+				{
+					"pattern": "www.timer-dev.simple-tech.app",
+					"custom_domain": true
+				},
+				{
+					"pattern": "zoom.timer-dev.simple-tech.app",
+					"custom_domain": true
+				}
+			],
+			// Bindings are per-environment: the dev Worker needs its own namespace,
+			// or staging writes would land in production users' profiles.
+			"kv_namespaces": [
+				{
+					"binding": "PROFILES",
+					"id": "4e1f8e3bbef340ee9d7a5d14fbdeeb26",
+					"remote": true
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "CARD_ASSETS",
+					"bucket_name": "toastmaster-timer-card-assets-dev"
+				}
+			]
+		}
+	}
+	// Secrets are NOT stored here. Set them per environment with `wrangler secret put`:
+	//   ZOOM_WEBHOOK_SECRET_TOKEN, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, POSTHOG_API_KEY,
+	//   POSTHOG_QUERY_API_KEY (personal key with Query read scope, for /api/stats)
+	//   SESSION_SIGNING_KEY (HMAC key for /api/profile session tokens; generate with
+	//     `openssl rand -base64 32`. Deliberately NOT ZOOM_CLIENT_SECRET — that one is
+	//     a Zoom credential and the two should rotate independently.)
+	//   prod: `wrangler secret put NAME`     dev: `wrangler secret put NAME --env dev`
+	// For local dev, put them in .dev.vars (see .dev.vars.example).
 }
