@@ -2911,6 +2911,62 @@ describe('an own background the organizer set in the app', () => {
     expect(result).toMatchObject({ ok: true, lostBackground: false });
   });
 
+  it('goes onto the video the moment it is set', async () => {
+    // Picking a background and seeing nothing happen reads as a setting that
+    // did not take. This is the one moment the organizer is looking at it.
+    setOwnBackground();
+    const { initializeZoomSdk, applyOwnBackground } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+
+    expect(await applyOwnBackground()).toBe('applied');
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
+  });
+
+  it('is not recorded as ours, so a later teardown cannot take it off', async () => {
+    setOwnBackground();
+    const { initializeZoomSdk, applyOwnBackground, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await applyOwnBackground();
+    sdkMock.setVirtualBackground.mockClear();
+
+    // Their own background is on the video and nothing of ours is; clearing
+    // must leave it exactly where it is.
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it('declines while a timing card is on the video rather than replacing it', async () => {
+    // Mid-speech the card is the whole reason the app is on screen. Showing the
+    // organizer a preview by taking the color away from the room is a bad
+    // trade, and the setting applies when the card comes off anyway.
+    setOwnBackground();
+    const { initializeZoomSdk, setOverlayMode, applyOwnBackground, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    sdkMock.setVirtualBackground.mockClear();
+
+    expect(await applyOwnBackground()).toBe('busy');
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+  });
+
+  it('says so rather than claiming success when the client will not take it', async () => {
+    setOwnBackground();
+    sdkMock.config.mockResolvedValue({ unsupportedApis: ['setVirtualBackground'] });
+    const { initializeZoomSdk, applyOwnBackground } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+
+    expect(await applyOwnBackground()).toBe('unavailable');
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalled();
+  });
+
   it('does nothing differently while none is set', async () => {
     // The guard on the whole feature: an organizer who never opens the modal
     // keeps the behaviour they have today.

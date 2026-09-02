@@ -8,7 +8,7 @@ import {
   clearOwnBackground,
   initCardImages,
 } from '@toastmaster-timer/shared';
-import { notifyOwnBackgroundChanged } from '../utils/zoomSdk';
+import { notifyOwnBackgroundChanged, applyOwnBackground } from '../utils/zoomSdk';
 import { useToast } from '../context/ToastContext';
 
 /**
@@ -62,7 +62,20 @@ export default function OwnBackgroundPicker({ onChange }) {
         return;
       }
       refresh();
-      showToast('Saved. Speeches will end on this background.', 'success');
+      // Put it on their video straight away: picking a background and seeing
+      // nothing happen reads as a setting that did not take, and this is the
+      // one moment they are looking at the result.
+      const applied = await applyOwnBackground();
+      showToast(
+        {
+          applied: 'Saved — your background is on your video now.',
+          // Declined rather than failed: the card on their video outranks a
+          // preview of a setting that applies when it comes off anyway.
+          busy: 'Saved. Your video returns to this when the timer clears.',
+          unavailable: 'Saved. Speeches will end on this background.',
+        }[applied],
+        'success'
+      );
     } catch {
       showToast('That file could not be read as an image.', 'error');
     } finally {

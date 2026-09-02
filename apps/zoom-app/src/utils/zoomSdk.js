@@ -1108,6 +1108,50 @@ export function notifyOwnBackgroundChanged() {
 }
 
 /**
+ * Put the organizer's own background on their video now, so setting one shows
+ * them what they set rather than a promise about the end of the next speech.
+ *
+ * Declines while anything of ours is on the video. A timing card is the whole
+ * point of the app being on screen, and replacing one mid-speech would take the
+ * color the room is reading away to show the organizer a preview — so the
+ * setting waits for the video to be theirs again, which is when it applies
+ * anyway. The caller is told which happened, because "nothing visibly changed"
+ * and "it worked" need different words.
+ *
+ * Queued as a non-supersedable operation: it is a push at the same layer the
+ * overlay pushes use, and dropping it would leave the organizer looking at the
+ * background they just replaced.
+ *
+ * @returns {Promise<'applied'|'busy'|'unavailable'>}
+ */
+export async function applyOwnBackground() {
+  await initializeZoomSdk();
+  if (!sdkAvailable || !zoomSdk || !isApiAvailable('setVirtualBackground')) return 'unavailable';
+  // Asked before the queue rather than inside it: what matters is whether the
+  // organizer is looking at a card right now, which is what they can see.
+  if (isOverlayActive()) return 'busy';
+
+  let outcome = 'unavailable';
+  await enqueueOverlayOp(
+    async () => {
+      const own = await readOwnBackgroundPixels();
+      if (!own) return;
+      try {
+        await zoomSdk.setVirtualBackground({ imageData: own });
+        // Deliberately not recorded as one of ours. It is the organizer's own
+        // background, and a teardown must never take it off.
+        log('Applied the organizer\'s own background to their video', 'info');
+        outcome = 'applied';
+      } catch (error) {
+        log(`Could not apply the organizer's own background: ${error.message || error.name}`, 'warn');
+      }
+    },
+    { supersedable: false }
+  );
+  return outcome;
+}
+
+/**
  * Turn a background id into the pixels needed to re-apply it.
  *
  * This is the call that makes restoring an image possible at all.
