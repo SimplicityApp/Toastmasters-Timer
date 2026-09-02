@@ -169,7 +169,7 @@ export default memo(function OverlayModeMenu({ value, onChange, revealFaceWhenId
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium text-gray-900">Show my own background</span>
                 <span className="block text-xs text-gray-500">
-                  Between speeches. Zoom asks you to confirm each time
+                  Between speeches. Your Zoom background is never changed
                 </span>
               </span>
             </label>
