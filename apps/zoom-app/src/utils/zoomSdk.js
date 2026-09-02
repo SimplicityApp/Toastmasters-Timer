@@ -1,5 +1,5 @@
 import zoomSdk from '@zoom/appssdk';
-import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout, resolveCardImage, CARD_ASSET_VERSION } from '@toastmaster-timer/shared';
+import { loadOverlayMode, loadOverlayTimeReadout, saveOverlayTimeReadout, resolveCardImage, CARD_ASSET_VERSION, hasOwnBackground, getOwnBackgroundUrl } from '@toastmaster-timer/shared';
 
 // Production base URL for background images
 const PRODUCTION_BASE_URL = 'https://www.timer.simple-tech.app';
@@ -1066,6 +1066,47 @@ async function readCurrentVirtualBackground() {
   }
 }
 
+// The organizer's uploaded background, decoded once and kept for the session.
+// Same reasoning as previousBackgroundPixels: an ImageData is megabytes, and
+// the Blob it came from is already durable, so this is a cache and not a store.
+let ownBackgroundPixels = null;
+
+/**
+ * The pixels of the background the organizer gave us, or null when they have
+ * not set one — or set one whose image cannot be decoded.
+ *
+ * This is the whole of the restore when it answers. No id, no getter, no saved
+ * list, and nothing to identify: the organizer said which background is theirs,
+ * so there is no background to pick wrongly and none to fall through to None.
+ *
+ * @returns {Promise<ImageData|null>}
+ */
+async function readOwnBackgroundPixels() {
+  if (!hasOwnBackground()) return null;
+  const url = getOwnBackgroundUrl();
+  if (!url) {
+    // initCardImages has not minted the object URL yet, or storage refused it.
+    // Nothing is cached against this, because the next call may well succeed.
+    log('An own background is set but its image is not loaded yet; falling back to reading what Zoom reports', 'warn');
+    return null;
+  }
+  if (ownBackgroundPixels?.url === url) return ownBackgroundPixels.imageData;
+  try {
+    const imageData = await decodeToImageData(url, RESTORED_BACKGROUND_MAX);
+    ownBackgroundPixels = { url, imageData };
+    log(`Decoded the organizer's own background (${imageData.width}x${imageData.height})`, 'info');
+    return imageData;
+  } catch (error) {
+    log(`Could not decode the organizer's own background: ${error.message || error.name}`, 'warn');
+    return null;
+  }
+}
+
+/** Drop the decoded own background, so a replacement is picked up. */
+export function notifyOwnBackgroundChanged() {
+  ownBackgroundPixels = null;
+}
+
 /**
  * Turn a background id into the pixels needed to re-apply it.
  *
@@ -1223,7 +1264,7 @@ async function decodeEncodedBackground(encoded) {
 }
 
 /**
- * Other identifiers the same background might be known by, from the saved list.
+ * Other identifiers the *same* background might be known by, from the saved list.
  *
  * The documentation is explicit that ids for getVirtualBackgroundData "are
  * obtained through the getVirtualBackgrounds response" — not from
@@ -1232,8 +1273,24 @@ async function decodeEncodedBackground(encoded) {
  * not. So when the id in hand is rejected, ask the list what it calls the same
  * background and try that instead.
  *
- * Logs the list's shape either way. It is the one response nothing has inspected
- * yet, and its entries are where the correct id field is named.
+ * Every candidate returned here gets applied to the organizer's video if its
+ * pixels come back, so a candidate that is not provably the same background is
+ * not a guess worth making — it is someone else's beach on their tile. Two
+ * things identify it, and nothing else counts:
+ *
+ *   1. An entry that lists the id we already tried, under any of its spellings.
+ *      Same background, spelled the way this API wants it.
+ *   2. Failing that, an entry with the same name.
+ *
+ * With neither — the client named the background only by an id the list does not
+ * carry — the honest answer is no candidates at all. This is what the reported
+ * bug was: the name filter read `!name || <matches>`, so a background the client
+ * reported without a name kept *every* saved entry instead of none, and the
+ * restore applied whichever unrelated one answered first. When none of them
+ * answered it fell through to removal, and the organizer landed on None.
+ *
+ * Logs the list's shape either way. Its entries are where the correct id field
+ * is named, and that is worth having in the panel when a restore misbehaves.
  *
  * @param {string} [name] - What the current background is called
  * @param {string} tried - The id already attempted, so it is not repeated
@@ -1245,14 +1302,31 @@ async function otherIdsFor(name, tried) {
     const raw = await callSdkApi('getVirtualBackgrounds', undefined, BACKGROUND_PIXELS_TIMEOUT_MS);
     log(`getVirtualBackgrounds answered: ${describeShape(raw)}`, 'info');
     const list = [raw?.virtualBackgrounds, raw?.backgrounds, raw?.list, raw].find(Array.isArray) || [];
-    return list
-      .filter((entry) => entry && typeof entry === 'object')
-      // Only the matching one, by name. Feeding every saved background to a
-      // getter in turn would be a lot of calls to land on a background the user
-      // never had up.
-      .filter((entry) => !name || firstString(entry.name, entry.fileName) === name)
-      .flatMap((entry) => [entry.id, entry.backgroundId, entry.virtualBackgroundId])
-      .filter((value) => typeof value === 'string' && value.trim() && value !== tried);
+    const entries = list.filter((entry) => entry && typeof entry === 'object');
+    const spellings = (entry) =>
+      [entry.id, entry.backgroundId, entry.virtualBackgroundId]
+        .map((value) => firstString(value))
+        .filter(Boolean);
+
+    // The entry that already knows the id we tried is the same background by
+    // construction, whatever it is called.
+    const sameEntry = entries.find((entry) => spellings(entry).includes(tried));
+    if (sameEntry) {
+      return spellings(sameEntry).filter((value) => value !== tried);
+    }
+
+    if (!name) {
+      log(
+        `The saved list does not carry "${tried}" and the client gave no name for it, so there is no way to tell which saved background is the organizer's; not guessing`,
+        'warn'
+      );
+      return [];
+    }
+
+    return entries
+      .filter((entry) => firstString(entry.name, entry.fileName) === name)
+      .flatMap(spellings)
+      .filter((value) => value !== tried);
   } catch (error) {
     log(`Could not read the saved background list: ${error.message || error.name}`, 'warn');
     return [];
@@ -2519,6 +2593,9 @@ const ERROR_NOTHING_APPLIED = 10195;
  * @returns {'setVirtualBackground'|'removeVirtualBackground'}
  */
 function restoreBackgroundApi() {
+  // An own background is always put back with the setter, whatever Zoom
+  // reports and whatever it was replaced over.
+  if (hasOwnBackground() && isApiAvailable('setVirtualBackground')) return 'setVirtualBackground';
   const previous = readPreviousBackground();
   // A video is deliberately absent here. No spelling of setVirtualBackground
   // re-applies one, so routing it to the setter would only pick a call that
@@ -2565,6 +2642,24 @@ function restoreBackgroundApi() {
  *   dropped because Zoom would not give it back.
  */
 async function restoreOrRemoveBackground() {
+  // The organizer's own upload outranks everything below it. They named the
+  // background they want to end on, so there is nothing to read, nothing to
+  // identify, and no way to land on someone else's picture or on None. Only a
+  // client that refuses setVirtualBackground, or an image that will not decode,
+  // falls past this into the guessing.
+  if (hasOwnBackground() && isApiAvailable('setVirtualBackground')) {
+    const own = await readOwnBackgroundPixels();
+    if (own) {
+      try {
+        log('Restoring the background the organizer set in the app', 'info');
+        await zoomSdk.setVirtualBackground({ imageData: own });
+        return { lost: false };
+      } catch (error) {
+        log(`Could not apply the organizer's own background: ${error.message || error.name}. Falling back.`, 'warn');
+      }
+    }
+  }
+
   const previous = readPreviousBackground();
 
   if (previous?.type === 'blur' && isApiAvailable('setVirtualBackground')) {
@@ -2638,7 +2733,24 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *   background themselves, which nothing reports — otherwise costs them a
  *   confirmation dialog for a background of ours that is not even there.
  *
- * Bypasses the overlay queue for the same reason leaveStage does.
+ * Runs on the overlay queue, as a removal that can never be superseded — the
+ * same footing removeOverlay is on. It used to bypass the queue, for the reason
+ * leaveStage still does: the queue drops a request a newer one has superseded,
+ * which would silently skip a teardown. But `supersedable: false` already says
+ * "never drop this", and bypassing bought nothing else while costing the one
+ * thing that matters here.
+ *
+ * What it cost: this and removeOverlay could run at once, and they read the same
+ * records. Both would see virtualBackgroundApplied still true, both would ask
+ * isOurBackgroundApplied, and both would set out to restore. The second one then
+ * finds a background it does not recognise — the first has already put the
+ * organizer's own back — concludes ours must still be up, and restores or
+ * removes over the top of a video that was already correct. Serialized, the
+ * second reads the records the first left behind and correctly does nothing.
+ *
+ * Safe to enqueue: every caller is outside the queue. setOverlayMode drives the
+ * queue rather than running on it, and the UI calls this straight from a button.
+ * Nothing queued calls it, so it cannot wait on itself.
  *
  * @returns {Promise<{ok: boolean, declined: boolean, ungranted: string[], lostBackground: boolean}>}
  *   ok is false only when something we believed was applied would not come off;
@@ -2649,7 +2761,25 @@ const ERROR_REMOVAL_DECLINED = 10017;
  */
 export async function clearVideoPipelines() {
   await initializeZoomSdk();
+  // Dropped now rather than inside the queued turn: a push that lands between
+  // this call and its turn must not be treated as still showing.
+  activeOverlay = null;
 
+  // enqueueOverlayOp reports a failed op by resolving, not rejecting, so the
+  // result has to come out through a binding. This default is what a caller
+  // sees if the body somehow never runs — the same shape, claiming nothing.
+  let outcome = { ok: false, declined: false, ungranted: [], lostBackground: false };
+  await enqueueOverlayOp(
+    async () => {
+      outcome = await clearVideoPipelinesInternal();
+    },
+    { supersedable: false }
+  );
+  return outcome;
+}
+
+/** The body of clearVideoPipelines, run on the overlay queue. */
+async function clearVideoPipelinesInternal() {
   // What we believe is on each pipeline. Both records are persisted, because
   // Zoom reloads the webview whenever the panel is reopened — which is exactly
   // when an organizer reaches for this button.
@@ -2668,7 +2798,10 @@ export async function clearVideoPipelines() {
   // Ask the video rather than the record, where the client will answer. Only a
   // definite "no" is acted on: null means it could not say, which leaves the
   // record in charge exactly as before.
-  if (hadBackground && (await isOurBackgroundApplied()) === false) {
+  // Skipped entirely with an own background set: the check exists to avoid
+  // acting on a background that is already the organizer's, and there the
+  // answer is "put mine back" whatever is currently up.
+  if (hadBackground && !hasOwnBackground() && (await isOurBackgroundApplied()) === false) {
     log('Zoom reports nothing of ours on the video; leaving the background alone', 'info');
     markVirtualBackgroundApplied(false);
     hadBackground = false;
@@ -2870,9 +3003,10 @@ async function removeOverlayInternal(pipelines, label) {
         const api = restoreBackgroundApi();
         if (!isApiAvailable(api)) {
           log(`Client did not grant ${api}; leaving the background in place`, 'warn');
-        } else if ((await isOurBackgroundApplied()) === false) {
+        } else if (!hasOwnBackground() && (await isOurBackgroundApplied()) === false) {
           // Must not put a dialog in front of someone whose background is
-          // already their own.
+          // already their own. Not consulted with an own background set — see
+          // the same skip in clearVideoPipelinesInternal.
           log('Zoom reports the background is not ours; leaving it alone', 'info');
           markVirtualBackgroundApplied(false);
         } else {
@@ -3011,7 +3145,9 @@ async function applyOverlayInternal(imageUrl) {
         // Before the first push of a session, and never once ours is up: what
         // is on the video now is theirs, and it is the only chance to learn
         // what to put back. No-ops on clients that cannot report it.
-        if (!virtualBackgroundApplied) await snapshotUserBackground();
+        // Reading what they had is only worth a round-trip when it is what we
+        // will put back. With an own background set it never is.
+        if (!virtualBackgroundApplied && !hasOwnBackground()) await snapshotUserBackground();
 
         // A video background is never replaced, because nothing in the SDK
         // replaces it back: setVirtualBackground takes imageData, a fileUrl or
@@ -3021,9 +3157,20 @@ async function applyOverlayInternal(imageUrl) {
         // on the foreground layer, which composites over their video rather
         // than replacing anything, and their face stays visible behind it.
         //
+        // Unless they have set an own background, which is the answer to "what
+        // should I be on" however they arrived at the meeting — so the card
+        // replaces the video like any other, and the speech ends on the still
+        // they chose. Deliberate: it is the one case where the app changes what
+        // kind of background they are using, and they asked for it by setting
+        // one.
+        //
         // Only for a video. Every other background is still replaced by the
         // card outright, which is what the room has always seen.
-        if (readPreviousBackground()?.type === 'video' && isApiAvailable('setVirtualForeground')) {
+        if (
+          !hasOwnBackground() &&
+          readPreviousBackground()?.type === 'video' &&
+          isApiAvailable('setVirtualForeground')
+        ) {
           const budget = getForegroundBudget();
           log(`Own background is a video; banding the card color instead of replacing it: ${describeUrl(imageUrl)}`, 'info');
           cameraBandColor = await loadCardBandColor(imageUrl);
