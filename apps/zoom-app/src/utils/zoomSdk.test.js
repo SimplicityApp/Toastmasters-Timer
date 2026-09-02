@@ -31,6 +31,19 @@ const { sdkMock } = vi.hoisted(() => ({
 
 vi.mock('@zoom/appssdk', () => ({ default: sdkMock }));
 
+// jsdom has neither IndexedDB nor object URLs, so the Blob the picker would
+// have stored cannot be minted into a URL here. Only that one function is stood
+// in for: hasOwnBackground stays real, because it is localStorage-backed and
+// behaves under jsdom exactly as it does in the client — so a test sets the
+// feature the same way the picker does, by writing the flag.
+vi.mock('@toastmaster-timer/shared', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getOwnBackgroundUrl: () => (actual.hasOwnBackground() ? 'blob:own-background' : null),
+  };
+});
+
 /**
  * jsdom has no real 2D canvas, so route createElement('canvas') to a fake whose
  * context records every operation performed on it.
@@ -2752,6 +2765,165 @@ describe('a clear and a teardown asked for at the same moment', () => {
     // One restore, and no removal chasing it.
     expect(sdkMock.setVirtualBackground).toHaveBeenCalledTimes(1);
     expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+  });
+});
+
+// The organizer hands the app the background they want to end on, so the
+// restore has nothing left to get wrong. Everything the guessing path could
+// fail at — an id the pixel call refuses, a client that grants none of the
+// getters, a name it never reported — stops applying the moment one is set.
+describe('an own background the organizer set in the app', () => {
+  function withBackgroundReader(current) {
+    sdkMock.getCurrentVirtualBackground = vi.fn().mockResolvedValue(current);
+    return sdkMock.getCurrentVirtualBackground;
+  }
+
+  /** Set one, the way OwnBackgroundPicker does. */
+  function setOwnBackground() {
+    localStorage.setItem('toastmaster_own_background', '1');
+  }
+
+  beforeEach(() => {
+    stubCanvas();
+    sdkMock.config.mockResolvedValue({});
+    sdkMock.setVideoFilter.mockResolvedValue({});
+    sdkMock.deleteVideoFilter.mockResolvedValue({});
+    sdkMock.setVirtualBackground.mockResolvedValue({});
+    sdkMock.removeVirtualBackground.mockResolvedValue({});
+    sdkMock.setVirtualForeground.mockResolvedValue({});
+    sdkMock.removeVirtualForeground.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete sdkMock.getCurrentVirtualBackground;
+    delete sdkMock.getVirtualBackgrounds;
+  });
+
+  it('restores it without asking Zoom anything at all', async () => {
+    setOwnBackground();
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'timer-green' });
+
+    const result = await clearVideoPipelines();
+
+    // Their image goes back...
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    // ...and none of the three fragile getters was consulted to do it. This is
+    // the point: they are absent from the shipped SDK typing and a client may
+    // grant none of them, and every reported failure ran through one.
+    expect(read).not.toHaveBeenCalled();
+    expect(sdkMock.callZoomApi).not.toHaveBeenCalledWith(
+      'getVirtualBackgroundData', expect.anything(), expect.anything()
+    );
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('outranks a snapshot that says the organizer had something else', async () => {
+    // The record says bookshelf; they told the app to end on their upload. The
+    // upload wins, and the pixels for the bookshelf are never even fetched.
+    setOwnBackground();
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'image', id: 'vb-77', name: 'bookshelf.png' })
+    );
+    const bookshelf = { width: 1920, height: 1080, data: new Uint8ClampedArray(4) };
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({ id: 'timer-green' });
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: bookshelf });
+
+    await clearVideoPipelines();
+
+    const [applied] = sdkMock.setVirtualBackground.mock.lastCall;
+    expect(applied.imageData).not.toBe(bookshelf);
+  });
+
+  it('outranks a blur, which the guessing path would have restored exactly', async () => {
+    setOwnBackground();
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem('toastmaster_zoom_previous_background', JSON.stringify({ type: 'blur' }));
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({ id: 'timer-green' });
+
+    await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).not.toHaveBeenCalledWith({ blur: true });
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
+  });
+
+  it('replaces a video background too, since they said where to land', async () => {
+    // The one case where setting this changes what kind of background they run
+    // on. Without it a video is left alone, because nothing can put one back;
+    // with it there is somewhere to land, so the card replaces it like any
+    // other and the speech ends on the still they chose.
+    setOwnBackground();
+    const { initializeZoomSdk, setOverlayMode, clearVideoPipelines, OVERLAY_MODE_CAMERA } =
+      await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    withBackgroundReader({
+      currentBackground: { id: 'vb-9', name: 'beach-loop.mp4' },
+      currentBackgroundSetting: 'video',
+    });
+
+    await setOverlayMode(OVERLAY_MODE_CAMERA, 'https://zoom.example/backgrounds/green.png');
+    // The card replaces it, rather than banding over the top.
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({
+      fileUrl: 'https://zoom.example/backgrounds/green.png',
+    });
+
+    sdkMock.setVirtualBackground.mockClear();
+    const result = await clearVideoPipelines();
+
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: expect.anything() });
+    expect(sdkMock.removeVirtualBackground).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('falls back to the old path when the image will not decode', async () => {
+    // The flag promises pixels; a browser that cannot hand them over must not
+    // turn that into a background that never comes off.
+    setOwnBackground();
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    localStorage.setItem(
+      'toastmaster_zoom_previous_background',
+      JSON.stringify({ type: 'image', id: 'vb-77', name: 'bookshelf.png' })
+    );
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    // No Image stub, so every decode rejects.
+    withBackgroundReader({ id: 'timer-green' });
+    const pixels = { width: 1920, height: 1080, data: new Uint8ClampedArray(4) };
+    sdkMock.callZoomApi.mockResolvedValue({ imageData: pixels });
+
+    const result = await clearVideoPipelines();
+
+    // Back to asking Zoom, exactly as before the setting existed.
+    expect(sdkMock.setVirtualBackground).toHaveBeenCalledWith({ imageData: pixels });
+    expect(result).toMatchObject({ ok: true, lostBackground: false });
+  });
+
+  it('does nothing differently while none is set', async () => {
+    // The guard on the whole feature: an organizer who never opens the modal
+    // keeps the behaviour they have today.
+    localStorage.setItem('toastmaster_zoom_virtual_background_applied', 'true');
+    const { initializeZoomSdk, clearVideoPipelines } = await loadModule();
+    await initializeZoomSdk();
+    stubImage();
+    const read = withBackgroundReader({ id: 'timer-green' });
+
+    await clearVideoPipelines();
+
+    expect(read).toHaveBeenCalled();
+    expect(sdkMock.removeVirtualBackground).toHaveBeenCalled();
   });
 });
 

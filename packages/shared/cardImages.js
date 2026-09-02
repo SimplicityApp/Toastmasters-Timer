@@ -29,6 +29,24 @@ const DB_NAME = 'toastmaster-timer';
 const DB_VERSION = 1;
 const IMAGE_STORE = 'card-images';
 
+// The organizer's own virtual background, uploaded here so the app can put it
+// back without asking Zoom for it.
+//
+// Everything the restore path could not do reliably came from not knowing what
+// to put back: getCurrentVirtualBackground names a background by an id that
+// getVirtualBackgroundData need not accept, none of those three APIs is in the
+// shipped SDK typing, and a client may grant none of them. Held here, the
+// pixels are ours — the restore needs no getter, cannot pick the wrong
+// background, and cannot fall through to None.
+//
+// Shares the image store with the card sets, under a key no set can collide
+// with: set keys are `${setId}:${color}` and every setId starts with 'custom-'.
+// Its own localStorage flag rather than a field in the card settings, because
+// that object is normalized down to known fields and deleted outright when it
+// holds nothing but defaults.
+const OWN_BACKGROUND_IMAGE_KEY = 'own-background';
+const OWN_BACKGROUND_FLAG_KEY = 'toastmaster_own_background';
+
 export const CARD_COLORS = ['blue', 'green', 'yellow', 'red'];
 
 // Cache-buster for the built-in files. They are served with
@@ -365,6 +383,19 @@ async function loadImagesIntoCache() {
   // selected one, because the picker shows thumbnails of each. Object URLs
   // are handles, not copies; the bytes stay in IndexedDB until decoded.
   const referenced = new Set();
+  // Not referenced by any card set, and swept as an orphan without this.
+  if (hasOwnBackground()) {
+    referenced.add(OWN_BACKGROUND_IMAGE_KEY);
+    const blob = stored.get(OWN_BACKGROUND_IMAGE_KEY);
+    if (!imageUrlCache.has(OWN_BACKGROUND_IMAGE_KEY) && isBlobLike(blob)) {
+      cacheBlobUrl(OWN_BACKGROUND_IMAGE_KEY, blob);
+    } else if (!isBlobLike(blob)) {
+      // The flag outlived its pixels — a cleared database, a failed write. Say
+      // the truth rather than promising a restore that has nothing to restore.
+      writeOwnBackgroundFlag(false);
+      referenced.delete(OWN_BACKGROUND_IMAGE_KEY);
+    }
+  }
   for (const set of getCardImageSettings().customSets) {
     for (const color of set.colors) {
       const key = imageKey(set.id, color);
@@ -560,4 +591,90 @@ export function fileToCardBlob(file) {
     };
     img.src = objectUrl;
   });
+}
+
+// ---------------------------------------------------------------------------
+// The organizer's own background
+// ---------------------------------------------------------------------------
+
+function writeOwnBackgroundFlag(present) {
+  try {
+    if (present) localStorage.setItem(OWN_BACKGROUND_FLAG_KEY, '1');
+    else localStorage.removeItem(OWN_BACKGROUND_FLAG_KEY);
+  } catch (error) {
+    console.error('Failed to record the own-background setting:', error);
+  }
+}
+
+/**
+ * Whether the organizer has given the app a background of their own to put
+ * back. Synchronous and available before init, because the restore path has to
+ * decide which strategy it is using without awaiting anything.
+ *
+ * True here is a promise about intent, not about pixels: init drops the flag if
+ * the image behind it has gone, and getOwnBackgroundUrl answers null until the
+ * blob is loaded.
+ *
+ * @returns {boolean}
+ */
+export function hasOwnBackground() {
+  try {
+    return localStorage.getItem(OWN_BACKGROUND_FLAG_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The organizer's own background as a displayable URL, or null when none is
+ * set or its Blob is not loaded yet (init still running, or storage failed).
+ * @returns {string|null}
+ */
+export function getOwnBackgroundUrl() {
+  return imageUrlCache.get(OWN_BACKGROUND_IMAGE_KEY) || null;
+}
+
+/**
+ * Store the organizer's own background and start using it.
+ *
+ * Blob first, flag second: a failure between the two leaves an orphan for init
+ * to sweep, where the reverse would leave a flag promising a restore with no
+ * pixels behind it.
+ *
+ * @param {Blob} blob - Re-encoded upload, from fileToCardBlob
+ * @returns {Promise<boolean>} false when nothing could be stored
+ */
+export async function saveOwnBackground(blob) {
+  const db = await openImageDb();
+  if (!db || !isBlobLike(blob)) return false;
+  try {
+    await idbPutMany(db, [[OWN_BACKGROUND_IMAGE_KEY, blob]]);
+  } catch (error) {
+    console.error('Failed to store the own background:', error);
+    return false;
+  }
+  revokeCached(OWN_BACKGROUND_IMAGE_KEY);
+  cacheBlobUrl(OWN_BACKGROUND_IMAGE_KEY, blob);
+  writeOwnBackgroundFlag(true);
+  return true;
+}
+
+/**
+ * Forget the organizer's own background, returning the restore path to reading
+ * what Zoom reports. The flag goes first here: once it is down nothing will
+ * look for the pixels, so a failed delete is an orphan rather than a promise
+ * the app cannot keep.
+ *
+ * @returns {Promise<void>}
+ */
+export async function clearOwnBackground() {
+  writeOwnBackgroundFlag(false);
+  revokeCached(OWN_BACKGROUND_IMAGE_KEY);
+  const db = await openImageDb();
+  if (!db) return;
+  try {
+    await idbDeleteMany(db, [OWN_BACKGROUND_IMAGE_KEY]);
+  } catch (error) {
+    console.error('Failed to delete the own background:', error);
+  }
 }
