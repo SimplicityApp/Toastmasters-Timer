@@ -1223,7 +1223,7 @@ async function decodeEncodedBackground(encoded) {
 }
 
 /**
- * Other identifiers the same background might be known by, from the saved list.
+ * Other identifiers the *same* background might be known by, from the saved list.
  *
  * The documentation is explicit that ids for getVirtualBackgroundData "are
  * obtained through the getVirtualBackgrounds response" — not from
@@ -1232,8 +1232,24 @@ async function decodeEncodedBackground(encoded) {
  * not. So when the id in hand is rejected, ask the list what it calls the same
  * background and try that instead.
  *
- * Logs the list's shape either way. It is the one response nothing has inspected
- * yet, and its entries are where the correct id field is named.
+ * Every candidate returned here gets applied to the organizer's video if its
+ * pixels come back, so a candidate that is not provably the same background is
+ * not a guess worth making — it is someone else's beach on their tile. Two
+ * things identify it, and nothing else counts:
+ *
+ *   1. An entry that lists the id we already tried, under any of its spellings.
+ *      Same background, spelled the way this API wants it.
+ *   2. Failing that, an entry with the same name.
+ *
+ * With neither — the client named the background only by an id the list does not
+ * carry — the honest answer is no candidates at all. This is what the reported
+ * bug was: the name filter read `!name || <matches>`, so a background the client
+ * reported without a name kept *every* saved entry instead of none, and the
+ * restore applied whichever unrelated one answered first. When none of them
+ * answered it fell through to removal, and the organizer landed on None.
+ *
+ * Logs the list's shape either way. Its entries are where the correct id field
+ * is named, and that is worth having in the panel when a restore misbehaves.
  *
  * @param {string} [name] - What the current background is called
  * @param {string} tried - The id already attempted, so it is not repeated
@@ -1245,14 +1261,31 @@ async function otherIdsFor(name, tried) {
     const raw = await callSdkApi('getVirtualBackgrounds', undefined, BACKGROUND_PIXELS_TIMEOUT_MS);
     log(`getVirtualBackgrounds answered: ${describeShape(raw)}`, 'info');
     const list = [raw?.virtualBackgrounds, raw?.backgrounds, raw?.list, raw].find(Array.isArray) || [];
-    return list
-      .filter((entry) => entry && typeof entry === 'object')
-      // Only the matching one, by name. Feeding every saved background to a
-      // getter in turn would be a lot of calls to land on a background the user
-      // never had up.
-      .filter((entry) => !name || firstString(entry.name, entry.fileName) === name)
-      .flatMap((entry) => [entry.id, entry.backgroundId, entry.virtualBackgroundId])
-      .filter((value) => typeof value === 'string' && value.trim() && value !== tried);
+    const entries = list.filter((entry) => entry && typeof entry === 'object');
+    const spellings = (entry) =>
+      [entry.id, entry.backgroundId, entry.virtualBackgroundId]
+        .map((value) => firstString(value))
+        .filter(Boolean);
+
+    // The entry that already knows the id we tried is the same background by
+    // construction, whatever it is called.
+    const sameEntry = entries.find((entry) => spellings(entry).includes(tried));
+    if (sameEntry) {
+      return spellings(sameEntry).filter((value) => value !== tried);
+    }
+
+    if (!name) {
+      log(
+        `The saved list does not carry "${tried}" and the client gave no name for it, so there is no way to tell which saved background is the organizer's; not guessing`,
+        'warn'
+      );
+      return [];
+    }
+
+    return entries
+      .filter((entry) => firstString(entry.name, entry.fileName) === name)
+      .flatMap(spellings)
+      .filter((value) => value !== tried);
   } catch (error) {
     log(`Could not read the saved background list: ${error.message || error.name}`, 'warn');
     return [];
@@ -2638,7 +2671,24 @@ const ERROR_REMOVAL_DECLINED = 10017;
  *   background themselves, which nothing reports — otherwise costs them a
  *   confirmation dialog for a background of ours that is not even there.
  *
- * Bypasses the overlay queue for the same reason leaveStage does.
+ * Runs on the overlay queue, as a removal that can never be superseded — the
+ * same footing removeOverlay is on. It used to bypass the queue, for the reason
+ * leaveStage still does: the queue drops a request a newer one has superseded,
+ * which would silently skip a teardown. But `supersedable: false` already says
+ * "never drop this", and bypassing bought nothing else while costing the one
+ * thing that matters here.
+ *
+ * What it cost: this and removeOverlay could run at once, and they read the same
+ * records. Both would see virtualBackgroundApplied still true, both would ask
+ * isOurBackgroundApplied, and both would set out to restore. The second one then
+ * finds a background it does not recognise — the first has already put the
+ * organizer's own back — concludes ours must still be up, and restores or
+ * removes over the top of a video that was already correct. Serialized, the
+ * second reads the records the first left behind and correctly does nothing.
+ *
+ * Safe to enqueue: every caller is outside the queue. setOverlayMode drives the
+ * queue rather than running on it, and the UI calls this straight from a button.
+ * Nothing queued calls it, so it cannot wait on itself.
  *
  * @returns {Promise<{ok: boolean, declined: boolean, ungranted: string[], lostBackground: boolean}>}
  *   ok is false only when something we believed was applied would not come off;
@@ -2649,7 +2699,25 @@ const ERROR_REMOVAL_DECLINED = 10017;
  */
 export async function clearVideoPipelines() {
   await initializeZoomSdk();
+  // Dropped now rather than inside the queued turn: a push that lands between
+  // this call and its turn must not be treated as still showing.
+  activeOverlay = null;
 
+  // enqueueOverlayOp reports a failed op by resolving, not rejecting, so the
+  // result has to come out through a binding. This default is what a caller
+  // sees if the body somehow never runs — the same shape, claiming nothing.
+  let outcome = { ok: false, declined: false, ungranted: [], lostBackground: false };
+  await enqueueOverlayOp(
+    async () => {
+      outcome = await clearVideoPipelinesInternal();
+    },
+    { supersedable: false }
+  );
+  return outcome;
+}
+
+/** The body of clearVideoPipelines, run on the overlay queue. */
+async function clearVideoPipelinesInternal() {
   // What we believe is on each pipeline. Both records are persisted, because
   // Zoom reloads the webview whenever the panel is reopened — which is exactly
   // when an organizer reaches for this button.
