@@ -24,7 +24,10 @@ const ROOT_TO_ZOOM_REWRITES = {
 // Apex hosts that must 301 to their www counterpart. Serving identical content
 // on two hosts splits link equity and leaves the canonical tag as the only
 // signal to search engines; a redirect makes www the single indexable origin.
-const APEX_HOST_PATTERN = /^timer(-dev)?\.simple-tech\.app$/;
+// The timer host under both the old and the new domain (docs/DOMAIN_MIGRATION.md)
+// canonicalizes to its *own* www host; the cross-domain redirect comes in a
+// later phase. The bare toastmusters.com root is parked here for now too.
+const APEX_HOST_PATTERN = /^(timer(-dev)?\.(simple-tech\.app|toastmusters\.com)|toastmusters\.com)$/;
 
 // Paths the root SPA (apps/web) owns via react-router. Anything else that
 // misses the asset lookup is a genuine 404 — serving index.html with HTTP 200
