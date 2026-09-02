@@ -1152,6 +1152,53 @@ export async function applyOwnBackground() {
 }
 
 /**
+ * Take the organizer's own background off their video, for when they clear the
+ * setting that put it there.
+ *
+ * The mirror of applyOwnBackground, and it declines in the same place: while a
+ * timing card is on the video the card owns it, and the background underneath
+ * is not what the organizer is looking at anyway.
+ *
+ * A removal is a removal — this hands them their camera, not a guess at what
+ * they had before the setting existed. Nothing here knows that, and inventing
+ * it is what the whole feature exists to stop doing.
+ *
+ * Zoom always asks the organizer to confirm a removal, so declining is a normal
+ * outcome rather than a failure: the setting is still gone, and only their video
+ * is unchanged. Reported separately so the caller can say which happened.
+ *
+ * @returns {Promise<'removed'|'declined'|'busy'|'unavailable'>}
+ */
+export async function removeOwnBackground() {
+  await initializeZoomSdk();
+  if (!sdkAvailable || !zoomSdk || !isApiAvailable('removeVirtualBackground')) return 'unavailable';
+  if (isOverlayActive()) return 'busy';
+
+  let outcome = 'unavailable';
+  await enqueueOverlayOp(
+    async () => {
+      try {
+        await zoomSdk.removeVirtualBackground();
+        log('Took the organizer\'s own background off their video', 'info');
+        outcome = 'removed';
+      } catch (error) {
+        if (error.code === ERROR_REMOVAL_DECLINED) {
+          log('The organizer declined Zoom\'s removal confirmation; their video is unchanged', 'info');
+          outcome = 'declined';
+        } else if (error.code === ERROR_NOTHING_APPLIED) {
+          // Already bare, which is the state being asked for.
+          outcome = 'removed';
+        } else {
+          log(`Could not take the own background off: ${error.message || error.name}`, 'warn');
+        }
+      }
+    },
+    { supersedable: false }
+  );
+  return outcome;
+}
+
+/**
  * Turn a background id into the pixels needed to re-apply it.
  *
  * This is the call that makes restoring an image possible at all.
