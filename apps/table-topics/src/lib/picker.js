@@ -26,6 +26,19 @@ export function drawQuestion(pool, seed, excludeId = null) {
   return candidates[pickIndex(rng, candidates.length)];
 }
 
+/**
+ * Like drawQuestion, but prefers questions whose ids are not in `seen`. When
+ * every question in the pool has been seen, the cycle restarts from the whole
+ * pool (still avoiding `excludeId`). Returns { question, cycled } so the caller
+ * can reset its seen list when a cycle completes.
+ */
+export function drawUnseen(pool, seed, excludeId, seen) {
+  if (!pool.length) return { question: null, cycled: false };
+  const unseen = pool.filter((q) => !seen.has(q.id) && q.id !== excludeId);
+  if (unseen.length) return { question: drawQuestion(unseen, seed), cycled: false };
+  return { question: drawQuestion(pool, seed, excludeId), cycled: true };
+}
+
 /** 'YYYY-MM-DD' in UTC, so every visitor worldwide gets the same day's set. */
 export function utcDateString(date = new Date()) {
   return date.toISOString().slice(0, 10);

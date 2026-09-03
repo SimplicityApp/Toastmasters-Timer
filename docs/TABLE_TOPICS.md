@@ -12,7 +12,16 @@ suite: one subdomain per tool, cross-linked through `TOOLS` in
   categories (`content/CATEGORIES.md`), each with `{ id, text, added }`
   questions. `scripts/validate-questions.mjs` enforces the rules in
   `content/GENERATION_PROMPT.md` (shape, ids, length, `?`, exact and fuzzy
-  duplicates across the bank, ≥15 per category). The build refuses an invalid bank.
+  duplicates across the bank, 15–80 per category). The build refuses an
+  invalid bank. Append-only: ids are never reused, so shared `?q=` links keep
+  resolving. The 80 ceiling (~1,600 total) stops growth after ~19 weekly runs;
+  after that the routine skips full categories and the next step is retiring
+  low-engagement questions using the per-id analytics events.
+- **Draw order.** The browser keeps a per-device list of shown ids in
+  `localStorage` (`tt_seen_v1`) and draws unseen questions first; when a pool is
+  exhausted it says so and starts a new cycle. Category pages show the first 40
+  questions and a "Show all" button (full list always in the HTML; a shared
+  link into the hidden part expands it).
 - **Static first, no framework.** `scripts/build.mjs` renders every page from
   the bank with the shared `packages/ui/content-pages.css` look, inlines
   `src/lib/{rng,picker,links}.js` into one `generator.js` (imports stripped, no
@@ -32,7 +41,7 @@ suite: one subdomain per tool, cross-linked through `TOOLS` in
   `VITE_PUBLIC_POSTHOG_*`). Events: `tt_question_shown {question_id, category,
   source: initial|random|share}`, `tt_category_selected`, `tt_question_copied`,
   `tt_share_copied`, `tt_timer_deeplink_clicked`, `tt_print_clicked`,
-  `tt_today_viewed {date, swapped}`.
+  `tt_today_viewed {date, swapped}`, `tt_list_expanded`.
 
 ## URL map
 
@@ -63,7 +72,7 @@ npm run install:tabletopics        # once; links packages/shared
 npm run validate:tabletopics       # content check
 npm run build:tabletopics          # -> apps/table-topics/dist
 npm run dev:tabletopics            # build + wrangler dev on :8789 (launch.json: tabletopics-worker)
-npx vitest run --project toastmusters-table-topics
+npx vitest run --root apps/table-topics   # app only; root `npm test` also covers it once every app is installed
 npm run cf:deploy:tabletopics:dev  # www.tabletopics-dev.toastmusters.com (noindex)
 npm run cf:deploy:tabletopics:prod
 ```

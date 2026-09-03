@@ -53,6 +53,9 @@
 .tt-list-actions a { color: var(--muted); text-decoration: none; }
 .tt-list-actions a:hover { color: var(--ink); text-decoration: underline; }
 .tt-list-time::before { content: '⏱ '; }
+.tt-list.is-collapsed li:nth-child(n + 41) { display: none; }
+.tt-show-all-row { text-align: center; margin: 1rem 0 0; }
+@media print { .tt-list.is-collapsed li { display: flex !important; } .tt-show-all-row { display: none; } }
 
 .tt-related { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 1.2rem; }
 .tt-related li a { color: var(--ink); }
