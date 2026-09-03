@@ -9,6 +9,7 @@ const CardImagesModal = lazy(() => import('./CardImagesModal'));
 import TimeInput, { TimeInputModeToggle } from './TimeInput';
 import { DEFAULT_ROLE_RULES, DEFAULT_CUSTOM_RULES, loadTimeInputMode, saveTimeInputMode, initCardImages } from '@toastmaster-timer/shared';
 import { setPageBackgroundFromStatus } from '../utils/pageBackground';
+import { parseSpeakerFromSearch, stripSpeakerParams } from '../utils/speakerDeepLink';
 import { getCardImageUrl, preloadCardImages } from '../utils/cardArtwork';
 import { trackEvent } from '../utils/posthog';
 
@@ -65,12 +66,25 @@ export default memo(function LiveTab({ onTimerStart }) {
     return () => { cancelled = true; };
   }, []);
 
+  // On mount, seed the speaker. A "Time this" deep link (?role=...&name=...)
+  // wins when nothing is loaded yet and the timer is idle; otherwise the
+  // default role applies. A speaker that is already there (restored state)
+  // is left alone. Either way the link params are consumed off the URL.
   useEffect(() => {
-    if (!initializedRef.current && !currentSpeaker && selectedRole && roleRules && Object.keys(roleRules).length > 0) {
-      setCurrentSpeaker({ name: '', role: selectedRole });
-      initializedRef.current = true;
+    if (initializedRef.current || !selectedRole || !roleRules || Object.keys(roleRules).length === 0) return;
+    if (!currentSpeaker) {
+      const linked = isRunning ? null : parseSpeakerFromSearch(window.location.search, roleOptions);
+      if (linked) {
+        setSpeakerName(linked.name);
+        setSelectedRole(linked.role);
+        setCurrentSpeaker({ name: linked.name, role: linked.role });
+      } else {
+        setCurrentSpeaker({ name: '', role: selectedRole });
+      }
     }
-  }, [roleRules, selectedRole, currentSpeaker, setCurrentSpeaker]);
+    stripSpeakerParams();
+    initializedRef.current = true;
+  }, [roleRules, roleOptions, selectedRole, currentSpeaker, setCurrentSpeaker, isRunning]);
 
   useEffect(() => {
     if (currentSpeaker) {

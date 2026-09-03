@@ -20,8 +20,10 @@ different name is bought, substitute it everywhere below. Hosts used:
 | PostHog proxy | `e.simple-tech.app` | unchanged |
 
 `www` stays the canonical form so the apex→www logic in the Worker is reused
-unchanged in shape. Every other tool follows the same shape
-(`tabletopics.`, `www.tabletopics.`, `tabletopics-dev.`, …) in its own Worker.
+unchanged in shape. Every other tool follows the same shape in its own Worker;
+the first is the Table Topics generator at `www.tabletopics.toastmusters.com`
+(`toastmusters-tabletopics`, see [TABLE_TOPICS.md](TABLE_TOPICS.md)), which is
+new on this domain and needs no migration.
 
 Trade-off accepted 2026-09-02: subdomains pool search authority less well than
 paths, so each tool earns links on its own and the root landing must

@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "npm run sync:ui",
     "build": "vite build",
-    "preview": "vite preview"
+    "prebuild": "npm run sync:ui",
+    "preview": "vite preview",
+    "sync:ui": "cp ../../packages/ui/content-pages.css public/content-pages.css"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

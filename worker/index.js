@@ -4,7 +4,7 @@ import { handleStats } from './stats.js';
 // Content-Security-Policy for the marketing + web app (root). Mirrors the
 // "/(.*)" rule from the old vercel.json.
 const ROOT_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://e.simple-tech.app https://*.posthog.com https://us-assets.i.posthog.com https://www.youtube.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://e.simple-tech.app https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://www.youtube.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://e.simple-tech.app https://*.posthog.com https://us-assets.i.posthog.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://e.simple-tech.app https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://www.youtube.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 
 // CSP for the Zoom app. Mirrors the "/zoom/(.*)" rule from vercel.json
 // (allows the Zoom Apps SDK + zoom.us frames/connections).

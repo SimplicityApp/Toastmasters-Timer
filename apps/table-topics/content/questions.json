@@ -1,0 +1,2345 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "slug": "icebreakers",
+      "name": "Icebreakers",
+      "description": "Easy, warm openers that help a nervous speaker get talking about themselves.",
+      "questions": [
+        {
+          "id": "icebreakers-001",
+          "text": "What is a small thing that made you smile this week?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-002",
+          "text": "How would your closest friend describe you in one sentence, and would you agree?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-003",
+          "text": "Which room in your home do you spend the most time in, and what happens there?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-004",
+          "text": "When was the last time you tried something for the very first time?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-005",
+          "text": "Who taught you a skill you still use almost every day?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-006",
+          "text": "What does a perfect lazy Sunday look like for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-007",
+          "text": "If your week had a theme song, what mood would it carry?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-008",
+          "text": "Where do you go when you need to clear your head?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-009",
+          "text": "What do people usually guess wrong about you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-010",
+          "text": "How did you spend your favorite evening of the past month?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-011",
+          "text": "What hobby would you pick up tomorrow if time and money were no object?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-012",
+          "text": "Which small compliment have you never forgotten?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-013",
+          "text": "What is the story behind your name or nickname?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-014",
+          "text": "When do you feel most like yourself?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-015",
+          "text": "What is a food you could happily eat every single day?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-016",
+          "text": "How do you usually celebrate a small personal win?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-017",
+          "text": "Which everyday sound do you find oddly comforting?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-018",
+          "text": "What was the best part of your journey here today?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-019",
+          "text": "If you could add one hour to every day, how would you spend it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-020",
+          "text": "What is something you are looking forward to in the coming weeks?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-021",
+          "text": "Which season fits your personality best, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "icebreakers-022",
+          "text": "What is a simple pleasure that never gets old for you?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "childhood-memories",
+      "name": "Childhood & Memories",
+      "description": "Growing up, family moments, first times, and the people who shaped us.",
+      "questions": [
+        {
+          "id": "childhood-memories-001",
+          "text": "What game did you play as a child that you would still enjoy today?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-002",
+          "text": "Who was the adult outside your family who influenced you most while growing up?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-003",
+          "text": "What did the street where you grew up look, sound, and smell like?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-004",
+          "text": "What was your first memory of feeling truly proud of yourself?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-005",
+          "text": "Which family tradition from your childhood do you miss the most?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-006",
+          "text": "How did you and your friends spend long summer afternoons as kids?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-007",
+          "text": "What was the first thing you saved up your own money to buy?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-008",
+          "text": "Which childhood fear seems funny to you now?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-009",
+          "text": "What lesson did a grandparent or elder pass on to you, and how?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-010",
+          "text": "When did you first realize your parents were not perfect?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-011",
+          "text": "What did you want to be when you grew up, and what happened to that dream?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-012",
+          "text": "Which smell instantly takes you back to being a child?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-013",
+          "text": "What was your favorite hiding place as a kid, and why did you love it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-014",
+          "text": "How did your family celebrate birthdays when you were young?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-015",
+          "text": "What is one piece of advice you would give your ten-year-old self?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-016",
+          "text": "Which book or bedtime story shaped the way you saw the world as a child?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-017",
+          "text": "What was the biggest trouble you got into as a kid, and what did you learn?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-018",
+          "text": "Who was your best friend at age seven, and what did you do together?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-019",
+          "text": "What object from your childhood home do you wish you still had?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-020",
+          "text": "When did you first feel truly independent, even for a moment?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-021",
+          "text": "How has your relationship with a sibling or cousin changed since childhood?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "childhood-memories-022",
+          "text": "What did a typical school morning look like in your house?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "travel-places",
+      "name": "Travel & Places",
+      "description": "Journeys, cities, homes, and the places that stay with us.",
+      "questions": [
+        {
+          "id": "travel-places-001",
+          "text": "Which place have you visited that felt completely different from what you expected?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-002",
+          "text": "What is the most memorable meal you have eaten far from home?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-003",
+          "text": "How do you decide where to go when you finally have time off?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-004",
+          "text": "When has getting lost led you somewhere better than your destination?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-005",
+          "text": "Who is the most interesting stranger you have met while traveling?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-006",
+          "text": "What makes a place feel like home to you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-007",
+          "text": "Which city would you love to wander through with no map and no plan?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-008",
+          "text": "How do you prefer to travel: by train, road, air, or on foot, and what does that say about you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-009",
+          "text": "What view has ever stopped you in your tracks, and where were you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-010",
+          "text": "How has moving to a new place, or staying put, shaped who you are?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-011",
+          "text": "What is one thing you always pack that most people would find odd?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-012",
+          "text": "Which journey taught you the most about yourself?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-013",
+          "text": "If you could live anywhere for one year, where would you choose and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-014",
+          "text": "What do you miss most about a place you used to live?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-015",
+          "text": "When has a trip gone badly wrong and still turned out to be worth it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-016",
+          "text": "What small detail do you notice first when you arrive somewhere new?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-017",
+          "text": "Which place from your past would you like to revisit, and what do you hope to find?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-018",
+          "text": "How do you like to spend your first evening in an unfamiliar city?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-019",
+          "text": "What souvenir or keepsake means the most to you, and what is its story?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-020",
+          "text": "Where in the world do you feel most at peace?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-021",
+          "text": "What would you show a visitor in your hometown that is not in any guidebook?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "travel-places-022",
+          "text": "Who would be your ideal travel companion, and what makes them so?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "work-career",
+      "name": "Work & Career",
+      "description": "Jobs, colleagues, ambitions, and lessons learned at work.",
+      "questions": [
+        {
+          "id": "work-career-001",
+          "text": "What was your very first job, and what did it teach you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-002",
+          "text": "Who is the best colleague you have ever worked with, and what made them great?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-003",
+          "text": "How do you know when it is time to leave a job?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-004",
+          "text": "What is a piece of career advice you ignored and later wished you had followed?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-005",
+          "text": "When did you feel most proud of something you did at work?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-006",
+          "text": "Which skill from a past job helps you in ways nobody would expect?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-007",
+          "text": "What does a truly good day at work look like for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-008",
+          "text": "How do you handle a colleague who never meets deadlines?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-009",
+          "text": "What would you do for a living if salary were not a factor?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-010",
+          "text": "Which workplace mistake taught you the most?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-011",
+          "text": "How has your idea of success at work changed over the years?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-012",
+          "text": "What is the hardest part of starting a new job?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-013",
+          "text": "When has saying no at work turned out to be the right call?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-014",
+          "text": "Who gave you your first real chance, and how did it happen?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-015",
+          "text": "What makes a meeting worth attending?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-016",
+          "text": "How do you keep your energy up during a long, dull task?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-017",
+          "text": "What is a job you would never want, and what does that reveal about you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-018",
+          "text": "Which habit of a former boss do you now try to copy, or avoid?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-019",
+          "text": "How do you separate work from the rest of your life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-020",
+          "text": "What would you tell a young person choosing their first career?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-021",
+          "text": "When has a job interview gone in a direction you never expected?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "work-career-022",
+          "text": "What does your dream retirement look like?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "leadership",
+      "name": "Leadership",
+      "description": "Leading, following, mentoring, and making decisions for others.",
+      "questions": [
+        {
+          "id": "leadership-001",
+          "text": "Who is the best leader you have personally known, and what made them so?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-002",
+          "text": "When have you had to make a decision that others disagreed with?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-003",
+          "text": "What is the difference between being in charge and being a leader?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-004",
+          "text": "How do you earn the trust of people who barely know you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-005",
+          "text": "What did you learn from a time you led badly?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-006",
+          "text": "When is following a better choice than leading?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-007",
+          "text": "How should a leader deliver bad news to their team?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-008",
+          "text": "What is one quality every good mentor shares?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-009",
+          "text": "How do you motivate someone who has stopped caring?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-010",
+          "text": "When did you first find yourself in charge, and how did it feel?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-011",
+          "text": "What does it take to admit a mistake in front of people you lead?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-012",
+          "text": "Which is harder: giving honest feedback or receiving it, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-013",
+          "text": "How do you make a fair decision when everyone wants something different?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-014",
+          "text": "What is a small act of leadership you have seen that impressed you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-015",
+          "text": "When should a leader change their mind, and when should they hold firm?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-016",
+          "text": "How do you help a shy team member find their voice?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-017",
+          "text": "What would you do first if you were put in charge of a struggling team?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-018",
+          "text": "Who have you mentored, formally or not, and what did you learn from them?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-019",
+          "text": "How do you stay calm when everyone is looking to you for answers?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-020",
+          "text": "What is the most important thing a leader owes the people they lead?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-021",
+          "text": "When has stepping back let someone else grow?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "leadership-022",
+          "text": "What tells you that a team is truly working well together?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "technology",
+      "name": "Technology & Gadgets",
+      "description": "Devices, the internet, and how tools change daily life.",
+      "questions": [
+        {
+          "id": "technology-001",
+          "text": "Which gadget could you not live without for a single day, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-002",
+          "text": "How has your phone changed the way you spend your mornings?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-003",
+          "text": "What is a piece of technology you resisted at first and now love?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-004",
+          "text": "When did a device fail you at the worst possible moment?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-005",
+          "text": "What would you miss most if the internet vanished for a month?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-006",
+          "text": "Which old piece of technology do you remember with real affection?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-007",
+          "text": "How do you decide when to upgrade a device and when to keep the old one?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-008",
+          "text": "What is one app or tool that genuinely saves you time every week?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-009",
+          "text": "How has technology changed the way you keep in touch with family?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-010",
+          "text": "What skill do you think people are losing because of technology?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-011",
+          "text": "Which invention from your lifetime has surprised you the most?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-012",
+          "text": "How do you unplug when screens start to feel like too much?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-013",
+          "text": "What would you invent to fix an everyday annoyance?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-014",
+          "text": "When has a video call brought you closer to someone far away?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-015",
+          "text": "What is the most useful thing you have learned from an online video?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-016",
+          "text": "How do you feel about talking to devices out loud?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-017",
+          "text": "Which piece of technology do you wish had never been invented?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-018",
+          "text": "What advice would you give someone twice your age about using a smartphone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-019",
+          "text": "How has taking photos everywhere changed the way you remember events?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-020",
+          "text": "What was the first computer or phone you ever used, and what did you do with it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-021",
+          "text": "Which task do you still prefer to do by hand rather than with a device?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "technology-022",
+          "text": "How might daily life look in twenty years if today's gadgets keep evolving?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "food-drink",
+      "name": "Food & Drink",
+      "description": "Meals, recipes, kitchens, and the memories that come with them.",
+      "questions": [
+        {
+          "id": "food-drink-001",
+          "text": "What dish reminds you most of home, and who used to make it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-002",
+          "text": "Which meal have you eaten that you still think about years later?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-003",
+          "text": "How did you learn to cook, or why have you avoided it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-004",
+          "text": "What food did you hate as a child and love now?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-005",
+          "text": "Who is the best cook you know, and what is their secret?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-006",
+          "text": "What is your go-to meal when you have ten minutes and an empty fridge?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-007",
+          "text": "When has sharing a meal with strangers turned into a real connection?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-008",
+          "text": "Which drink signals to you that the day is done?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-009",
+          "text": "What is a kitchen disaster you can laugh about now?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-010",
+          "text": "How do you feel about eating alone in a restaurant?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-011",
+          "text": "What food tradition would you like to pass on to the next generation?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-012",
+          "text": "Which smell from a kitchen instantly makes you hungry?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-013",
+          "text": "What is the strangest food combination you secretly enjoy?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-014",
+          "text": "How does a meal taste different when someone else has cooked it for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-015",
+          "text": "What would you serve at a dinner meant to impress someone you admire?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-016",
+          "text": "When have you tried a new food that changed your mind about a whole cuisine?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-017",
+          "text": "What is the perfect breakfast, and when did you last have it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-018",
+          "text": "Which recipe do you make so often you no longer need to look it up?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-019",
+          "text": "How do you feel about leftovers: treasure or chore?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-020",
+          "text": "What snack do you reach for when nobody is watching?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-021",
+          "text": "Who taught you table manners, and which rule still sticks with you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "food-drink-022",
+          "text": "What is one ingredient you believe makes almost everything better?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "hypotheticals",
+      "name": "Hypotheticals & What-Ifs",
+      "description": "Imagined situations that reveal values and imagination.",
+      "questions": [
+        {
+          "id": "hypotheticals-001",
+          "text": "If you could relive one ordinary day from your past, which would you choose?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-002",
+          "text": "What would you do with a year of guaranteed income and no obligations?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-003",
+          "text": "Which new language would you want to wake up fluent in tomorrow, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-004",
+          "text": "How would your life change if you could never use a clock again?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-005",
+          "text": "What one sentence would you send to yourself ten years ago?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-006",
+          "text": "What would you build if you owned an empty plot of land in the middle of town?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-007",
+          "text": "If animals could talk for one day, which one would you want a conversation with?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-008",
+          "text": "How would you spend a day in which nobody could see you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-009",
+          "text": "Which subject would you teach if you had to run a class on anything tomorrow?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-010",
+          "text": "If you could master any one skill instantly, what would you choose and what would you do first?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-011",
+          "text": "If every person got one free wish granted at birth, what should yours have been?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-012",
+          "text": "How would the world be different if everyone had to sleep at the same time?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-013",
+          "text": "If you could swap lives with a neighbor for a week, what would you hope to learn?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-014",
+          "text": "What would you put in a time capsule to be opened in one hundred years?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-015",
+          "text": "Which cause or joy would a brand-new holiday of your own invention celebrate?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-016",
+          "text": "How would you spend your time if you knew you would live to two hundred?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-017",
+          "text": "If your house could talk, what story would it tell about you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-018",
+          "text": "What would you change about your town if you were in charge of it for a day?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-019",
+          "text": "If you could witness one moment from history in person, how would you choose?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-020",
+          "text": "What would you do if you had to move to another country next month?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-021",
+          "text": "Which small daily annoyance would you erase forever, given the chance?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "hypotheticals-022",
+          "text": "How would your friendships change if nobody could ever tell a lie?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "would-you-rather",
+      "name": "Would You Rather",
+      "description": "Two options, one choice, and the reasoning behind it.",
+      "questions": [
+        {
+          "id": "would-you-rather-001",
+          "text": "Would you rather live by the sea or in the mountains, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-002",
+          "text": "Would you rather have more free time or more money, and what would you do with it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-003",
+          "text": "Would you rather be able to fly or to become invisible, and how would you use it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-004",
+          "text": "Would you rather always be ten minutes early or exactly on time, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-005",
+          "text": "Would you rather explore the deep ocean or outer space?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-006",
+          "text": "Would you rather live without music or without books, and how would you cope?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-007",
+          "text": "Would you rather relive your best day or erase your worst one?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-008",
+          "text": "Would you rather be the funniest person in the room or the wisest?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-009",
+          "text": "Would you rather have a big loud family dinner or a quiet evening alone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-010",
+          "text": "Would you rather know how every story ends or be surprised every time?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-011",
+          "text": "Would you rather speak every language or play every instrument?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-012",
+          "text": "Would you rather work four long days or five short ones, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-013",
+          "text": "Would you rather travel to the past or the future, and what would you look for?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-014",
+          "text": "Would you rather give up your phone or your car for a year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-015",
+          "text": "Would you rather be too hot or too cold, and what is your reasoning?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-016",
+          "text": "Would you rather have a rewind button or a pause button for your life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-017",
+          "text": "Would you rather live in a bustling city or a tiny village, and what would you miss?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-018",
+          "text": "Would you rather never eat dessert again or never eat breakfast again?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-019",
+          "text": "Would you rather be famous among strangers or deeply respected by a few?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-020",
+          "text": "Would you rather always know the time or always know the weather?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-021",
+          "text": "Would you rather learn from a strict teacher or figure things out alone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "would-you-rather-022",
+          "text": "Would you rather have a home with a huge garden or one with a huge library?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "quotes-proverbs",
+      "name": "Quotes & Proverbs",
+      "description": "React to a saying, agree or disagree, and make it personal.",
+      "questions": [
+        {
+          "id": "quotes-proverbs-001",
+          "text": "\"Slow and steady wins the race\": when has that been true for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-002",
+          "text": "\"Actions speak louder than words\": who in your life has proved this?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-003",
+          "text": "\"The early bird catches the worm\": how does that saying fit your own rhythm?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-004",
+          "text": "\"Too many cooks spoil the broth\": when have you seen this happen?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-005",
+          "text": "\"Every cloud has a silver lining\": what hard moment later showed you one?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-006",
+          "text": "\"Practice makes perfect\": what have you practiced long enough to see it pay off?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-007",
+          "text": "\"Don't judge a book by its cover\": when did a first impression turn out to be wrong?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-008",
+          "text": "\"A journey of a thousand miles begins with a single step\": what first step are you proud of?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-009",
+          "text": "\"Honesty is the best policy\": when has being honest cost you something?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-010",
+          "text": "\"The grass is always greener on the other side\": how does this show up in your life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-011",
+          "text": "\"Better late than never\": what did you finally get around to doing?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-012",
+          "text": "\"You can't have your cake and eat it too\": what trade-off have you had to accept?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-013",
+          "text": "\"Many hands make light work\": what have you achieved only because others pitched in?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-014",
+          "text": "\"Where there's a will, there's a way\": when has sheer stubbornness carried you through?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-015",
+          "text": "\"Look before you leap\": when has caution served you well, or held you back?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-016",
+          "text": "\"Laughter is the best medicine\": what has laughter healed for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-017",
+          "text": "\"Home is where the heart is\": where is your heart right now?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-018",
+          "text": "\"Fortune favors the bold\": what bold move paid off for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-019",
+          "text": "\"Two heads are better than one\": when did teamwork produce something you never could alone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-020",
+          "text": "\"Still waters run deep\": who in your life fits this description?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-021",
+          "text": "\"A picture is worth a thousand words\": which photograph tells your story best?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "quotes-proverbs-022",
+          "text": "\"Good things come to those who wait\": what have you waited a long time for?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "storytelling",
+      "name": "Storytelling Prompts",
+      "description": "Prompts that ask for a short story with a beginning, middle, and end.",
+      "questions": [
+        {
+          "id": "storytelling-001",
+          "text": "When did a stranger's kindness change your day, and what happened next?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-002",
+          "text": "From idea to reaction, how did the best gift you ever gave unfold?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-003",
+          "text": "How did a time you got completely lost begin, unfold, and end?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-004",
+          "text": "What happened the day everything went wrong and somehow worked out?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-005",
+          "text": "What is the story behind a promise you kept when breaking it would have been easier?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-006",
+          "text": "How did you meet one of your closest friends, and what happened after?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-007",
+          "text": "When were you caught in bad weather with no shelter, and how did it end?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-008",
+          "text": "What happened the first time you cooked for someone you wanted to impress?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-009",
+          "text": "When did a misunderstanding spiral before finally getting sorted out?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-010",
+          "text": "Which object have you lost and found again, and what happened in between?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-011",
+          "text": "What happened the last time you raced against the clock, and how did it end?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-012",
+          "text": "When has a plan for a quiet evening turned into an adventure?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-013",
+          "text": "Who is the bravest person you have watched in action, and what did they do?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-014",
+          "text": "How did you once talk your way out of a tight spot?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-015",
+          "text": "What happened when you tried to fix something and made it worse?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-016",
+          "text": "Which chance encounter changed the course of your week, and how?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-017",
+          "text": "Which door did you almost not walk through, and what was waiting behind it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-018",
+          "text": "How did the worst haircut of your life come to be, and how did you recover?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-019",
+          "text": "What happened the day you surprised yourself with what you could do?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-020",
+          "text": "When did an animal cause chaos in your life, and how did it end?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-021",
+          "text": "What is the story of a letter or message you almost did not send?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "storytelling-022",
+          "text": "How did a long wait once turn into a memorable moment?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "persuasion",
+      "name": "Persuasion & Opinions",
+      "description": "Take a stance on an everyday topic and convince the room.",
+      "questions": [
+        {
+          "id": "persuasion-001",
+          "text": "Why should everyone learn to cook at least one great meal?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-002",
+          "text": "What is the strongest case that mornings beat evenings?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-003",
+          "text": "Why is a handwritten note better than a text message?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-004",
+          "text": "Should cities have more parks or more parking, and how would you argue it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-005",
+          "text": "What is the best argument for taking a nap every afternoon?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-006",
+          "text": "Why should every adult keep a hobby that earns no money?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-007",
+          "text": "How would you convince a friend to try a food they swear they hate?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-008",
+          "text": "Why is walking the most underrated way to get around?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-009",
+          "text": "What is one everyday rule you think should be abolished, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-010",
+          "text": "How would you persuade someone that boredom is good for them?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-011",
+          "text": "Why should everyone spend a week without their phone once a year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-012",
+          "text": "What makes board games better than video games, or the other way around?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-013",
+          "text": "How would you argue that the window seat is the only seat worth having?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-014",
+          "text": "Why should schools teach cooking, budgeting, or public speaking as a core subject?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-015",
+          "text": "What is the case for keeping a paper calendar in a digital world?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-016",
+          "text": "How would you convince the room that breakfast is the most important meal?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-017",
+          "text": "Why is it worth learning to say no more often?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-018",
+          "text": "What would you say to persuade a friend to take a trip alone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-019",
+          "text": "Why should everyone own at least one plant?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-020",
+          "text": "How would you sell the idea of a four-day school week to a skeptical parent?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-021",
+          "text": "Why is doing nothing sometimes the most productive choice?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "persuasion-022",
+          "text": "What is the best argument for making your bed every morning, or never doing so?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "seasons-celebrations",
+      "name": "Seasons & Celebrations",
+      "description": "Weather, seasons, traditions, and the moments we mark each year.",
+      "questions": [
+        {
+          "id": "seasons-celebrations-001",
+          "text": "Which season makes you feel most alive, and what do you do in it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-002",
+          "text": "What is your favorite way to mark the first warm day of the year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-003",
+          "text": "How does your family celebrate the turning of a new year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-004",
+          "text": "Which celebration from your childhood have you carried into adult life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-005",
+          "text": "What does the first snowfall, or the first big rain, mean to you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-006",
+          "text": "How do you feel when the days start getting shorter?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-007",
+          "text": "What is a tradition you invented yourself that others now follow?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-008",
+          "text": "Which holiday food do you wait all year to eat?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-009",
+          "text": "How would you design a brand-new festival for your community?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-010",
+          "text": "What is the best birthday you have ever had, and what made it special?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-011",
+          "text": "Which month of the year is the hardest for you, and how do you get through it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-012",
+          "text": "What sound or smell tells you a particular season has arrived?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-013",
+          "text": "How do you like to spend the longest day of the year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-014",
+          "text": "What celebration do you find overrated, and what would you replace it with?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-015",
+          "text": "Which weather do you secretly love that most people complain about?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-016",
+          "text": "How has the way you celebrate changed as you have grown older?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-017",
+          "text": "What do you always do on the last day of the year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-018",
+          "text": "Which anniversary, big or small, do you never let pass unnoticed?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-019",
+          "text": "How do you cope with the heat on the hottest days of summer?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-020",
+          "text": "What is one gift-giving rule you live by during celebration seasons?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-021",
+          "text": "Which seasonal chore do you actually enjoy?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "seasons-celebrations-022",
+          "text": "How do you keep a celebration meaningful when you are far from home?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "humor",
+      "name": "Humor & Lighthearted",
+      "description": "Funny, playful prompts that invite a laugh and a light touch.",
+      "questions": [
+        {
+          "id": "humor-001",
+          "text": "What is the funniest thing that has ever happened to you in public?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-002",
+          "text": "Which of your habits would make the least sense to a visitor from another planet?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-003",
+          "text": "Which excuse are you least proud of giving, and how was it received?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-004",
+          "text": "If your pet, or a pet you know, wrote a review of you, what would it say?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-005",
+          "text": "What is the silliest argument you have ever won or lost?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-006",
+          "text": "Which everyday object would make the worst superhero sidekick, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-007",
+          "text": "Which joke or funny story still makes you laugh no matter how often you hear it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-008",
+          "text": "How would you survive a day where everything you said came out as a song?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-009",
+          "text": "How far have you ever gone to avoid doing a chore?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-010",
+          "text": "Which fashion choice from your past would you now like to explain?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-011",
+          "text": "What is the most awkward misunderstanding you have been part of?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-012",
+          "text": "What would your autobiography be titled if it had to be funny?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-013",
+          "text": "Which sport would be funniest if it were played in slow motion?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-014",
+          "text": "When have you said something strange to a stranger by mistake?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-015",
+          "text": "How would you explain a common household appliance to someone from three hundred years ago?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-016",
+          "text": "Which food do you believe is secretly a prank on humanity?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-017",
+          "text": "Which mundane task deserves its own dramatic theme music?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-018",
+          "text": "When have you done something clumsy while trying to look cool?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-019",
+          "text": "If you could give a trophy for the most useless talent you have, what would the plaque say?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-020",
+          "text": "Which misheard phrase or lyric did you believe for years?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-021",
+          "text": "Which animal would make the worst roommate, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "humor-022",
+          "text": "What would you do if you woke up tomorrow and could only speak in questions?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "dilemmas",
+      "name": "Everyday Dilemmas",
+      "description": "Small ethical or practical choices with no perfect answer.",
+      "questions": [
+        {
+          "id": "dilemmas-001",
+          "text": "A friend gives you a gift you dislike: how honest do you get?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-002",
+          "text": "You see someone drop money without noticing: what do you do, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-003",
+          "text": "How do you decide whether to tell a friend something you know they do not want to hear?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-004",
+          "text": "When is it acceptable to break a small promise?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-005",
+          "text": "Your neighbor's dog barks every night: how do you handle it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-006",
+          "text": "How do you decide whether to offer your seat to a stranger who might not want it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-007",
+          "text": "What would you do if a cashier gave you too much change?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-008",
+          "text": "When a friend asks to borrow money, how do you decide what to say?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-009",
+          "text": "How do you split the bill fairly when one person ordered much more?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-010",
+          "text": "What do you do when a colleague takes credit for your idea in a meeting?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-011",
+          "text": "How would you tell a friend that their partner was rude to you, if at all?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-012",
+          "text": "When is a white lie kinder than the truth?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-013",
+          "text": "Someone cuts in front of you in a long line: what is your move?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-014",
+          "text": "What do you do when you receive two invitations for the same evening?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-015",
+          "text": "How honest should you be when a friend asks for feedback on their cooking?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-016",
+          "text": "When someone is talking loudly on a phone in a quiet place, what do you do?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-017",
+          "text": "How do you handle finding out a friend has been keeping a secret from you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-018",
+          "text": "What do you owe a neighbor you barely know when they ask for a favor?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-019",
+          "text": "When is it right to correct someone who has made a small mistake in public?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-020",
+          "text": "How do you choose between finishing a task on time and doing it well?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-021",
+          "text": "Your friend's child breaks something in your home: what do you say?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "dilemmas-022",
+          "text": "When a family member and a friend need you on the same day, how do you choose?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "learning-growth",
+      "name": "Learning & Growth",
+      "description": "Skills, mistakes, feedback, and how we change over time.",
+      "questions": [
+        {
+          "id": "learning-growth-001",
+          "text": "What is a skill you learned as an adult that you wish you had learned earlier?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-002",
+          "text": "Which mistake taught you more than any success?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-003",
+          "text": "How do you react when someone gives you feedback you did not ask for?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-004",
+          "text": "When did you last change your mind about something important?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-005",
+          "text": "Who has taught you the most without ever meaning to?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-006",
+          "text": "What are you trying to get better at right now, and how is it going?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-007",
+          "text": "How do you know when you have truly learned something?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-008",
+          "text": "What is a belief you held strongly at twenty that you have since let go?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-009",
+          "text": "Which subject did you struggle with in school and later come to enjoy?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-010",
+          "text": "How do you keep going when learning something feels slow and frustrating?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-011",
+          "text": "What has a younger person taught you recently?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-012",
+          "text": "When has failing at something opened an unexpected door?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-013",
+          "text": "How has the way you learn changed since you were a student?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-014",
+          "text": "What is the best piece of feedback you have ever received?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-015",
+          "text": "Which habit did you finally break, and what made the difference?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-016",
+          "text": "How do you make time to learn when life is already full?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-017",
+          "text": "What would you study if you went back to school tomorrow?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-018",
+          "text": "When has being a beginner again been good for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-019",
+          "text": "How do you decide which criticism to take on board and which to let go?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-020",
+          "text": "What lesson have you had to learn more than once?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-021",
+          "text": "Who do you turn to when you want honest advice about yourself?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "learning-growth-022",
+          "text": "How would the person you were five years ago react to who you are now?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "nature-outdoors",
+      "name": "Nature & Outdoors",
+      "description": "Animals, landscapes, weather, and time spent outside.",
+      "questions": [
+        {
+          "id": "nature-outdoors-001",
+          "text": "Which animal do you feel a strange kinship with, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-002",
+          "text": "What is the most beautiful natural place you have ever stood in?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-003",
+          "text": "How does being outside change your mood?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-004",
+          "text": "When did the weather completely ruin your plans and yet make the day memorable?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-005",
+          "text": "What tree, plant, or flower holds a special meaning for you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-006",
+          "text": "Which outdoor activity would you love to try before you get too old for it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-007",
+          "text": "How do you feel about camping: adventure or ordeal?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-008",
+          "text": "What is the closest encounter you have had with a wild animal?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-009",
+          "text": "Which outdoor spot is your thinking place, and what makes it work?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-010",
+          "text": "How has your relationship with nature changed since childhood?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-011",
+          "text": "What sound in nature calms you most?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-012",
+          "text": "Which season is best for being outdoors where you live, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-013",
+          "text": "What have you learned from watching animals?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-014",
+          "text": "How do you feel about rain: something to escape or something to enjoy?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-015",
+          "text": "What is a garden or patch of green that has mattered in your life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-016",
+          "text": "When have you felt very small in front of nature?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-017",
+          "text": "How would you spend a whole day outside with no phone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-018",
+          "text": "Which is more your speed: a mountain hike or a lazy beach afternoon?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-019",
+          "text": "What is the best sunrise or sunset you can remember, and where were you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-020",
+          "text": "How do you bring nature into your home or daily life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-021",
+          "text": "Which natural event, such as a storm or a starry night, has left you speechless?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "nature-outdoors-022",
+          "text": "What would you miss most about nature if you had to live indoors for a year?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "habits-routines",
+      "name": "Habits & Routines",
+      "description": "Mornings, evenings, rituals, and the small things done daily.",
+      "questions": [
+        {
+          "id": "habits-routines-001",
+          "text": "What is the first thing you do every morning, and how did it become a habit?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-002",
+          "text": "Which small ritual makes your evening feel complete?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-003",
+          "text": "How do you get yourself started on a day when you feel no motivation?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-004",
+          "text": "What is a habit you are proud of keeping for more than a year?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-005",
+          "text": "Which routine did you abandon, and what took its place?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-006",
+          "text": "How does your weekend routine differ from your weekday one?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-007",
+          "text": "What is one thing you do every day that nobody else knows about?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-008",
+          "text": "When did a tiny change to your routine make a surprisingly big difference?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-009",
+          "text": "How do you wind down before sleep?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-010",
+          "text": "What habit did you pick up from a parent without realizing it?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-011",
+          "text": "Which daily task do you wish you could automate forever?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-012",
+          "text": "How do you handle a morning when everything runs late?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-013",
+          "text": "What is your relationship with to-do lists?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-014",
+          "text": "Which habit would you most like to build in the next month, and how will you start?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-015",
+          "text": "How does your routine change when you travel?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-016",
+          "text": "What small thing do you do to make an ordinary day feel special?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-017",
+          "text": "When do you do your best thinking: morning, afternoon, or late at night?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-018",
+          "text": "How long does it take you to get out of the door in the morning, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-019",
+          "text": "What is a routine you share with someone else, and how did it begin?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-020",
+          "text": "Which bad habit do you defend anyway?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-021",
+          "text": "How do you reset when your routines have fallen apart?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "habits-routines-022",
+          "text": "How do your habits change when you are stressed?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "creativity-arts",
+      "name": "Creativity & the Arts",
+      "description": "Music, books, film, making things, and creative inspiration.",
+      "questions": [
+        {
+          "id": "creativity-arts-001",
+          "text": "Which song can change your mood in under a minute, and how?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-002",
+          "text": "What is the last thing you made with your own hands?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-003",
+          "text": "Who is the most creative person you know, and what do they do differently?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-004",
+          "text": "How do you feel when you finish a book you loved?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-005",
+          "text": "Which piece of art, music, or writing has stayed with you for years?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-006",
+          "text": "When do your best ideas tend to arrive?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-007",
+          "text": "What would you create if you had a free month and no fear of judgment?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-008",
+          "text": "How does music from your teenage years affect you today?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-009",
+          "text": "Which film or story would you love to experience again for the first time?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-010",
+          "text": "What creative skill did you give up that you would like to return to?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-011",
+          "text": "How do you get unstuck when inspiration runs dry?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-012",
+          "text": "What role did drawing, singing, or making things play in your childhood?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-013",
+          "text": "Which kind of art do you not understand but wish you did?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-014",
+          "text": "How has a book changed the way you see the world?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-015",
+          "text": "What is the difference between being talented and being creative?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-016",
+          "text": "When has making something with others been better than making it alone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-017",
+          "text": "Which instrument would you learn if you could master it in a month?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-018",
+          "text": "What story would you tell if you were asked to write a novel?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-019",
+          "text": "How do you decide what to watch, read, or listen to next?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-020",
+          "text": "What is a creative habit you admire in someone else?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-021",
+          "text": "Which place inspires you to create, and what is it about that place?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "creativity-arts-022",
+          "text": "How do you feel about sharing something you made with other people?",
+          "added": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "slug": "contest-style",
+      "name": "Contest-Style Questions",
+      "description": "Broader, thought-provoking prompts of the kind used in Table Topics contests.",
+      "questions": [
+        {
+          "id": "contest-style-001",
+          "text": "What does courage look like in ordinary life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-002",
+          "text": "How do you decide what is worth your time?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-003",
+          "text": "What is the difference between being busy and being productive?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-004",
+          "text": "When has a change you dreaded turned out to be a gift?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-005",
+          "text": "What does it mean to live a good life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-006",
+          "text": "What would you say success means at this point in your life?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-007",
+          "text": "Which value would you never compromise on, and why?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-008",
+          "text": "What is the most important lesson life has taught you so far?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-009",
+          "text": "How do you want to be remembered by the people who know you?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-010",
+          "text": "When is it wiser to wait than to act?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-011",
+          "text": "What does freedom mean to you in everyday terms?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-012",
+          "text": "How do you find hope when things look bleak?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-013",
+          "text": "What is worth more: a comfortable life or a meaningful one?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-014",
+          "text": "Which moment made you realize you had grown up?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-015",
+          "text": "How do you balance ambition with contentment?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-016",
+          "text": "What does it mean to truly listen to someone?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-017",
+          "text": "When has kindness required more courage than confrontation?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-018",
+          "text": "What legacy do you hope to leave, however small?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-019",
+          "text": "How do you handle uncertainty about the future?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-020",
+          "text": "What is one thing worth failing at?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-021",
+          "text": "If today were your last day of work forever, what would you want to have finished?",
+          "added": "2026-09-02"
+        },
+        {
+          "id": "contest-style-022",
+          "text": "How does gratitude change the way you see a difficult day?",
+          "added": "2026-09-02"
+        }
+      ]
+    }
+  ]
+}
