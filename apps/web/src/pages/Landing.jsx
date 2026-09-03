@@ -10,6 +10,7 @@ import {
   Camera,
 } from 'lucide-react'
 import { trackEvent } from '../utils/posthog'
+import { TOOLS } from '@toastmaster-timer/shared'
 import YouTubePlayer from '../components/YouTubePlayer'
 
 const ZOOM_APP_URL = 'https://marketplace.zoom.us/zoomapp/DsFHK5sNQs2_VFyeQky2sg/context/meeting/target/launch/deeplink'
@@ -842,7 +843,7 @@ export default function Landing() {
       </main>
 
       <footer className="bg-white border-t border-stone-200 py-12 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-8">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           <div>
             <h4 className="text-sm font-semibold mb-3">Resources</h4>
             <ul className="space-y-2">
@@ -872,6 +873,20 @@ export default function Landing() {
             <h4 className="text-sm font-semibold mb-3">Get Started</h4>
             <ul className="space-y-2">
               <li><Link to="/app" className="text-sm text-stone-500 hover:text-ink transition-colors">Start Timer</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold mb-3">Tools</h4>
+            <ul className="space-y-2">
+              {TOOLS.map((tool) => (
+                <li key={tool.slug}>
+                  {tool.slug === 'timer' ? (
+                    <span className="text-sm text-stone-500">{tool.name} (this site)</span>
+                  ) : (
+                    <a href={tool.url} className="text-sm text-stone-500 hover:text-ink transition-colors">{tool.name}</a>
+                  )}
+                </li>
+              ))}
             </ul>
           </div>
         </div>

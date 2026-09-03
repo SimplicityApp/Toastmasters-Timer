@@ -39,7 +39,18 @@
   "routes": [
     { "pattern": "timer.simple-tech.app", "custom_domain": true },
     { "pattern": "www.timer.simple-tech.app", "custom_domain": true },
-    { "pattern": "zoom.timer.simple-tech.app", "custom_domain": true }
+    { "pattern": "zoom.timer.simple-tech.app", "custom_domain": true },
+    // New domain (docs/DOMAIN_MIGRATION.md). toastmusters.com hosts a suite of
+    // tools, one subdomain each; the timer keeps its old host shape under it.
+    // Served side by side with the old hosts until the Zoom home URL has
+    // moved; no redirects yet.
+    { "pattern": "timer.toastmusters.com", "custom_domain": true },
+    { "pattern": "www.timer.toastmusters.com", "custom_domain": true },
+    { "pattern": "zoom.timer.toastmusters.com", "custom_domain": true },
+    // The bare root is parked on this Worker only until the suite landing
+    // page exists; it then moves to that project.
+    { "pattern": "toastmusters.com", "custom_domain": true },
+    { "pattern": "www.toastmusters.com", "custom_domain": true }
   ],
 
   "env": {
@@ -50,7 +61,10 @@
       "routes": [
         { "pattern": "timer-dev.simple-tech.app", "custom_domain": true },
         { "pattern": "www.timer-dev.simple-tech.app", "custom_domain": true },
-        { "pattern": "zoom.timer-dev.simple-tech.app", "custom_domain": true }
+        { "pattern": "zoom.timer-dev.simple-tech.app", "custom_domain": true },
+        { "pattern": "timer-dev.toastmusters.com", "custom_domain": true },
+        { "pattern": "www.timer-dev.toastmusters.com", "custom_domain": true },
+        { "pattern": "zoom.timer-dev.toastmusters.com", "custom_domain": true }
       ]
     }
   }

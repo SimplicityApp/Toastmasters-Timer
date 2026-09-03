@@ -4,7 +4,7 @@ import { handleStats } from './stats.js';
 // Content-Security-Policy for the marketing + web app (root). Mirrors the
 // "/(.*)" rule from the old vercel.json.
 const ROOT_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://e.simple-tech.app https://*.posthog.com https://us-assets.i.posthog.com https://www.youtube.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://e.simple-tech.app https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://www.youtube.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://e.simple-tech.app https://*.posthog.com https://us-assets.i.posthog.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://e.simple-tech.app https://*.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com; frame-src 'self' https://www.youtube.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 
 // CSP for the Zoom app. Mirrors the "/zoom/(.*)" rule from vercel.json
 // (allows the Zoom Apps SDK + zoom.us frames/connections).
@@ -24,7 +24,10 @@ const ROOT_TO_ZOOM_REWRITES = {
 // Apex hosts that must 301 to their www counterpart. Serving identical content
 // on two hosts splits link equity and leaves the canonical tag as the only
 // signal to search engines; a redirect makes www the single indexable origin.
-const APEX_HOST_PATTERN = /^timer(-dev)?\.simple-tech\.app$/;
+// The timer host under both the old and the new domain (docs/DOMAIN_MIGRATION.md)
+// canonicalizes to its *own* www host; the cross-domain redirect comes in a
+// later phase. The bare toastmusters.com root is parked here for now too.
+const APEX_HOST_PATTERN = /^(timer(-dev)?\.(simple-tech\.app|toastmusters\.com)|toastmusters\.com)$/;
 
 // Paths the root SPA (apps/web) owns via react-router. Anything else that
 // misses the asset lookup is a genuine 404 — serving index.html with HTTP 200
