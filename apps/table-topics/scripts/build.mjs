@@ -12,7 +12,8 @@ import { dirname, resolve, join, extname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TOOLS, TIMER_APP_URL } from '@toastmaster-timer/shared/appLinks';
 import { validateBank } from '../src/lib/validate.js';
-import { flattenQuestions, drawQuestion, todaySet, utcDateString } from '../src/lib/picker.js';
+import { flattenQuestions, drawSet, todaySet, utcDateString } from '../src/lib/picker.js';
+import { SET_SIZE } from '../src/templates/widget.mjs';
 import { indexPage } from '../src/templates/index.mjs';
 import { categoryPage } from '../src/templates/category.mjs';
 import { topicsPage } from '../src/templates/topics.mjs';
@@ -83,11 +84,11 @@ export function renderSite(bank, config) {
   const pool = flattenQuestions(bank.categories);
   const seed = `home:${config.buildDate}`;
 
-  out.set('/index.html', indexPage(config, bank, drawQuestion(pool, seed)));
+  out.set('/index.html', indexPage(config, bank, drawSet(pool, seed, SET_SIZE).questions));
   out.set('/topics/index.html', topicsPage(config, bank));
   for (const cat of bank.categories) {
     const catPool = pool.filter((q) => q.category === cat.slug);
-    out.set(`/topics/${cat.slug}/index.html`, categoryPage(config, bank, cat, drawQuestion(catPool, `${cat.slug}:${config.buildDate}`)));
+    out.set(`/topics/${cat.slug}/index.html`, categoryPage(config, bank, cat, drawSet(catPool, `${cat.slug}:${config.buildDate}`, SET_SIZE).questions));
   }
   out.set('/today/index.html', todayPage(config, bank, todaySet(bank.categories, config.buildDate, 10)));
   out.set('/404.html', notFoundPage(config));

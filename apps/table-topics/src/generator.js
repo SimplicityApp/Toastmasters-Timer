@@ -1,7 +1,7 @@
 // Browser behaviour for the generator card and the Today page. The build
 // inlines ./lib/rng.js, ./lib/picker.js and ./lib/links.js above this code
 // (imports are stripped), so this file must only use their exported names.
-import { drawUnseen, flattenQuestions, todaySet, utcDateString } from './lib/picker.js';
+import { drawSet, flattenQuestions, todaySet, utcDateString } from './lib/picker.js';
 import { timerDeepLink, shareLink } from './lib/links.js';
 
 const TIMER_APP_URL = '__TIMER_APP_URL__';
@@ -62,58 +62,77 @@ async function copyText(text) {
   }
 }
 
+const SET_SIZE = 3;
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Mirrors setItem() in src/templates/widget.mjs.
+function renderItem(q, index) {
+  return `<li class="tt-set-item" data-tt-item data-tt-id="${escapeHtml(q.id)}">
+    <span class="tt-set-num" aria-hidden="true">${index + 1}</span>
+    <div class="tt-set-body">
+      <p class="tt-question" data-tt-text>${escapeHtml(q.text)}</p>
+      <p class="tt-set-meta">
+        <a href="/topics/${escapeHtml(q.category)}/" data-tt-category-link>${escapeHtml(q.categoryName)}</a>
+        <span aria-hidden="true">·</span>
+        <a class="tt-set-time" data-tt-time href="${escapeHtml(timerDeepLink(q.text, TIMER_APP_URL))}" rel="noopener">Time this (1–2 min)</a>
+      </p>
+    </div>
+  </li>`;
+}
+
 function initGenerator(root) {
-  const textEl = root.querySelector('[data-tt-text]');
-  const catLink = root.querySelector('[data-tt-category-link]');
-  const timeLink = root.querySelector('[data-tt-time]');
+  const setEl = root.querySelector('[data-tt-set]');
   const statusEl = root.querySelector('[data-tt-status]');
   const chips = Array.from(root.querySelectorAll('[data-tt-chip]'));
   const fixedCategory = root.dataset.ttCategory || '';
   let category = fixedCategory;
-  let current = { id: root.dataset.ttInitial, text: textEl.textContent.trim() };
+  // What is on screen. Before the bank loads we only know ids and texts from the HTML.
+  let current = Array.from(root.querySelectorAll('[data-tt-item]')).map((li) => ({
+    id: li.dataset.ttId,
+    text: li.querySelector('[data-tt-text]').textContent.trim(),
+  }));
   let pool = [];
   let all = [];
   let statusTimer = null;
   const seen = loadSeen();
-  if (current.id) {
-    seen.add(current.id);
-    saveSeen(seen);
-  }
+  for (const q of current) seen.add(q.id);
+  saveSeen(seen);
 
   function setStatus(msg) {
     statusEl.textContent = msg;
     clearTimeout(statusTimer);
-    if (msg) statusTimer = setTimeout(() => (statusEl.textContent = ''), 2200);
+    if (msg) statusTimer = setTimeout(() => (statusEl.textContent = ''), 2600);
+  }
+
+  function ids() {
+    return current.map((q) => q.id);
+  }
+
+  function render(questions, source) {
+    current = questions;
+    for (const q of questions) seen.add(q.id);
+    saveSeen(seen);
+    setEl.classList.add('is-changing');
+    setEl.innerHTML = questions.map(renderItem).join('');
+    setTimeout(() => setEl.classList.remove('is-changing'), 120);
+    const url = new URL(window.location.href);
+    url.searchParams.set('q', ids().join(','));
+    history.replaceState(null, '', url);
+    track('tt_set_shown', { question_ids: ids(), category: category || 'all', source, count: questions.length });
+    questions.forEach((q, i) => track('tt_question_shown', { question_id: q.id, category: q.category, source, position: i + 1 }));
   }
 
   function draw() {
-    const { question, cycled } = drawUnseen(pool, randomSeed(), current.id, seen);
+    const { questions, cycled } = drawSet(pool, randomSeed(), SET_SIZE, ids(), seen);
     if (cycled) {
-      // Every question in this pool has been shown; start a new cycle.
       for (const q of pool) seen.delete(q.id);
+      for (const q of questions) seen.add(q.id);
       setStatus('You have seen every question here — starting over');
     }
-    return question;
-  }
-
-  function render(q, source) {
-    current = q;
-    seen.add(q.id);
-    saveSeen(seen);
-    // Set the text synchronously (background tabs throttle rAF); the class
-    // only drives a short fade.
-    textEl.textContent = q.text;
-    textEl.classList.add('is-changing');
-    setTimeout(() => textEl.classList.remove('is-changing'), 120);
-    if (catLink) {
-      catLink.textContent = q.categoryName;
-      catLink.href = `/topics/${q.category}/`;
-    }
-    timeLink.href = timerDeepLink(q.text, TIMER_APP_URL);
-    const url = new URL(window.location.href);
-    url.searchParams.set('q', q.id);
-    history.replaceState(null, '', url);
-    track('tt_question_shown', { question_id: q.id, category: q.category, source });
+    return questions;
   }
 
   function rebuildPool() {
@@ -126,16 +145,17 @@ function initGenerator(root) {
   });
 
   root.querySelector('[data-tt-copy]').addEventListener('click', async () => {
-    const ok = await copyText(current.text);
-    setStatus(ok ? 'Question copied' : 'Copy failed — select the text instead');
-    track('tt_question_copied', { question_id: current.id, ok });
+    const text = current.map((q, i) => `${i + 1}. ${q.text}`).join('\n');
+    const ok = await copyText(text);
+    setStatus(ok ? `${current.length} questions copied` : 'Copy failed — select the text instead');
+    track('tt_question_copied', { question_ids: ids(), ok });
   });
 
   root.querySelector('[data-tt-share]').addEventListener('click', async () => {
-    const link = shareLink(window.location.origin, window.location.pathname, current.id);
+    const link = shareLink(window.location.origin, window.location.pathname, ids().join(','));
     const ok = await copyText(link);
     setStatus(ok ? 'Link copied' : link);
-    track('tt_share_copied', { question_id: current.id, ok });
+    track('tt_share_copied', { question_ids: ids(), ok });
   });
 
   root.querySelector('[data-tt-print]').addEventListener('click', () => {
@@ -143,8 +163,11 @@ function initGenerator(root) {
     window.print();
   });
 
-  timeLink.addEventListener('click', () => {
-    track('tt_timer_deeplink_clicked', { question_id: current.id, category: current.category || category });
+  setEl.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-tt-time]');
+    if (!a) return;
+    const li = a.closest('[data-tt-item]');
+    track('tt_timer_deeplink_clicked', { question_id: li?.dataset.ttId || null, category: category || 'all', source: 'set' });
   });
 
   chips.forEach((chip) => {
@@ -166,14 +189,17 @@ function initGenerator(root) {
     if (!bank) return;
     all = flattenQuestions(bank.categories);
     rebuildPool();
-    const shared = new URLSearchParams(window.location.search).get('q');
-    const match = shared && all.find((q) => q.id === shared);
-    if (match && match.id !== current.id) {
-      if (!fixedCategory || match.category === fixedCategory) render(match, 'share');
+    const byId = new Map(all.map((q) => [q.id, q]));
+    const shared = (new URLSearchParams(window.location.search).get('q') || '')
+      .split(',')
+      .map((id) => byId.get(id.trim()))
+      .filter((q) => q && (!fixedCategory || q.category === fixedCategory));
+    const sharedIds = shared.map((q) => q.id).join(',');
+    if (shared.length && sharedIds !== ids().join(',')) {
+      render(shared, 'share');
     } else {
-      const initial = all.find((q) => q.id === current.id);
-      if (initial) current = initial;
-      track('tt_question_shown', { question_id: current.id, category: current.category || category, source: shared ? 'share' : 'initial' });
+      current = current.map((q) => byId.get(q.id) || q);
+      track('tt_set_shown', { question_ids: ids(), category: category || 'all', source: shared.length ? 'share' : 'initial', count: current.length });
     }
   });
 }
