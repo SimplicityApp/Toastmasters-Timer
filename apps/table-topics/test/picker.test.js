@@ -54,3 +54,22 @@ describe('picker', () => {
     expect(utcDateString(new Date('2026-09-03T00:00:00Z'))).toBe('2026-09-03');
   });
 });
+
+import { drawUnseen } from '../src/lib/picker.js';
+
+describe('drawUnseen', () => {
+  const pool = flattenQuestions(bank.categories).slice(0, 5);
+  it('prefers unseen questions and reports when the cycle restarts', () => {
+    const seen = new Set([pool[0].id, pool[1].id, pool[2].id]);
+    for (let s = 0; s < 30; s++) {
+      const { question, cycled } = drawUnseen(pool, s, null, seen);
+      expect(cycled).toBe(false);
+      expect([pool[3].id, pool[4].id]).toContain(question.id);
+    }
+    const all = new Set(pool.map((q) => q.id));
+    const { question, cycled } = drawUnseen(pool, 1, pool[4].id, all);
+    expect(cycled).toBe(true);
+    expect(question.id).not.toBe(pool[4].id);
+    expect(drawUnseen([], 1, null, new Set())).toEqual({ question: null, cycled: false });
+  });
+});

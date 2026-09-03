@@ -33,10 +33,17 @@ Bad: `Do you like coffee?` (yes/no) · `What did you think of the election?`
 (politics) · `Name three apps you use daily.` (list, no `?`) ·
 `What is the capital of France?` (trivia).
 
-## Categories are fixed
+## Categories are fixed, and each has a ceiling
 
 Add questions only to categories that already exist in the bank. Never create,
 rename, reorder, or delete a category; new categories arrive by a manual PR.
+
+Every category holds **at most 80 questions** (the validator enforces it).
+Before writing, count each category: if adding `N` would exceed 80, add only as
+many as fit, and **skip categories that are already full**. When every category
+is full, do not open a PR; finish with a summary saying the bank is at capacity.
+Removing or replacing questions is never part of this routine — retirement of
+weak questions is a separate, human-led task driven by usage analytics.
 
 ## Output contract
 
@@ -49,8 +56,9 @@ rename, reorder, or delete a category; new categories arrive by a manual PR.
 
 ## Steps
 
-1. Read the bank. For each category, list its existing questions so you avoid
-   near-duplicates, then write `N` new ones that widen the range of angles
+1. Read the bank. For each category, count its questions (skip it at 80) and
+   list the existing ones so you avoid near-duplicates, then write up to `N`
+   new ones that widen the range of angles
    (time frames, senses, people, places, emotions, "why" vs "how" vs "when").
 2. Append them and run, from the repo root:
 

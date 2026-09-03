@@ -32,6 +32,7 @@ describe('validateBank', () => {
     ['duplicate slug', (b) => { b.categories[1].slug = 'alpha'; }, /duplicate category slug/],
     ['short description', (b) => { b.categories[0].description = 'short'; }, /description/],
     ['too few questions', (b) => { b.categories[0].questions.pop(); }, /only 14 questions/],
+    ['too many questions', (b) => { for (let i = 16; i <= 81; i++) b.categories[0].questions.push(q('alpha', i, `Alpha filler ${i} about ${['sun','moon','rain','wind','snow','fog'][i % 6]} number ${i * 7}?`)); }, /exceeds the ceiling of 80/],
     ['bad id shape', (b) => { b.categories[0].questions[0].id = 'alpha-1'; }, /must match alpha-NNN/],
     ['duplicate id', (b) => { b.categories[0].questions[1].id = 'alpha-001'; }, /duplicate id/],
     ['bad date', (b) => { b.categories[0].questions[0].added = '2026/09/02'; }, /added must be/],

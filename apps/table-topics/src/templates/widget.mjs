@@ -37,10 +37,13 @@ export function widget(config, { categories, categorySlug, initial, showChips })
       </section>`;
 }
 
-export function questionList(config, path, questions, { numbered = true } = {}) {
+export const LIST_VISIBLE = 40;
+
+export function questionList(config, path, questions, { numbered = true, collapsible = false, id = 'tt-list' } = {}) {
   const tag = numbered ? 'ol' : 'ul';
+  const extra = collapsible ? ` id="${attr(id)}" data-tt-collapsible` : '';
   return `
-        <${tag} class="tt-list">
+        <${tag} class="tt-list"${extra}>
           ${questions
             .map(
               (q) => `<li id="${attr(q.id)}">
