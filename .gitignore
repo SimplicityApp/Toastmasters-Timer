@@ -35,3 +35,6 @@ test-results/
 .wrangler/
 .vercel
 .env*
+
+# Synced from packages/ui by apps/web `npm run sync:ui` (predev/prebuild)
+apps/web/public/content-pages.css

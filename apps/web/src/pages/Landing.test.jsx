@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Landing from './Landing';
+import { TOOLS } from '@toastmaster-timer/shared';
 
 const TEST_ZOOM_URL = 'https://zoom.us/oauth/authorize?test=true';
 
@@ -107,5 +108,20 @@ describe('Landing', () => {
       screen.getByText(/Founding Ambassador\s*·\s*Toastmasters Area Director, Area E1, Division E,\s*Founder's District/)
     ).toBeInTheDocument();
     expect(screen.getByText(/serves the San Diego clubs/)).toBeInTheDocument();
+  });
+});
+
+describe('Landing footer tools', () => {
+  it('links to every other tool in the suite', () => {
+    render(
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
+    );
+
+    for (const tool of TOOLS.filter((entry) => entry.slug !== 'timer')) {
+      expect(screen.getByRole('link', { name: tool.name })).toHaveAttribute('href', tool.url);
+    }
+    expect(screen.getByText(/Toastmusters Timer \(this site\)/)).toBeInTheDocument();
   });
 });

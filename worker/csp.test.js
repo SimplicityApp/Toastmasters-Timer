@@ -57,3 +57,27 @@ describe('the Content-Security-Policy the app ships', () => {
     }
   });
 });
+
+describe('the root policy the Worker serves', () => {
+  // ROOT_CSP is the first policy in worker/index.js; ZOOM_CSP follows it and
+  // deliberately stays stricter, so this reads the root one by name.
+  const rootPolicy = read('worker/index.js').match(/const ROOT_CSP =\s*"(default-src[^"]*)"/)?.[1];
+
+  it('is defined', () => {
+    expect(rootPolicy).toBeDefined();
+  });
+
+  it('lets content pages load their Google Fonts', () => {
+    // packages/ui/content-pages.css @imports Inter and Plus Jakarta Sans from
+    // fonts.googleapis.com, which then serves the font files from
+    // fonts.gstatic.com. A style-src without the first host silently drops the
+    // whole stylesheet import; a font-src without the second drops the faces.
+    // The dev server sends no CSP, so only production showed the fallback fonts.
+    const styleSrc = rootPolicy.match(/style-src ([^;]*)/)?.[1];
+    const fontSrc = rootPolicy.match(/font-src ([^;]*)/)?.[1];
+    expect(styleSrc, 'style-src missing from ROOT_CSP').toBeDefined();
+    expect(fontSrc, 'font-src missing from ROOT_CSP').toBeDefined();
+    expect(styleSrc).toContain('https://fonts.googleapis.com');
+    expect(fontSrc).toContain('https://fonts.gstatic.com');
+  });
+});

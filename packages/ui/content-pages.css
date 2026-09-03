@@ -1,0 +1,481 @@
+/* Shared styles for static landing and content pages.
+   Mirrors the app's landing page design system: warm paper background, near-
+   black ink, white cards with soft borders, Plus Jakarta Sans display type,
+   and the green/yellow/red signal colors as the only loud accents. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
+
+:root {
+  --cream: #FAF7F2;
+  --ink: #1C1B1A;
+  --body-text: #57534e;   /* stone-600 */
+  --muted: #78716c;       /* stone-500 */
+  --faint: #a8a29e;       /* stone-400 */
+  --border: #e7e5e4;      /* stone-200 */
+  --card-bg: #ffffff;
+  --green: #16a34a;
+  --yellow: #ca8a04;
+  --red: #dc2626;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+}
+
+.static-landing {
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--cream);
+  font-family: var(--font-body);
+  color: var(--body-text);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+/* The dark theme's dimming layer over the cover photo; the light theme has
+   neither. Kept as a selector so existing markup needs no change. */
+.static-overlay {
+  display: none;
+}
+.static-header {
+  position: relative;
+  z-index: 10;
+  background: rgba(250, 247, 242, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.static-header-inner {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0.875rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.static-header-logo {
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 0.75rem;
+  object-fit: cover;
+}
+.static-header-title {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.static-main {
+  position: relative;
+  z-index: 10;
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+.static-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 1px 2px rgba(28, 27, 26, 0.04);
+}
+.static-hero {
+  margin-top: 1.5rem;
+  margin-bottom: 3rem;
+  text-align: center;
+  overflow: hidden;
+  padding: 0;
+}
+.static-gradient-bar {
+  height: 6px;
+  width: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%);
+}
+.static-hero-content {
+  padding: 2.5rem 1.5rem;
+}
+.static-hero-logo {
+  display: block;
+  margin: 0 auto;
+  height: 5rem;
+  width: 5rem;
+  border-radius: 1rem;
+  object-fit: cover;
+}
+.static-hero h1 {
+  margin-top: 1.5rem;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.15;
+}
+.static-hero p {
+  margin-top: 0.75rem;
+  font-size: 1.125rem;
+  color: var(--body-text);
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+.static-cta-row {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+}
+@media (min-width: 640px) {
+  .static-cta-row { flex-direction: row; }
+}
+.static-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+.static-cta-primary:hover {
+  background: #44403c;
+}
+.static-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  border: 1px solid #d6d3d1;
+  background: var(--card-bg);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.static-cta-secondary:hover {
+  border-color: var(--faint);
+  background: #fafaf9;
+}
+.static-card h1 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-bottom: 1rem;
+}
+.static-card h2, .static-card h3 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 1rem;
+}
+.static-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.static-dot {
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  margin-top: 0.375rem;
+  flex-shrink: 0;
+}
+/* Numbered how-to steps on the landing page. `.static-features` is a flex list
+   with its own bullet dots, so steps need their own rule to keep the marker. */
+.static-steps {
+  color: var(--body-text);
+  padding-left: 1.25rem;
+  margin: 0 0 1rem;
+  line-height: 1.7;
+}
+.static-steps li {
+  margin-bottom: 0.625rem;
+  padding-left: 0.25rem;
+}
+.static-steps strong {
+  color: var(--ink);
+}
+.static-rules-table {
+  width: 100%;
+  font-size: 0.875rem;
+}
+.static-rules-table li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #f5f5f4;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.static-rules-table li:last-child {
+  border-bottom: none;
+}
+.static-rules-table .static-rule-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.static-note {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-top: 1rem;
+}
+
+/* Footer */
+.static-footer {
+  position: relative;
+  z-index: 10;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border);
+  margin-top: 3rem;
+  padding: 2.5rem 1rem;
+}
+.static-footer-inner {
+  max-width: 56rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+@media (min-width: 640px) {
+  .static-footer-inner { grid-template-columns: repeat(3, 1fr); }
+}
+.static-footer h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+}
+.static-footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.static-footer-links li {
+  margin-bottom: 0.5rem;
+}
+.static-footer-links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s;
+}
+.static-footer-links a:hover {
+  color: var(--ink);
+}
+.static-footer-copy {
+  font-size: 0.75rem;
+  color: var(--faint);
+  margin-top: 2rem;
+  text-align: center;
+}
+
+/* Breadcrumb */
+.static-breadcrumb {
+  position: relative;
+  z-index: 10;
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 0;
+  font-size: 0.875rem;
+}
+.static-breadcrumb a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.static-breadcrumb a:hover {
+  color: var(--ink);
+}
+.static-breadcrumb span {
+  color: var(--faint);
+  margin: 0 0.5rem;
+}
+.static-breadcrumb .current {
+  color: var(--ink);
+}
+
+/* Content page styles */
+.static-content p {
+  color: var(--body-text);
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+.static-content h2 {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+.static-content h3 {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.static-content ul, .static-content ol {
+  color: var(--body-text);
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+  line-height: 1.7;
+}
+.static-content li {
+  margin-bottom: 0.5rem;
+}
+.static-content strong {
+  color: var(--ink);
+}
+.static-content a {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: #d6d3d1;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+.static-content a:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* Timing chart table */
+.static-timing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  margin: 1rem 0;
+}
+.static-timing-table th {
+  text-align: left;
+  color: var(--ink);
+  font-weight: 600;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 2px solid var(--border);
+}
+.static-timing-table td {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid #f5f5f4;
+  color: var(--body-text);
+}
+.static-timing-table tr:last-child td {
+  border-bottom: none;
+}
+/* Darker than the raw signal colors on purpose: yellow especially needs the
+   600-weight shade to stay readable as text on white. */
+.color-green { color: var(--green); font-weight: 600; }
+.color-yellow { color: var(--yellow); font-weight: 600; }
+.color-red { color: var(--red); font-weight: 600; }
+.color-bar {
+  display: flex;
+  height: 1.25rem;
+  border-radius: 0.375rem;
+  overflow: hidden;
+  margin-top: 0.25rem;
+  border: 1px solid var(--border);
+}
+.color-bar-green { background: #22c55e; }
+.color-bar-yellow { background: #eab308; }
+.color-bar-red { background: #dc2626; }
+.color-bar-over { background: #7f1d1d; }
+
+/* ── Answer-first block ──────────────────────────────────────────────────────
+   A short, self-contained answer directly under the H1. Answer engines lift
+   this paragraph as the response, so it must make sense with no surrounding
+   context. Keep it to roughly 40-80 words. */
+.answer-block {
+  background: #f0fdf4;
+  border-left: 3px solid #10b981;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin: 0 0 1.75rem;
+}
+.answer-block p {
+  margin: 0;
+  color: #44403c;
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+.answer-block p + p {
+  margin-top: 0.75rem;
+}
+
+/* Inline call-to-action inside article body copy. */
+.static-inline-cta {
+  display: inline-block;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.7rem 1.5rem;
+  border-radius: 9999px;
+  margin: 0.5rem 0;
+  transition: background-color 0.15s;
+}
+.static-inline-cta:hover {
+  background: #44403c;
+  color: #fff;
+}
+/* Pill CTAs placed inside article copy: the `.static-content a` rule is more
+   specific than the single pill class, so without these the ink link color
+   lands on the ink pill — dark text on a dark background — plus an underline. */
+.static-content a.static-inline-cta,
+.static-content a.static-cta-primary,
+.static-content a.static-cta-secondary {
+  text-decoration: none;
+}
+.static-content a.static-inline-cta,
+.static-content a.static-cta-primary {
+  color: #fff;
+}
+.static-content a.static-cta-secondary {
+  color: var(--ink);
+}
+
+/* "Last updated" stamp. Freshness is weighted heavily by answer engines, so
+   the date is visible to readers as well as declared in JSON-LD. */
+.page-updated {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin: -0.5rem 0 1.5rem;
+}
+
+/* Download grid used by the Zoom backgrounds page. */
+.download-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.download-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(28, 27, 26, 0.04);
+}
+.download-swatch {
+  display: block;
+  width: 100%;
+  height: 5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+}
+.download-card h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.download-card a {
+  font-weight: 600;
+}
