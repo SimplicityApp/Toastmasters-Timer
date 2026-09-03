@@ -17,14 +17,23 @@
 .tt-chip:hover { border-color: var(--muted); color: var(--ink); }
 .tt-chip.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
 .tt-kicker { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.72rem; color: var(--muted); margin: 0 0 0.6rem; font-weight: 600; }
-.tt-question {
-  font-family: var(--font-display); font-weight: 700; font-size: clamp(1.4rem, 3.2vw, 2.1rem); line-height: 1.25;
-  color: var(--ink); margin: 0 auto 0.75rem; max-width: 34ch; min-height: 2.5em; text-wrap: balance;
+.tt-set { list-style: none; margin: 0 auto 1.25rem; padding: 0; max-width: 46rem; text-align: left; }
+.tt-set-item { display: flex; gap: 0.9rem; align-items: flex-start; padding: 0.85rem 0; border-top: 1px solid var(--border); }
+.tt-set-item:first-child { border-top: 0; }
+.tt-set-num {
+  flex: 0 0 2rem; height: 2rem; border-radius: 999px; background: var(--ink); color: #fff;
+  font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; display: inline-flex; align-items: center; justify-content: center; margin-top: 0.15rem;
 }
-.tt-question.is-changing { opacity: 0.35; transition: opacity 0.12s; }
-.tt-meta { margin: 0 0 1.25rem; font-size: 0.9rem; }
-.tt-meta a { color: var(--muted); text-decoration: none; }
-.tt-meta a:hover { text-decoration: underline; }
+.tt-set-body { flex: 1 1 auto; min-width: 0; }
+.tt-question {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(1.1rem, 2.2vw, 1.45rem); line-height: 1.3;
+  color: var(--ink); margin: 0 0 0.3rem; text-wrap: balance;
+}
+.tt-set.is-changing { opacity: 0.35; transition: opacity 0.12s; }
+.tt-set-meta { margin: 0; font-size: 0.85rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.tt-set-meta a { color: var(--muted); text-decoration: none; }
+.tt-set-meta a:hover { color: var(--ink); text-decoration: underline; }
+.tt-set-time::before { content: '⏱ '; }
 .tt-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
 .tt-btn { font: inherit; cursor: pointer; }
 .tt-btn-ghost {
@@ -62,7 +71,7 @@
 .tt-related li span { color: var(--faint); font-size: 0.82rem; margin-left: 0.25rem; }
 
 @media print {
-  .static-header, .static-footer, .static-breadcrumb, .tt-actions, .tt-chips, .tt-status, .tt-list-actions, .tt-today-teaser, .tt-related { display: none !important; }
+  .static-header, .static-footer, .static-breadcrumb, .tt-actions, .tt-chips, .tt-status, .tt-list-actions, .tt-set-time, .tt-today-teaser, .tt-related { display: none !important; }
   .static-card { box-shadow: none; border: 0; page-break-inside: avoid; }
   .tt-list li { border-bottom: 1px solid #ddd; }
   body { background: #fff; }

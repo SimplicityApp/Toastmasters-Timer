@@ -55,7 +55,7 @@ describe('picker', () => {
   });
 });
 
-import { drawUnseen } from '../src/lib/picker.js';
+import { drawUnseen, drawSet } from '../src/lib/picker.js';
 
 describe('drawUnseen', () => {
   const pool = flattenQuestions(bank.categories).slice(0, 5);
@@ -71,5 +71,35 @@ describe('drawUnseen', () => {
     expect(cycled).toBe(true);
     expect(question.id).not.toBe(pool[4].id);
     expect(drawUnseen([], 1, null, new Set())).toEqual({ question: null, cycled: false });
+  });
+});
+
+describe('drawSet', () => {
+  const pool = flattenQuestions(bank.categories);
+  it('returns distinct questions, deterministic per seed, avoiding what is on screen', () => {
+    const a = drawSet(pool, 'seed', 3).questions;
+    expect(a).toHaveLength(3);
+    expect(new Set(a.map((q) => q.id)).size).toBe(3);
+    expect(drawSet(pool, 'seed', 3).questions.map((q) => q.id)).toEqual(a.map((q) => q.id));
+    const b = drawSet(pool, 'seed2', 3, a.map((q) => q.id)).questions;
+    expect(b.some((q) => a.find((x) => x.id === q.id))).toBe(false);
+  });
+
+  it('prefers unseen and reports cycling when fewer than count remain unseen', () => {
+    const seen = new Set(pool.slice(2).map((q) => q.id)); // only 2 unseen
+    const { questions, cycled } = drawSet(pool, 7, 3, [], seen);
+    expect(cycled).toBe(true);
+    expect(questions.slice(0, 2).map((q) => q.id).sort()).toEqual([pool[0].id, pool[1].id].sort());
+    expect(questions).toHaveLength(3);
+    expect(drawSet(pool, 7, 3, [], new Set()).cycled).toBe(false);
+  });
+
+  it('backfills from the on-screen set when the pool is tiny', () => {
+    const tiny = pool.slice(0, 4);
+    const onScreen = tiny.slice(0, 3).map((q) => q.id);
+    const { questions } = drawSet(tiny, 1, 3, onScreen);
+    expect(questions).toHaveLength(3);
+    expect(questions[0].id).toBe(tiny[3].id);
+    expect(drawSet([], 1, 3)).toEqual({ questions: [], cycled: false });
   });
 });
