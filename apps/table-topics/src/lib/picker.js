@@ -39,6 +39,30 @@ export function drawUnseen(pool, seed, excludeId, seen) {
   return { question: drawQuestion(pool, seed, excludeId), cycled: true };
 }
 
+/**
+ * Draw `count` distinct questions (a Table Topics round is usually three).
+ * Unseen questions come first; when there are not enough unseen ones left the
+ * rest are filled from the whole pool and `cycled` is true. `excludeIds`
+ * (the set currently on screen) is avoided when the pool allows it.
+ */
+export function drawSet(pool, seed, count, excludeIds = [], seen = new Set()) {
+  const rng = mulberry32(typeof seed === 'number' ? seed : hashSeed(String(seed)));
+  const exclude = new Set(excludeIds);
+  const fresh = shuffle(pool.filter((q) => !exclude.has(q.id)), rng);
+  const unseen = fresh.filter((q) => !seen.has(q.id));
+  const rest = fresh.filter((q) => seen.has(q.id));
+  const picked = [...unseen, ...rest].slice(0, count);
+  if (picked.length < count && exclude.size) {
+    // Tiny pool: allow repeats of what is on screen rather than show fewer.
+    const backfill = shuffle(pool.filter((q) => exclude.has(q.id)), rng);
+    for (const q of backfill) {
+      if (picked.length >= count) break;
+      picked.push(q);
+    }
+  }
+  return { questions: picked, cycled: unseen.length < count && pool.length > 0 };
+}
+
 /** 'YYYY-MM-DD' in UTC, so every visitor worldwide gets the same day's set. */
 export function utcDateString(date = new Date()) {
   return date.toISOString().slice(0, 10);

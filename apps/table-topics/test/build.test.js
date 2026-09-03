@@ -32,6 +32,8 @@ describe('renderSite', () => {
     expect(doc).toContain('<meta property="og:url" content="https://www.tabletopics.toastmusters.com/" />');
     expect(jsonLdTypes(doc)).toEqual(['Organization', 'WebSite', 'WebApplication', 'FAQPage', 'BreadcrumbList']);
     expect(doc).toContain('data-tt-generator data-tt-category=""');
+    expect((doc.match(/data-tt-item /g) || []).length).toBe(3); // a set of three
+    expect(doc).toMatch(/data-tt-initial="[a-z-]+-\d{3},[a-z-]+-\d{3},[a-z-]+-\d{3}"/);
     expect((doc.match(/data-tt-chip=/g) || []).length).toBe(4); // All + 3
     expect(doc).toContain('/topics/travel-places/');
     expect(doc).not.toContain('<meta name="robots"');
@@ -49,6 +51,8 @@ describe('renderSite', () => {
     expect(doc).not.toContain('<topic a>');
     expect(doc).toContain('href="https://www.timer.toastmusters.com/app?role=Table%20Topics%20Speech&amp;name=');
     expect(doc).toContain('data-tt-generator data-tt-category="icebreakers"');
+    expect((doc.match(/data-tt-item /g) || []).length).toBe(3);
+    expect((doc.match(/data-tt-initial="([^"]+)"/) || [])[1].split(',').every((id) => id.startsWith('icebreakers-'))).toBe(true);
     expect(doc).not.toContain('data-tt-chip');
   });
 

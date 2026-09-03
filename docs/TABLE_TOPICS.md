@@ -17,6 +17,11 @@ suite: one subdomain per tool, cross-linked through `TOOLS` in
   resolving. The 80 ceiling (~1,600 total) stops growth after ~19 weekly runs;
   after that the routine skips full categories and the next step is retiring
   low-engagement questions using the per-id analytics events.
+- **Sets of three.** The widget shows a set of three questions (a Table Topics
+  round), on the home page for "All" and for each category. "New set" redraws
+  all three; each question has its own "Time this" link; "Copy all" copies the
+  numbered set; "Copy link" shares `?q=id1,id2,id3` (a single id still works).
+  `SET_SIZE` lives in `src/templates/widget.mjs` and `src/generator.js`.
 - **Draw order.** The browser keeps a per-device list of shown ids in
   `localStorage` (`tt_seen_v1`) and draws unseen questions first; when a pool is
   exhausted it says so and starts a new cycle. Category pages show the first 40
@@ -38,8 +43,8 @@ suite: one subdomain per tool, cross-linked through `TOOLS` in
   `/assets/*`, one hour for `/questions.json`.
 - **Analytics.** `src/analytics.js` loads posthog-js from the proxy
   `e.simple-tech.app` (same key as the timer, read from the repo-root `.env` or
-  `VITE_PUBLIC_POSTHOG_*`). Events: `tt_question_shown {question_id, category,
-  source: initial|random|share}`, `tt_category_selected`, `tt_question_copied`,
+  `VITE_PUBLIC_POSTHOG_*`). Events: `tt_set_shown {question_ids, category, source, count}`,
+  `tt_question_shown {question_id, category, source, position}`, `tt_category_selected`, `tt_question_copied`,
   `tt_share_copied`, `tt_timer_deeplink_clicked`, `tt_print_clicked`,
   `tt_today_viewed {date, swapped}`, `tt_list_expanded`.
 
