@@ -52,6 +52,21 @@ describe('renderSite', () => {
     expect(doc).not.toContain('data-tt-chip');
   });
 
+  it('category list is collapsible only above 40 questions, with the full list always in the HTML', () => {
+    const small = html('/topics/icebreakers/index.html');
+    expect(small).toContain('data-tt-collapsible');
+    expect(small).not.toContain('data-tt-show-all');
+    const big = fixtureBank(1, 16);
+    big.categories[0].questions = Array.from({ length: 45 }, (_, i) => ({
+      id: `icebreakers-${String(i + 1).padStart(3, '0')}`,
+      text: `Filler ${i} about ${['sun', 'moon', 'rain', 'wind', 'snow'][i % 5]} number ${i * 7}?`,
+      added: '2026-09-02',
+    }));
+    const doc = renderSite(big, fixtureConfig).get('/topics/icebreakers/index.html');
+    expect(doc).toContain('data-tt-show-all="tt-list" hidden>Show all 45 questions</button>');
+    expect((doc.match(/<li id="icebreakers-/g) || []).length).toBe(45);
+  });
+
   it('topics index: CollectionPage + BreadcrumbList + ItemList', () => {
     expect(jsonLdTypes(html('/topics/index.html'))).toEqual(['Organization', 'WebSite', 'CollectionPage', 'BreadcrumbList', 'ItemList']);
   });

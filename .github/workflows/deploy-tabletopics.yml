@@ -44,10 +44,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm ci --no-audit --no-fund --prefix apps/table-topics
 
+      # --root points vitest at the app's own config. The root config lists every
+      # workspace project and fails to load unless apps/web and apps/zoom-app are
+      # installed too, which this job deliberately does not do.
       - name: Validate content and run the app's tests
         run: |
           npm run validate:tabletopics
-          npx vitest run --project toastmusters-table-topics
+          npx vitest run --root apps/table-topics
 
       - name: Build
         env:

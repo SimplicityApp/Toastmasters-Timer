@@ -2,6 +2,10 @@ import { normalizeText, tokenJaccard } from './normalize.js';
 
 export const DEFAULT_RULES = {
   minPerCategory: 15,
+  // Ceiling per category: enough for years of weekly meetings without repeats,
+  // and it keeps the bank (and the category pages) from growing forever. The
+  // weekly routine skips categories that are full.
+  maxPerCategory: 80,
   minLen: 10,
   maxLen: 140,
   fuzzyThreshold: 0.8,
@@ -39,6 +43,7 @@ export function validateBank(bank, rules = {}) {
     if (typeof cat.description !== 'string' || cat.description.trim().length < 20) add(`${where}.description missing or too short (min 20 chars)`);
     if (!Array.isArray(cat.questions)) return add(`${where}.questions must be an array`);
     if (cat.questions.length < r.minPerCategory) add(`${cat.slug}: only ${cat.questions.length} questions (min ${r.minPerCategory})`);
+    if (cat.questions.length > r.maxPerCategory) add(`${cat.slug}: ${cat.questions.length} questions exceeds the ceiling of ${r.maxPerCategory}`);
 
     const idRe = new RegExp(`^${cat.slug}-\\d{3}$`);
     cat.questions.forEach((q, qi) => {

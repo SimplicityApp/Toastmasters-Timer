@@ -1,5 +1,5 @@
 import { page, esc, attr } from './layout.mjs';
-import { widget, questionList } from './widget.mjs';
+import { widget, questionList, LIST_VISIBLE } from './widget.mjs';
 import { article, breadcrumb, itemList } from './seo.mjs';
 
 export function categoryPage(config, bank, category, initial) {
@@ -24,7 +24,8 @@ export function categoryPage(config, bank, category, initial) {
 ${widget(config, { categories: bank.categories, categorySlug: category.slug, initial, showChips: false })}
       <section class="static-card static-content">
         <h2>All ${n} ${esc(category.name.toLowerCase())} questions</h2>
-${questionList(config, path, questions)}
+${questionList(config, path, questions, { collapsible: true, id: 'tt-list' })}
+        ${n > LIST_VISIBLE ? `<p class="tt-show-all-row"><button type="button" class="tt-btn tt-btn-ghost" data-tt-show-all="tt-list" hidden>Show all ${n} questions</button></p>` : ''}
         <p><a class="static-inline-cta" href="${attr(config.timerAppUrl)}?role=Table%20Topics%20Speech" rel="noopener">Open the Table Topics timer &rarr;</a></p>
       </section>
       <section class="static-card static-content">

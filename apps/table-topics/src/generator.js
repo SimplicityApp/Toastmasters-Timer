@@ -1,10 +1,34 @@
 // Browser behaviour for the generator card and the Today page. The build
 // inlines ./lib/rng.js, ./lib/picker.js and ./lib/links.js above this code
 // (imports are stripped), so this file must only use their exported names.
-import { drawQuestion, flattenQuestions, todaySet, utcDateString } from './lib/picker.js';
+import { drawUnseen, flattenQuestions, todaySet, utcDateString } from './lib/picker.js';
 import { timerDeepLink, shareLink } from './lib/links.js';
 
 const TIMER_APP_URL = '__TIMER_APP_URL__';
+const SEEN_KEY = 'tt_seen_v1';
+const SEEN_MAX = 2000;
+const LIST_VISIBLE = 40;
+
+// Questions this browser has already been shown, so the draw cycles through
+// unseen ones first. Storage can be unavailable (private mode, blocked); the
+// feature simply degrades to plain random.
+function loadSeen() {
+  try {
+    const raw = localStorage.getItem(SEEN_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveSeen(seen) {
+  try {
+    const arr = [...seen];
+    localStorage.setItem(SEEN_KEY, JSON.stringify(arr.slice(Math.max(0, arr.length - SEEN_MAX))));
+  } catch {
+    /* ignore */
+  }
+}
 
 function track(name, props) {
   if (typeof window.ttTrack === 'function') window.ttTrack(name, props);
@@ -50,6 +74,11 @@ function initGenerator(root) {
   let pool = [];
   let all = [];
   let statusTimer = null;
+  const seen = loadSeen();
+  if (current.id) {
+    seen.add(current.id);
+    saveSeen(seen);
+  }
 
   function setStatus(msg) {
     statusEl.textContent = msg;
@@ -57,8 +86,20 @@ function initGenerator(root) {
     if (msg) statusTimer = setTimeout(() => (statusEl.textContent = ''), 2200);
   }
 
+  function draw() {
+    const { question, cycled } = drawUnseen(pool, randomSeed(), current.id, seen);
+    if (cycled) {
+      // Every question in this pool has been shown; start a new cycle.
+      for (const q of pool) seen.delete(q.id);
+      setStatus('You have seen every question here — starting over');
+    }
+    return question;
+  }
+
   function render(q, source) {
     current = q;
+    seen.add(q.id);
+    saveSeen(seen);
     // Set the text synchronously (background tabs throttle rAF); the class
     // only drives a short fade.
     textEl.textContent = q.text;
@@ -81,7 +122,7 @@ function initGenerator(root) {
 
   root.querySelector('[data-tt-new]').addEventListener('click', () => {
     if (!pool.length) return setStatus('Questions are still loading…');
-    render(drawQuestion(pool, randomSeed(), current.id), 'random');
+    render(draw(), 'random');
   });
 
   root.querySelector('[data-tt-copy]').addEventListener('click', async () => {
@@ -117,7 +158,7 @@ function initGenerator(root) {
       root.dataset.ttCategory = category;
       rebuildPool();
       track('tt_category_selected', { category: category || 'all' });
-      if (pool.length) render(drawQuestion(pool, randomSeed(), current.id), 'random');
+      if (pool.length) render(draw(), 'random');
     });
   });
 
@@ -187,5 +228,25 @@ document.addEventListener('click', (e) => {
   if (a) track('tt_timer_deeplink_clicked', { question_id: a.closest('li')?.id || null, source: 'list' });
 });
 
+// Long category lists: show the first LIST_VISIBLE, reveal the rest on demand.
+// Progressive enhancement — without JavaScript the whole list is visible, and
+// crawlers always get the full list in the HTML.
+function initCollapsible(list) {
+  const items = list.querySelectorAll('li');
+  const button = document.querySelector(`[data-tt-show-all="${list.id}"]`);
+  if (items.length <= LIST_VISIBLE || !button) return;
+  const targetId = (window.location.hash || '').slice(1) || new URLSearchParams(window.location.search).get('q');
+  const targetIndex = targetId ? [...items].findIndex((li) => li.id === targetId) : -1;
+  if (targetIndex >= LIST_VISIBLE) return; // a shared link points into the hidden part
+  list.classList.add('is-collapsed');
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    list.classList.remove('is-collapsed');
+    button.hidden = true;
+    track('tt_list_expanded', { count: items.length, page: window.location.pathname });
+  });
+}
+
 document.querySelectorAll('[data-tt-generator]').forEach(initGenerator);
+document.querySelectorAll('[data-tt-collapsible]').forEach(initCollapsible);
 document.querySelectorAll('[data-tt-today]').forEach(initToday);
