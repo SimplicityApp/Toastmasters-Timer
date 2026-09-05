@@ -418,7 +418,7 @@ function AmbassadorPhoto() {
   return (
     <img
       src="/people/john-christensen.jpg"
-      alt="John Christensen"
+      alt="John C."
       loading="lazy"
       onError={() => setMissing(true)}
       // Anchored to the photo's bottom: it's a portrait selfie with open sky in
@@ -606,19 +606,21 @@ export default function Landing() {
             <figcaption className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 text-left">
               <AmbassadorPhoto />
               <div className="text-center sm:text-left">
-                <h3 className="text-base font-semibold">John Christensen</h3>
+                <h3 className="text-base font-semibold">John C.</h3>
                 <p className="text-sm text-stone-500">
-                  Founding Ambassador &middot; Toastmasters Area Director, Area E1, Division E,
-                  Founder&apos;s District
+                  Toastmasters Area Director
                 </p>
               </div>
             </figcaption>
-            <p className="mt-6 text-sm text-stone-600 leading-relaxed max-w-xl mx-auto">
+            <p className="mt-6 text-sm text-stone-600 leading-relaxed max-w-xl mx-auto text-left">
               John is a member of more than twenty Toastmasters clubs around the world, from
-              San Diego to the UK to Phnom Penh. As Area Director of Area E1 (Division E,
-              Founder&apos;s District) he serves the San Diego clubs, has introduced the timer
-              to clubs across his area and beyond, and dozens of his suggestions have shaped
-              the app you see today.
+              California to EMEA to Southeast Asia. As Area Director he has introduced the Zoom
+              timer App to clubs across his area and globally, and dozens of his suggestions
+              have shaped the app you see today.
+            </p>
+            <p className="mt-4 text-sm text-stone-600 leading-relaxed max-w-xl mx-auto text-left">
+              The timer role is now a fun, low-stress way to participate, allowing you to focus
+              more on the speakers and less on worrying about the clock.
             </p>
           </figure>
         </section>

@@ -123,40 +123,41 @@ domains to the dev allow list, run the full
 [ZOOM_TEST_PLAN.md](ZOOM_TEST_PLAN.md) including background push, virtual
 foreground count-up, popout, and share-app.
 
-## Phase 2 — Storage bridge (carry organizer data across origins)
+## Phase 2 — Storage bridge — **DROPPED 2026-09-03 (measured, not assumed)**
 
-Ship this **before** the Marketplace submission so it is live on both hosts
-when Zoom flips the home URL.
+Zoom webview storage is **not** session-scoped: `distinct_id` lives in
+`localStorage` on the zoom origin, and over 90 days 33 of 205 buckets spanned
+≥1 day, 18 ≥1 week, 11 ≥3 weeks, longest 58 days. So data does persist across
+meetings and a new origin genuinely starts empty.
 
-Design (one-time, idempotent):
+But the data actually at risk is negligible (same 90 days, zoom origin):
 
-1. On the new zoom origin, if `localStorage.toastmaster_migrated_from_old_origin`
-   is unset **and** the app has no existing data (`toastmaster_agenda`,
-   `toastmaster_role_rules`, `toastmaster_reports` all empty), mount a hidden
-   `<iframe src="https://zoom.timer.simple-tech.app/zoom/bridge.html">`.
-2. `bridge.html` (a tiny static page shipped under `/zoom/`) reads every
-   `toastmaster_*` localStorage key plus all IndexedDB `card-images` entries
-   (as blobs → ArrayBuffers), and `postMessage`s them to the parent, checking
-   `event.origin` is exactly `https://zoom.timer.toastmusters.com` (or the dev host).
-3. Parent validates `event.origin === 'https://zoom.timer.simple-tech.app'`,
-   writes the keys and images, sets the migrated flag, removes the iframe, and
-   reloads state. Failure or a 5 s timeout also sets the flag so the app never
-   blocks on the bridge; the user simply starts fresh.
+| Irreplaceable config | People |
+| --- | --- |
+| `rules_edited` (custom timing rules) | 2 |
+| `role_added` (custom roles) | 3 |
+| `agenda_imported` (re-entered weekly anyway) | 7 |
+| custom card sets / own background upload | **0 events — feature is brand new** |
 
-Enabling it in the Worker (`withSecurityHeaders`):
+Reports history affects the ~11–33 organizers with persistent storage.
 
-- [ ] On the **old** zoom host only, for `/zoom/bridge.html`, replace
-      `frame-ancestors 'self'` in the Zoom CSP with
-      `frame-ancestors https://zoom.timer.toastmusters.com https://zoom.timer-dev.toastmusters.com`.
-      Everything else keeps `'self'`.
-- [ ] The old domain must stay in Zoom's **domain allow list** (Phase 3) or
-      the webview will refuse the iframe.
-- [ ] Add a PostHog event `storage_bridge_result` with `{ outcome, keys,
-      images }` so the 90-day window can be judged on data.
+**Decision:** a day of engineering, a CSP exception on the old host, a 90-day
+iframe dependency, and a mechanism unproven inside the Zoom webview is not
+worth sparing ~5 people one re-edit of their timing rules. Ship without it.
 
-The alternative is a server-side store keyed by the Zoom `uid` from the
-identity work. It is the right long-term answer (and would make future origin
-changes free) but is a larger build; the bridge is enough for this move.
+Instead:
+- [ ] A dismissible one-time notice on the new zoom origin for ~90 days:
+      settings live per address, please re-enter custom rules once. A few lines,
+      no CSP change, no iframe.
+- [ ] Re-check `rules_edited` / `role_added` before the flip. If custom card-set
+      usage has become material by then, revisit this decision.
+
+The durable fix is the **server-side store keyed on the Zoom `uid`** already
+decrypted from the app context. Treat it as a product feature — settings follow
+the organizer across devices, popouts and desktop-vs-web clients — not as
+migration plumbing. It also removes the storage resets that made the retention
+number unreliable in the first place. Its own project, after the identity work
+has a forward cohort.
 
 ## Phase 3 — One Marketplace submission
 
@@ -167,7 +168,7 @@ marketplace.zoom.us:
 - [ ] Home URL → `https://zoom.timer.toastmusters.com`
 - [ ] Domain allow list: **add** `timer.toastmusters.com`,
       `www.timer.toastmusters.com`, `zoom.timer.toastmusters.com`; **keep** all `*.timer.simple-tech.app` entries
-      (bridge) and `e.simple-tech.app` (PostHog).
+      (old deep links keep resolving) and `e.simple-tech.app` (PostHog).
 - [ ] OAuth redirect URL: **add** `https://www.timer.toastmusters.com/oauth/redirect`,
       **keep** the old one listed.
 - [ ] Event notification endpoint → `https://www.timer.toastmusters.com/api/zoom/webhook`.
@@ -186,7 +187,6 @@ Verify before touching redirects:
 
 - [ ] Open the app in a real meeting; confirm the URL bar / PostHog
       `$current_url` shows `zoom.timer.toastmusters.com`.
-- [ ] `storage_bridge_result` events arriving with `outcome=success`.
 - [ ] Worker logs (observability is on) show no 4xx/5xx spike on the new host.
 - [ ] Webhook events (`meeting.started`) arriving at the new endpoint.
 
@@ -223,8 +223,7 @@ quarter at the time of writing, so the downside is small.
 
 ## Phase 5 — Cleanup (~90 days after Phase 4)
 
-- [ ] Check `storage_bridge_result` volume has gone to ~0.
-- [ ] Remove the bridge (iframe code, `bridge.html`, CSP exception).
+- [ ] Remove the one-time re-enter-settings notice.
 - [ ] 301 `zoom.timer.simple-tech.app/*` → `https://zoom.timer.toastmusters.com/*`
       and remove the old `zoom.` allow-list entry and old OAuth redirect URL in
       the next regular Marketplace release.
