@@ -3,6 +3,12 @@
 Built 2026-08-31 from PostHog usage data + Toastmasters directory research.
 Master data: [clubs-outreach.csv](clubs-outreach.csv) (~118 clubs).
 
+## Weekly focus lists
+
+| Week | File | Clubs | Selection rule |
+|---|---|---|---|
+| 2026-09-03 | [clubs-outreach-week-2026-09-03.csv](clubs-outreach-week-2026-09-03.csv) | 26 | All P0 (confirmed users) + P1 in the three anonymous-usage clusters + Montreal P1 + EU P1 with a published email. Adds `why_this_week`, `pitch_angle`, `contact_channel`, and `status`/`sent_date`/`reply_notes` tracking columns. |
+
 ## Segments
 
 | Segment | Count | Angle |
