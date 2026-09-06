@@ -57,6 +57,43 @@ describe('canonical host redirect', () => {
     expect(res.headers.get('location')).toBe('https://www.timer-dev.simple-tech.app/');
   });
 
+  it('301s the new domain apex to its own www host, preserving path and query', async () => {
+    const res = await worker.fetch(
+      get('https://timer.toastmusters.com/toastmasters-timing-chart?ref=x'),
+      makeEnv(),
+      ctx
+    );
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(
+      'https://www.timer.toastmusters.com/toastmasters-timing-chart?ref=x'
+    );
+  });
+
+  it('301s the new dev apex to its own www host', async () => {
+    const res = await worker.fetch(get('https://timer-dev.toastmusters.com/'), makeEnv(), ctx);
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe('https://www.timer-dev.toastmusters.com/');
+  });
+
+  it('301s the parked bare root toastmusters.com to www', async () => {
+    const res = await worker.fetch(get('https://toastmusters.com/'), makeEnv(), ctx);
+
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe('https://www.toastmusters.com/');
+  });
+
+  // Dual-serve (docs/DOMAIN_MIGRATION.md): the old www host keeps serving its
+  // own content and must NOT redirect to the new domain until Phase 4.
+  it('does not redirect the old www host to the new domain', async () => {
+    const env = makeEnv(['/index.html']);
+    const res = await worker.fetch(get('https://www.timer.simple-tech.app/'), env, ctx);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
   // The redirect must never manufacture www.zoom.timer.simple-tech.app — that
   // host does not exist and every Zoom-registered URL depends on the zoom
   // subdomain resolving directly.
@@ -65,6 +102,11 @@ describe('canonical host redirect', () => {
     'https://zoom.timer.simple-tech.app/',
     'https://zoom.timer-dev.simple-tech.app/',
     'https://www.timer-dev.simple-tech.app/',
+    'https://www.timer.toastmusters.com/',
+    'https://zoom.timer.toastmusters.com/',
+    'https://zoom.timer-dev.toastmusters.com/',
+    'https://www.timer-dev.toastmusters.com/',
+    'https://www.toastmusters.com/',
     'http://localhost:8787/',
     'https://toastmaster-timer.workers.dev/',
   ])('does not redirect %s', async (url) => {

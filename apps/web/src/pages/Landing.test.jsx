@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Landing from './Landing';
+import { TOOLS } from '@toastmaster-timer/shared';
 
 const TEST_ZOOM_URL = 'https://zoom.us/oauth/authorize?test=true';
 
@@ -95,17 +96,31 @@ describe('Landing', () => {
     expect(screen.getByText('300+')).toBeInTheDocument();
   });
 
-  it('introduces John Christensen as Founding Ambassador', () => {
+  it('introduces John C. as Founding Ambassador', () => {
     render(
       <MemoryRouter>
         <Landing />
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'John Christensen' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/Founding Ambassador\s*·\s*Toastmasters Area Director, Area E1, Division E,\s*Founder's District/)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/serves the San Diego clubs/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'John C.' })).toBeInTheDocument();
+    expect(screen.getByText('Toastmasters Area Director')).toBeInTheDocument();
+    expect(screen.getByText(/California to EMEA to Southeast Asia/)).toBeInTheDocument();
+    expect(screen.getByText(/fun, low-stress way to participate/)).toBeInTheDocument();
+  });
+});
+
+describe('Landing footer tools', () => {
+  it('links to every other tool in the suite', () => {
+    render(
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
+    );
+
+    for (const tool of TOOLS.filter((entry) => entry.slug !== 'timer')) {
+      expect(screen.getByRole('link', { name: tool.name })).toHaveAttribute('href', tool.url);
+    }
+    expect(screen.getByText(/Toastmusters Timer \(this site\)/)).toBeInTheDocument();
   });
 });

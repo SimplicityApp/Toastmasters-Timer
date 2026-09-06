@@ -28,7 +28,13 @@
     "analyze:zoom": "ANALYZE=true npm run build --prefix apps/zoom-app",
     "cf:dev": "npm run build && wrangler dev",
     "cf:deploy:dev": "npm run build && wrangler deploy --env dev",
-    "cf:deploy:prod": "npm run build && wrangler deploy"
+    "cf:deploy:prod": "npm run build && wrangler deploy",
+    "install:tabletopics": "npm install --prefix apps/table-topics",
+    "validate:tabletopics": "node apps/table-topics/scripts/validate-questions.mjs",
+    "build:tabletopics": "node apps/table-topics/scripts/build.mjs",
+    "dev:tabletopics": "npm run build:tabletopics && wrangler dev -c apps/table-topics/wrangler.jsonc --port 8789",
+    "cf:deploy:tabletopics:dev": "SITE_ORIGIN=https://www.tabletopics-dev.toastmusters.com npm run build:tabletopics && wrangler deploy -c apps/table-topics/wrangler.jsonc --env dev",
+    "cf:deploy:tabletopics:prod": "npm run build:tabletopics && wrangler deploy -c apps/table-topics/wrangler.jsonc"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

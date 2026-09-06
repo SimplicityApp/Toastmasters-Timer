@@ -2,6 +2,8 @@ import { screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LiveTab from './LiveTab';
 import { renderWithProviders } from '../test/helpers';
+import { useEffect } from 'react';
+import { useTimer } from '../context/TimerContext';
 
 describe('LiveTab', () => {
   describe('initial state', () => {
@@ -193,5 +195,55 @@ describe('LiveTab', () => {
 
       expect(input).toHaveValue('Jane');
     });
+  });
+});
+
+describe('LiveTab "Time this" deep link', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('loads the role and name from the URL and then strips them', async () => {
+    window.history.pushState({}, '', '/app?role=Table%20Topics%20Speech&name=Describe%20a%20perfect%20day');
+    renderWithProviders(<LiveTab />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toHaveValue('Table Topics Speech');
+    });
+    expect(screen.getByPlaceholderText(/type speaker name/i)).toHaveValue('Describe a perfect day');
+    expect(window.location.pathname).toBe('/app');
+    expect(window.location.search).toBe('');
+  });
+
+  it('falls back to the defaults for an unknown role and still strips the params', async () => {
+    window.history.pushState({}, '', '/app?role=Keynote&name=Jane');
+    renderWithProviders(<LiveTab />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toHaveValue('Standard Speech');
+    });
+    expect(screen.getByPlaceholderText(/type speaker name/i)).toHaveValue('');
+    expect(window.location.search).toBe('');
+  });
+
+  it('does not override a speaker the context already has', async () => {
+    // Stands in for a speaker restored before the Live tab mounts: LiveTab is
+    // only rendered once the context holds one.
+    function Seeded() {
+      const { currentSpeaker, setCurrentSpeaker } = useTimer();
+      useEffect(() => {
+        setCurrentSpeaker({ name: 'Jane', role: 'Ice Breaker' });
+      }, [setCurrentSpeaker]);
+      return currentSpeaker ? <LiveTab /> : null;
+    }
+
+    window.history.pushState({}, '', '/app?role=Table%20Topics%20Speech&name=Describe%20a%20perfect%20day');
+    renderWithProviders(<Seeded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox')).toHaveValue('Ice Breaker');
+    });
+    expect(screen.getByPlaceholderText(/type speaker name/i)).toHaveValue('Jane');
+    expect(window.location.search).toBe('');
   });
 });
